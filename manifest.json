@@ -1,0 +1,21 @@
+{
+  "name": "Venom Decentralized Network",
+  "short_name": "Venom",
+  "description": "Fully anonymous, end-to-end encrypted style decentralized social space for unfiltered thoughts, polls, and Q&A.",
+  "start_url": "/?pwa=main",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/jvgCCsHG/file-000000004bf07206ae4d6af1c09bafc0.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.ibb.co/jvgCCsHG/file-000000004bf07206ae4d6af1c09bafc0.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

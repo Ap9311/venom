@@ -1,0 +1,6 @@
+{
+  "name": "Venom",
+  "description": "Fully anonymous, end-to-end encrypted style decentralized social space for unfiltered thoughts, polls, and Q&A. No accounts, no tracing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

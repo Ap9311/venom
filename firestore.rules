@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allows full read/write on posts, which are required for both user-voted updates and administrator controls
+    match /posts/{postId} {
+      allow read, write: if true;
+
+      // Allows full read/write on comments for thread expansion
+      match /comments/{commentId} {
+        allow read, write: if true;
+
+        // Allows full read/write on nested comment replies
+        match /replies/{replyId} {
+          allow read, write: if true;
+        }
+      }
+    }
+
+    // Allows reading and managing blocked IP lists to prevent spam
+    match /blockedIps/{ip} {
+      allow read, write: if true;
+    }
+
+    // Allows reading and managing blocked IMEI lists to prevent device evasion
+    match /blockedImeis/{imei} {
+      allow read, write: if true;
+    }
+
+    // Allows testing connection
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Allows tracking and managing user-submitted reports
+    match /reports/{reportId} {
+      allow read, write: if true;
+    }
+
+    // Allows tracking and locking device-level likes and votes securely
+    match /interactions/{interactionId} {
+      allow read, write: if true;
+    }
+
+    // Allows tracking and managing communities
+    match /communities/{communityId} {
+      allow read, write: if true;
+
+      // Chats within a community
+      match /chats/{chatId} {
+        allow read, write: if true;
+
+        // Comments under a community chat
+        match /comments/{commentId} {
+          allow read, write: if true;
+        }
+      }
+
+      // Visits/reviews within a community
+      match /visits/{ip} {
+        allow read, write: if true;
+      }
+    }
+  }
+}

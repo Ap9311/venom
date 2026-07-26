@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Venom | Decentralized Anonymous Grid</title>
+    <script>
+      (function() {
+        // Capture PWA install prompt as early as possible
+        window.addEventListener('beforeinstallprompt', function(e) {
+          e.preventDefault();
+          window.pwaInstallPrompt = e;
+          window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
+        });
+
+        var path = window.location.pathname;
+        var isAdmin = path.startsWith('/admin') || path.includes('admin');
+        var manifestUrl = isAdmin ? '/admin-manifest.json' : '/manifest.json';
+        var faviconUrl = isAdmin ? 'https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png' : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
+        var titleText = "Venom | Decentralized Anonymous Grid";
+        if (isAdmin) {
+          if (path.includes('report')) {
+            titleText = "Venom Admin Reports";
+          } else {
+            titleText = "Venom Admin Console";
+          }
+        } else {
+          if (path.startsWith('/report') || path.includes('report')) {
+            titleText = "Venom Security Report";
+          } else if (path.startsWith('/policies') || path.includes('policies')) {
+            titleText = "Venom Policies";
+          } else if (path.startsWith('/guidelines') || path.includes('guidelines')) {
+            titleText = "Venom Guidelines";
+          }
+        }
+        
+        try {
+          // Dynamically create and append the links to head to avoid the browser pre-loading /manifest.json by default on /admin route
+          var manifestLink = document.createElement('link');
+          manifestLink.id = 'pwa-manifest-link';
+          manifestLink.rel = 'manifest';
+          manifestLink.href = manifestUrl;
+          document.head.appendChild(manifestLink);
+
+          var favicon32 = document.createElement('link');
+          favicon32.id = 'favicon-link-32';
+          favicon32.rel = 'icon';
+          favicon32.type = 'image/png';
+          favicon32.sizes = '32x32';
+          favicon32.href = faviconUrl + '?v=2';
+          document.head.appendChild(favicon32);
+
+          var favicon16 = document.createElement('link');
+          favicon16.id = 'favicon-link-16';
+          favicon16.rel = 'icon';
+          favicon16.type = 'image/png';
+          favicon16.sizes = '16x16';
+          favicon16.href = faviconUrl + '?v=2';
+          document.head.appendChild(favicon16);
+
+          var appleIcon = document.createElement('link');
+          appleIcon.id = 'apple-icon-link';
+          appleIcon.rel = 'apple-touch-icon';
+          appleIcon.href = faviconUrl + '?v=2';
+          document.head.appendChild(appleIcon);
+
+          document.title = titleText;
+        } catch(e) {
+          console.error('Error executing head initialization script:', e);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
