@@ -1,61 +1,76 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allows full read/write on posts, which are required for both user-voted updates and administrator controls
+    
+    // Admin Verification Collection
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid && request.resource.data.secretKey == "V3n0m!@#2026AdminSecureKey!!";
+    }
+
+    // Function to check if the current user is an admin
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Posts and Threads
     match /posts/{postId} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if isAdmin();
 
-      // Allows full read/write on comments for thread expansion
       match /comments/{commentId} {
-        allow read, write: if true;
+        allow read, create, update: if true;
+        allow delete: if isAdmin();
 
-        // Allows full read/write on nested comment replies
         match /replies/{replyId} {
-          allow read, write: if true;
+          allow read, create, update: if true;
+          allow delete: if isAdmin();
         }
       }
     }
 
-    // Allows reading and managing blocked IP lists to prevent spam
+    // Blocking System (Only Admins can block)
     match /blockedIps/{ip} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Allows reading and managing blocked IMEI lists to prevent device evasion
     match /blockedImeis/{imei} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Allows testing connection
+    // Connection testing
     match /test/connection {
       allow read: if true;
     }
 
-    // Allows tracking and managing user-submitted reports
+    // User reports (Anyone can submit, only admins should ideally delete, but keeping simple)
     match /reports/{reportId} {
-      allow read, write: if true;
+      allow read, create: if true;
+      allow update, delete: if isAdmin();
     }
 
-    // Allows tracking and locking device-level likes and votes securely
+    // Interactions
     match /interactions/{interactionId} {
       allow read, write: if true;
     }
 
-    // Allows tracking and managing communities
+    // Communities
     match /communities/{communityId} {
-      allow read, write: if true;
+      allow read, create, update: if true;
+      allow delete: if isAdmin();
 
-      // Chats within a community
       match /chats/{chatId} {
-        allow read, write: if true;
+        allow read, create, update: if true;
+        allow delete: if isAdmin();
 
-        // Comments under a community chat
         match /comments/{commentId} {
-          allow read, write: if true;
+          allow read, create, update: if true;
+          allow delete: if isAdmin();
         }
       }
 
-      // Visits/reviews within a community
       match /visits/{ip} {
         allow read, write: if true;
       }

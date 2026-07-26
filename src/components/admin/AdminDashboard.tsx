@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { db } from '../../firebase';
+import { db, auth } from '../../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Post } from '../../types';
 import { AdminTelemetry } from './AdminTelemetry';
@@ -48,18 +48,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
   }, []);
 
   // Handle administrator credentials authentication
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
-    // Hardcoded credentials match
-    if (username === 'theakshatpopat' && password === 'Aprt9311') {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      setUsername('');
-      setPassword('');
-    } else {
-      setLoginError('Invalid Administrator credentials. Security breach log generated.');
+    try {
+      const res = await fetch('/api/admin-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+
+      if (data.success && data.token && auth.currentUser) {
+        // Register this device's anonymous UID as an admin in Firestore
+        const adminRef = doc(db, 'admins', auth.currentUser.uid);
+        await setDoc(adminRef, {
+          isAdmin: true,
+          secretKey: data.token,
+          registeredAt: new Date().toISOString()
+        });
+
+        setIsAuthenticated(true);
+        sessionStorage.setItem('venom_admin_auth', 'true');
+        setUsername('');
+        setPassword('');
+      } else {
+        setLoginError(data.error || 'Invalid Administrator credentials.');
+      }
+    } catch (err) {
+      setLoginError('Authentication server error.');
     }
   };
 
