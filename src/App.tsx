@@ -48,6 +48,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { getOperativeID } from './utils/crypto';
 import { checkIpBlockStatus, BlockStatus } from './utils/blockChecker';
+import { Analytics } from '@vercel/analytics/react';
 import QuarantineNoticeModal from './components/QuarantineNoticeModal';
 import { InstallPwaModal } from './components/InstallPwaModal';
 import { MobileBottomBar } from './components/MobileBottomBar';
@@ -1081,6 +1082,8 @@ export default function App() {
       />
 
       <MobileBottomBar currentPath={currentPath} />
+
+      <Analytics />
 
     </motion.div>
   );
