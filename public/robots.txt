@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /admin-manifest.json
+
+Sitemap: https://myvenom.vercel.app/sitemap.xml
