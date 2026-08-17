@@ -3,6 +3,10 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
+    },
+    {
+      "source": "/(?!.*\\.(xml|txt|ico|png|jpg|jpeg|css|js|json|svg|webp)$).*",
+      "destination": "/"
     }
   ],
   "headers": [
