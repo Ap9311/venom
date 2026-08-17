@@ -5,7 +5,7 @@
       "destination": "/api/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/(?!.*\\.(xml|txt|ico|png|jpg|jpeg|css|js|json|svg|webp)$).*",
       "destination": "/"
     }
   ],
