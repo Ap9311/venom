@@ -92,7 +92,7 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
   const appSubtitle = isAdmin ? 'MODERATOR COMMAND CENTER' : 'OFFICIAL SOCIAL HUB';
   const appDescription = isAdmin 
     ? 'Access threat response, user reporting logs, device quarantine controls, and real-time community usage statistics.' 
-    : 'Read anonymous feeds, react, comment, cast polls, and stay connected with full desktop and mobile standby notifications.';
+    : 'Read anonymous feeds, react, comment, cast polls, and stay connected.';
   
   const appIcon = isAdmin 
     ? 'https://img.icons8.com/nolan/96/shield.png'
