@@ -58,34 +58,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const text = await res.text(); let data; try { data = JSON.parse(text); } catch(e) { throw new Error(`Invalid JSON response (Status ${res.status}): ${text.substring(0, 100)}`); }
+      const data = await res.json();
 
-      if (data.success && data.token) {
-        if (!db || !auth) {
-          setLoginError('Authentication server error: Database connection not established.');
-          return;
-        }
-
-        // Ensure anonymous auth is ready
-        let currentUser = auth.currentUser;
-        if (!currentUser) {
-          try {
-            const { signInAnonymously } = await import('firebase/auth');
-            const cred = await signInAnonymously(auth);
-            currentUser = cred.user;
-          } catch (authErr: any) {
-            setLoginError('Authentication server error: Failed to establish security session. ' + authErr.message);
-            return;
-          }
-        }
-
-        if (!currentUser) {
-           setLoginError('Authentication server error: Could not establish anonymous security session.');
-           return;
-        }
-
+      if (data.success && data.token && auth.currentUser) {
         // Register this device's anonymous UID as an admin in Firestore
-        const adminRef = doc(db, 'admins', currentUser.uid);
+        const adminRef = doc(db, 'admins', auth.currentUser.uid);
         await setDoc(adminRef, {
           isAdmin: true,
           secretKey: data.token,
@@ -93,19 +70,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
         });
 
         setIsAuthenticated(true);
-        try {
-          sessionStorage.setItem('venom_admin_auth', 'true');
-        } catch (e) {
-          console.warn('Session storage blocked or full', e);
-        }
+        sessionStorage.setItem('venom_admin_auth', 'true');
         setUsername('');
         setPassword('');
       } else {
         setLoginError(data.error || 'Invalid Administrator credentials.');
       }
-    } catch (err: any) {
-      console.error(err);
-      setLoginError('Authentication server error: ' + (err.message || String(err)));
+    } catch (err) {
+      setLoginError('Authentication server error.');
     }
   };
 
