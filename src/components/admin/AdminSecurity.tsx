@@ -7,11 +7,11 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, query } from 'firebase/firestore';
 import { ShieldAlert, Unlock, RefreshCw, Clock, Ban } from 'lucide-react';
-import { getClientIp } from '../../utils/ip';
+import { getDeviceFingerprint } from '../../utils/ip';
 
 export const AdminSecurity: React.FC = () => {
-  const [blockedIps, setBlockedIps] = useState<any[]>([]);
-  const [newIpToBlock, setNewIpToBlock] = useState('');
+  const [blockedFingerprints, setBlockedFingerprints] = useState<any[]>([]);
+  const [newFingerprintToBlock, setNewFingerprintToBlock] = useState('');
   const [banType, setBanType] = useState<'temporary' | 'permanent'>('permanent');
   const [banDays, setBanDays] = useState('7');
   const [triggerPostId, setTriggerPostId] = useState('');
@@ -19,15 +19,15 @@ export const AdminSecurity: React.FC = () => {
   const [isFirewallLoading, setIsFirewallLoading] = useState(false);
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
   const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
-  const [adminIp, setAdminIp] = useState<string>('');
+  const [adminFingerprint, setAdminFingerprint] = useState<string>('');
 
-  // Resolve current administrator's IP address on load
+  // Resolve current administrator's Fingerprint address on load
   useEffect(() => {
-    const resolveIp = async () => {
-      const resolved = await getClientIp();
-      setAdminIp(resolved);
+    const resolveFingerprint = async () => {
+      const resolved = await getDeviceFingerprint();
+      setAdminFingerprint(resolved);
     };
-    resolveIp();
+    resolveFingerprint();
   }, []);
 
   // Clear feedback messages automatically
@@ -45,10 +45,10 @@ export const AdminSecurity: React.FC = () => {
     }
   }, [successFeedback]);
 
-  // Fetch Blocked IPs list in real-time
+  // Fetch Blocked Fingerprints list in real-time
   useEffect(() => {
     setIsFirewallLoading(true);
-    const blockedRef = collection(db, 'blockedIps');
+    const blockedRef = collection(db, 'blockedFingerprints');
     
     const unsubscribe = onSnapshot(
       blockedRef,
@@ -57,12 +57,12 @@ export const AdminSecurity: React.FC = () => {
           id: d.id,
           ...d.data()
         }));
-        setBlockedIps(ips);
+        setBlockedFingerprints(ips);
         setIsFirewallLoading(false);
       },
       (error) => {
         setIsFirewallLoading(false);
-        console.error('Failed to fetch blocked IPs:', error);
+        console.error('Failed to fetch blocked Fingerprints:', error);
         setErrorFeedback('Failed to synchronize firewall. Check Firestore access rules.');
       }
     );
@@ -70,20 +70,15 @@ export const AdminSecurity: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Block a new IP address
-  const handleBlockIpSubmit = async (e: React.FormEvent) => {
+  // Block a new Fingerprint address
+  const handleBlockFingerprintSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanIp = newIpToBlock.trim();
-    if (!cleanIp) return;
+    const cleanFingerprint = newFingerprintToBlock.trim();
+    if (!cleanFingerprint) return;
 
-    // Basic IP validation check (supports both IPv4 and simple IPv6 format)
-    if (!/^[a-fA-F0-9.:]+$/.test(cleanIp)) {
-      setErrorFeedback('Invalid IP format. Access denied.');
-      return;
-    }
-
-    if (cleanIp === '150.129.200.97') {
-      setErrorFeedback('Security system error: IP address 150.129.200.97 is white-listed and cannot be blocked under any circumstances.');
+    // Basic Fingerprint validation check (removed to allow alphanumeric strings)
+    if (cleanFingerprint === '150.129.200.97') {
+      setErrorFeedback('Security system error: Fingerprint address 150.129.200.97 is white-listed and cannot be blocked under any circumstances.');
       return;
     }
 
@@ -124,9 +119,9 @@ export const AdminSecurity: React.FC = () => {
         }
       }
 
-      const blockRef = doc(db, 'blockedIps', cleanIp);
+      const blockRef = doc(db, 'blockedFingerprints', cleanFingerprint);
       await setDoc(blockRef, {
-        ip: cleanIp,
+        ip: cleanFingerprint,
         isBlocked: true,
         blockCount: 1,
         totalReports: 0,
@@ -140,30 +135,30 @@ export const AdminSecurity: React.FC = () => {
         triggerPostImageUrl: triggerPostImageUrl || null
       });
 
-      setNewIpToBlock('');
+      setNewFingerprintToBlock('');
       setTriggerPostId('');
       setBanReason('Community Guidelines Violation (Admin Enforced)');
-      setSuccessFeedback(`IP Address ${cleanIp} blacklisted successfully (${banType === 'temporary' ? `Temporary: ${banDays} days` : 'Permanent'}).`);
+      setSuccessFeedback(`Device Fingerprint ${cleanFingerprint} blacklisted successfully (${banType === 'temporary' ? `Temporary: ${banDays} days` : 'Permanent'}).`);
     } catch (err) {
-      console.error('Failed to block IP:', err);
+      console.error('Failed to block Fingerprint:', err);
       setErrorFeedback('Firewall error. Deploy Firestore rules or verify client permissions.');
     }
   };
 
-  // Unblock an IP address
-  const handleUnblockIp = async (ip: string) => {
+  // Unblock an Fingerprint address
+  const handleUnblockFingerprint = async (ip: string) => {
     try {
-      const blockRef = doc(db, 'blockedIps', ip);
+      const blockRef = doc(db, 'blockedFingerprints', ip);
       await setDoc(blockRef, {
         isBlocked: false,
         expiresAt: null,
         blockedAt: null,
         totalReports: 0
       }, { merge: true });
-      setSuccessFeedback(`IP Address ${ip} has been successfully unblocked.`);
+      setSuccessFeedback(`Device Fingerprint ${ip} has been successfully unblocked.`);
     } catch (err) {
-      console.error('Failed to unblock IP:', err);
-      setErrorFeedback(`Failed to lift IP block on: ${ip}`);
+      console.error('Failed to unblock Fingerprint:', err);
+      setErrorFeedback(`Failed to lift Fingerprint block on: ${ip}`);
     }
   };
 
@@ -171,16 +166,16 @@ export const AdminSecurity: React.FC = () => {
     <div className="bg-zinc-950 border border-zinc-900 rounded-lg p-5 shadow-xl">
       <h3 className="text-xs font-bold text-emerald-400 border-b border-zinc-900 pb-2.5 mb-4 uppercase tracking-widest flex items-center gap-2 font-mono">
         <ShieldAlert className="w-4 h-4 text-emerald-500/70" />
-        <span>IP Firewall Rule Set</span>
+        <span>Fingerprint Firewall Rule Set</span>
       </h3>
 
-      {/* Admin Current IP Address Diagnostic */}
-      {adminIp && (
+      {/* Admin Current Device Fingerprint Diagnostic */}
+      {adminFingerprint && (
         <div className="mb-4 p-2.5 bg-zinc-900/30 border border-zinc-900 rounded flex items-center justify-between text-[10px] font-mono">
-          <span className="text-zinc-500 uppercase tracking-wide">Your IP Signature:</span>
+          <span className="text-zinc-500 uppercase tracking-wide">Your Fingerprint Signature:</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-zinc-300 font-bold">{adminIp}</span>
-            {blockedIps.some(b => b.id === adminIp) ? (
+            <span className="text-zinc-300 font-bold">{adminFingerprint}</span>
+            {blockedFingerprints.some(b => b.id === adminFingerprint) ? (
               <span className="px-1.5 py-0.5 rounded bg-rose-950/40 border border-rose-500/25 text-rose-400 font-bold uppercase text-[7px] tracking-widest animate-pulse">
                 Blocked
               </span>
@@ -206,19 +201,19 @@ export const AdminSecurity: React.FC = () => {
         </div>
       )}
 
-      {/* Block IP Form */}
-      <form onSubmit={handleBlockIpSubmit} className="space-y-3 mb-6 bg-zinc-900/10 p-3.5 border border-zinc-900 rounded-lg">
+      {/* Block Fingerprint Form */}
+      <form onSubmit={handleBlockFingerprintSubmit} className="space-y-3 mb-6 bg-zinc-900/10 p-3.5 border border-zinc-900 rounded-lg">
         <span className="text-[9px] uppercase text-zinc-500 block font-bold tracking-wider font-mono">
-          MANUALLY DEPLOY IP BLOCK
+          MANUALLY DEPLOY Fingerprint BLOCK
         </span>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[9px] text-zinc-500 uppercase tracking-wider block">Target IP Address</label>
+            <label className="text-[9px] text-zinc-500 uppercase tracking-wider block">Target Device Fingerprint</label>
             <input
               type="text"
-              value={newIpToBlock}
-              onChange={(e) => setNewIpToBlock(e.target.value)}
+              value={newFingerprintToBlock}
+              onChange={(e) => setNewFingerprintToBlock(e.target.value)}
               placeholder="e.g. 192.168.1.1"
               required
               className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors font-mono"
@@ -298,14 +293,14 @@ export const AdminSecurity: React.FC = () => {
           type="submit"
           className="w-full py-2 bg-rose-950/20 border border-rose-500/30 hover:border-rose-500 hover:bg-rose-950/40 text-rose-400 text-[10px] font-bold rounded transition-colors uppercase font-mono tracking-widest cursor-pointer"
         >
-          Execute IP Suspension
+          Execute Fingerprint Suspension
         </button>
       </form>
 
       {/* Firewall List */}
       <div className="space-y-2 max-h-[350px] overflow-y-auto scrollbar-thin">
         <span className="text-[9px] uppercase text-zinc-500 block font-bold mb-2 tracking-wider font-mono">
-          BLACKLISTED IP ADDRESSES ({blockedIps.length})
+          BLACKLISTED Fingerprint ADDRESSES ({blockedFingerprints.length})
         </span>
         
         {isFirewallLoading ? (
@@ -313,12 +308,12 @@ export const AdminSecurity: React.FC = () => {
             <RefreshCw className="w-3 h-3 animate-spin text-emerald-500" />
             <span>Querying firewall configuration...</span>
           </div>
-        ) : blockedIps.length === 0 ? (
+        ) : blockedFingerprints.length === 0 ? (
           <div className="text-[10px] text-zinc-600 italic bg-zinc-900/20 p-4 border border-zinc-900 rounded text-center font-mono">
             Firewall is clean. No device bans issued.
           </div>
         ) : (
-          blockedIps.map((block) => {
+          blockedFingerprints.map((block) => {
             let detailsLabel = 'Permanent Ban';
             if (block.expiresAt) {
               const expires = new Date(block.expiresAt);
@@ -382,16 +377,16 @@ export const AdminSecurity: React.FC = () => {
                 
                 {isCurrentlyBlocked ? (
                   <button
-                    onClick={() => handleUnblockIp(block.id)}
+                    onClick={() => handleUnblockFingerprint(block.id)}
                     className="p-1.5 bg-zinc-900/50 hover:bg-zinc-850 border border-zinc-850 hover:border-emerald-500/30 text-zinc-500 hover:text-emerald-400 rounded transition-colors cursor-pointer shrink-0"
-                    title="Lift IP Suspension"
+                    title="Lift Fingerprint Suspension"
                   >
                     <Unlock className="w-4 h-4" />
                   </button>
                 ) : (
                   <button
                     onClick={() => {
-                      setNewIpToBlock(block.id);
+                      setNewFingerprintToBlock(block.id);
                       setBanType('permanent');
                     }}
                     className="p-1.5 bg-zinc-900/50 hover:bg-zinc-850 border border-zinc-850 hover:border-rose-500/30 text-zinc-600 hover:text-rose-450 rounded transition-colors cursor-pointer shrink-0"

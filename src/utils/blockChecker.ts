@@ -1,6 +1,6 @@
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getDeviceImei } from './ip';
+import { getDeviceImei, getDeviceFingerprint } from './ip';
 
 export interface BlockStatus {
   isBlocked: boolean;
@@ -28,8 +28,56 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
   }
 
   const deviceImei = imei || await getDeviceImei();
+  const deviceFingerprint = await getDeviceFingerprint();
 
   try {
+    // 0. Highest priority check: Device Fingerprint
+    if (deviceFingerprint) {
+      const fpBlockRef = doc(db, 'blockedFingerprints', deviceFingerprint);
+      const fpBlockSnap = await getDoc(fpBlockRef);
+      if (fpBlockSnap.exists()) {
+        const data = fpBlockSnap.data();
+        if (data.isBlocked) {
+          if (data.expiresAt) {
+            const expires = new Date(data.expiresAt);
+            const now = new Date();
+            if (now >= expires) {
+              await updateDoc(fpBlockRef, {
+                isBlocked: false,
+                expiresAt: null,
+                blockedAt: null
+              });
+            } else {
+              const diffMs = expires.getTime() - now.getTime();
+              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+              const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+              const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+              
+              let label = '';
+              if (diffDays > 0) label += `${diffDays}d `;
+              if (diffHours > 0 || diffDays > 0) label += `${diffHours}h `;
+              label += `${diffMins}m remaining`;
+              
+              return {
+                isBlocked: true,
+                timeLeftLabel: label,
+                blockType: data.blockType || 'temporary',
+                reason: data.reason || 'This device has been quarantined due to Community Guidelines Violations.',
+                expiresAt: data.expiresAt
+              };
+            }
+          } else {
+            return {
+              isBlocked: true,
+              timeLeftLabel: 'Permanent Ban',
+              blockType: 'permanent',
+              reason: data.reason || 'This device is permanently blacklisted.'
+            };
+          }
+        }
+      }
+    }
+
     // 1. Prioritize check by IMEI to prevent evasion by IP hopping
     if (deviceImei) {
       const imeiBlockRef = doc(db, 'blockedImeis', deviceImei);

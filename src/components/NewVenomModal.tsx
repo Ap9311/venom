@@ -20,7 +20,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { generatePostHash } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
-import { getClientIp, getDeviceDetails, getDeviceImei, isMobileDevice, getDeviceSerial } from '../utils/ip';
+import { getClientIp, getDeviceDetails, getDeviceImei, isMobileDevice, getDeviceSerial, getDeviceFingerprint } from '../utils/ip';
 import { getDoc } from 'firebase/firestore';
 import { checkIpBlockStatus } from '../utils/blockChecker';
 import { motion } from 'motion/react';
@@ -153,6 +153,20 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
     e.preventDefault();
     if (isSubmitting) return;
 
+    // Rate limit to prevent spam (max 10 posts per minute)
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+    const historyStr = localStorage.getItem('venom_post_history');
+    let postHistory: number[] = historyStr ? JSON.parse(historyStr) : [];
+    
+    // Filter out posts older than 1 minute
+    postHistory = postHistory.filter(time => time > oneMinuteAgo);
+    
+    if (postHistory.length >= 10) {
+      setErrorMsg("You have reached the limit of 10 posts per minute. Please wait a moment.");
+      return;
+    }
+
     // Validate generic inputs
     if (!title.trim()) {
       setErrorMsg('Title is required.');
@@ -226,6 +240,7 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
         postedFromDevice: deviceDetails,
         postedFromImei: await getDeviceImei(),
         postedFromSerial: await getDeviceSerial(),
+        deviceFingerprint: await getDeviceFingerprint(),
         postedFromDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
       };
 
@@ -244,6 +259,8 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
       }
 
       await setDoc(customDocRef, payload);
+      postHistory.push(now);
+      localStorage.setItem('venom_post_history', JSON.stringify(postHistory));
       onPostCreated();
       onClose();
     } catch (err) {
@@ -349,9 +366,10 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
               type="text"
               required
               value={title}
+              
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Give your post an interesting title..."
-              maxLength={200}
+              maxLength={150}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-emerald-500/30"
             />
           </div>
@@ -363,10 +381,12 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
             <textarea
               required={type !== 'image'}
               value={content}
+              
               onChange={(e) => setContent(e.target.value)}
               placeholder={type === 'image' ? "Add an optional description for your image..." : "What would you like to share?"}
               rows={4}
-              maxLength={5000}
+              maxLength={500}
+              
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-emerald-500/30"
             />
           </div>
@@ -465,7 +485,7 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
                       value={option}
                       onChange={(e) => handlePollOptionChange(idx, e.target.value)}
                       placeholder={`Option choice ${idx + 1}...`}
-                      maxLength={150}
+                      
                       className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500/30 font-sans"
                     />
 

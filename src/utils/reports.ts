@@ -1,12 +1,13 @@
 import { doc, getDoc, updateDoc, runTransaction, collection } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getDeviceImei } from './ip';
+import { getDeviceImei, getDeviceFingerprint } from './ip';
 
 export interface ReportPayload {
   postId: string;
   reason: string;
   opinion: string;
   reporterIp: string;
+  reporterFingerprint: string;
 }
 
 export interface ReportResult {
@@ -37,6 +38,7 @@ export async function submitPostReport(
 
   // Retrieve IMEI of reporter to ensure single device reporting restriction
   const reporterImei = await getDeviceImei();
+  const reporterFingerprint = await getDeviceFingerprint();
   const duplicateCheckImeiId = `dup_imei_${postId}_${reporterImei}`;
   const duplicateCheckImeiRef = doc(db, 'reports', duplicateCheckImeiId);
 
@@ -197,12 +199,14 @@ export async function submitPostReport(
       opinion: opinion.trim(),
       reporterIp,
       reporterImei,
+      reporterFingerprint,
       createdAt: new Date().toISOString(),
       postTitle: postData.title || "",
       postContent: postData.content || "",
       postImageUrl: postData.imageUrl || "",
       postedFromIp: authorIp,
       postedFromImei: postData.postedFromImei || "",
+      postedFromFingerprint: postData.deviceFingerprint || "",
     });
 
     // 3. Update the post's report counters

@@ -56,7 +56,7 @@ import {
   Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial } from '../utils/ip';
+import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceFingerprint } from '../utils/ip';
 import { generatePostHash } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
 import { checkIpBlockStatus } from '../utils/blockChecker';
@@ -521,6 +521,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
         createdBySerial: await getDeviceSerial(),
+        deviceFingerprint: await getDeviceFingerprint(),
         createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
         createdAt: serverTimestamp(),
         reportsCount: 0,
@@ -713,6 +714,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
         createdBySerial: await getDeviceSerial(),
+        deviceFingerprint: await getDeviceFingerprint(),
         createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
         encryptedHash: hash,
         likesCount: 0,
@@ -829,6 +831,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
         createdBySerial: await getDeviceSerial(),
+        deviceFingerprint: await getDeviceFingerprint(),
         createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP'
       };
 
@@ -2015,6 +2018,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                     rows={2}
                     placeholder="Briefly describe community intent..."
                     value={cDesc}
+                    maxLength={500}
                     onChange={(e) => setCDesc(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none placeholder-zinc-700 resize-none"
                   />

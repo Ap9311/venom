@@ -109,68 +109,17 @@ function ReportPostGroupView({
           </span>
         </div>
         <div className="text-zinc-600 font-mono text-[9px] flex flex-wrap items-center gap-2">
-          <span>AUTHOR SIGNATURE IP: <strong className="text-zinc-300 font-sans">{post.postedFromIp || 'UNKNOWN'}</strong></span>
+          <span>AUTHOR IP: <strong className="text-zinc-300 font-sans">{post.postedFromIp || 'UNKNOWN'}</strong></span>
           <span>•</span>
-          {(!post.postedFromDeviceType && post.postedFromImei && !post.postedFromSerial) || post.postedFromDeviceType === 'MOBILE' ? (
-            <span>AUTHOR IMEI: <strong className="text-rose-400 font-mono">
-              {post.postedFromImei || (() => {
-                const ip = post.postedFromIp || '127.0.0.1';
-                let hash = 0;
-                for (let i = 0; i < ip.length; i++) {
-                  hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                let digits = '35';
-                for (let i = 0; i < 13; i++) {
-                  digits += Math.abs((hash + i * 19) % 10).toString();
-                }
-                return digits;
-              })()}
-            </strong></span>
-          ) : (
-            <span>AUTHOR S/N: <strong className="text-amber-400 font-mono">
-              {post.postedFromSerial || (() => {
-                const imeiStr = post.postedFromImei || (() => {
-                  const ip = post.postedFromIp || '127.0.0.1';
-                  let hash = 0;
-                  for (let i = 0; i < ip.length; i++) {
-                    hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-                  }
-                  let digits = '35';
-                  for (let i = 0; i < 13; i++) {
-                    digits += Math.abs((hash + i * 19) % 10).toString();
-                  }
-                  return digits;
-                })();
-                let hash = 0;
-                for (let i = 0; i < imeiStr.length; i++) {
-                  hash = imeiStr.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                let serial = 'VSN';
-                for (let i = 0; i < 10; i++) {
-                  serial += chars.charAt(Math.abs((hash + i * 23) % chars.length));
-                }
-                return serial;
-              })()}
-            </strong></span>
-          )}
+          <span>AUTHOR FP: <strong className="text-emerald-400 font-mono">{post.deviceFingerprint || 'UNKNOWN'}</strong></span>
         </div>
       </div>
-
-      {/* Render matching shared-post visual preview card */}
-      <div className="space-y-1.5">
-        <span className="text-[8px] text-zinc-500 font-bold tracking-wider uppercase block">
-          SECURE MATCHING POST PREVIEW
-        </span>
-        <VenomCard post={post} highlighted={true} isBlocked={true} compact={true} />
-      </div>
-
+      
       {/* List of Reports under this post */}
       <div className="space-y-2.5">
         <span className="text-[8px] text-rose-400/80 font-bold tracking-wider uppercase block">
           INDIVIDUAL COMPLAINTS BUFFER
         </span>
-        
         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
           {reports.map((rep) => (
             <div 
@@ -289,7 +238,7 @@ function ReportPostGroupView({
                 authorBanReason,
                 { id: post.id, title: post.title, content: post.content, imageUrl: post.imageUrl },
                 reports[0] ? { reason: reports[0].reason, opinion: reports[0].opinion } : undefined,
-                resolvePostImei(post)
+                post.deviceFingerprint
               )}
               className="px-3 py-2 bg-rose-950/15 hover:bg-rose-950/30 border border-rose-500/20 hover:border-rose-500 text-rose-400 text-[10px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 uppercase"
             >
@@ -532,7 +481,7 @@ export default function AdminReports() {
       await setDoc(blockRef, payload, { merge: true });
 
       if (imei) {
-        const imeiBlockRef = doc(db, 'blockedImeis', imei);
+        const imeiBlockRef = doc(db, 'blockedFingerprints', imei);
         await setDoc(imeiBlockRef, {
           imei,
           ip,
@@ -565,7 +514,7 @@ export default function AdminReports() {
           totalReports: 0
         });
         if (data.imei) {
-          const imeiBlockRef = doc(db, 'blockedImeis', data.imei);
+          const imeiBlockRef = doc(db, 'blockedFingerprints', data.imei);
           await updateDoc(imeiBlockRef, {
             isBlocked: false,
             expiresAt: null,
@@ -598,7 +547,7 @@ export default function AdminReports() {
       if (snap.exists()) {
         const data = snap.data();
         if (data.imei) {
-          await deleteDoc(doc(db, 'blockedImeis', data.imei)).catch(() => {});
+          await deleteDoc(doc(db, 'blockedFingerprints', data.imei)).catch(() => {});
         }
       }
       await deleteDoc(blockRef);
