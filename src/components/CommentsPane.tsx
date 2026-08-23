@@ -25,7 +25,6 @@ import {
 } from '../utils/storage';
 import { Heart, CornerDownRight, MessageSquare, Send, ShieldAlert, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getDeviceFingerprint } from '../utils/ip';
 
 interface CommentsPaneProps {
   postId: string;
@@ -90,7 +89,6 @@ export default function CommentsPane({
       await setDoc(customCommentRef, {
         id: newCommentId, // This matches the document ID and satisfies firestore rules perfectly!
         content: text,
-        deviceFingerprint: await getDeviceFingerprint(),
         likesCount: 0,
         repliesCount: 0,
         createdAt: serverTimestamp(),
@@ -127,7 +125,6 @@ export default function CommentsPane({
         <input
           type="text"
           value={newCommentText}
-          maxLength={500}
           onChange={(e) => setNewCommentText(e.target.value)}
           placeholder="Write a comment..."
           maxLength={1000}
@@ -287,7 +284,6 @@ function CommentItem({
       await setDoc(customReplyRef, {
         id: newReplyId,
         content: text,
-        deviceFingerprint: await getDeviceFingerprint(),
         likesCount: 0,
         createdAt: serverTimestamp(),
       });

@@ -25,7 +25,6 @@ import {
 } from '../utils/storage';
 import { Heart, CornerDownRight, MessageSquare, Send, ShieldAlert, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getDeviceFingerprint } from '../utils/ip';
 
 interface ChatCommentsPaneProps {
   communityId: string;
@@ -87,7 +86,6 @@ export default function ChatCommentsPane({
       await setDoc(customCommentRef, {
         id: newCommentId,
         content: text,
-        deviceFingerprint: await getDeviceFingerprint(),
         likesCount: 0,
         repliesCount: 0,
         createdAt: serverTimestamp(),
@@ -286,7 +284,6 @@ function ChatCommentItem({
       await setDoc(customReplyRef, {
         id: newReplyId,
         content: text,
-        deviceFingerprint: await getDeviceFingerprint(),
         likesCount: 0,
         createdAt: serverTimestamp(),
       });

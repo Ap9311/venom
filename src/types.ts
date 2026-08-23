@@ -24,7 +24,6 @@ export interface Post {
   postedFromIp?: string; // Stored user IP for admin visibility
   postedFromDevice?: string; // Stored user agent details for admin
   postedFromImei?: string; // Stored device IMEI for admin visibility
-  deviceFingerprint?: string; // Stored device fingerprint for blocking
   reactions?: { [key: string]: number }; // Reaction counts (love, fire, laugh, wow, like, angry)
 }
 
@@ -33,7 +32,6 @@ export interface Comment {
   content: string;
   likesCount: number;
   repliesCount: number;
-  deviceFingerprint?: string;
   createdAt: any; // Firestore Timestamp
 }
 
@@ -41,7 +39,6 @@ export interface Reply {
   id: string;
   content: string;
   likesCount: number;
-  deviceFingerprint?: string;
   createdAt: any; // Firestore Timestamp
 }
 

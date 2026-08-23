@@ -106,7 +106,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
       });
       
       if (imei) {
-        const imeiBlockRef = doc(db, 'blockedFingerprints', imei);
+        const imeiBlockRef = doc(db, 'blockedImeis', imei);
         await setDoc(imeiBlockRef, {
           imei,
           ip,

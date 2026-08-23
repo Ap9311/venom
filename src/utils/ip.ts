@@ -62,7 +62,7 @@ import fpPromise from '@fingerprintjs/fingerprintjs';
 
 let fpInstance: any = null;
 
-export async function getDeviceFingerprint(): Promise<string> {
+async function getFingerprint(): Promise<string> {
   if (!fpInstance) {
     fpInstance = await fpPromise.load();
   }
@@ -77,7 +77,7 @@ export async function getDeviceImei(): Promise<string> {
   let imei = localStorage.getItem('venom_device_imei');
   if (!imei) {
     // Generate standard 15-digit IMEI starting with 35 using deterministic fingerprint hash
-    const fp = await getDeviceFingerprint();
+    const fp = await getFingerprint();
     // Use the first few characters of the hex string to create deterministic digits
     let digits = '35';
     for (let i = 0; i < 13; i++) {
@@ -105,7 +105,7 @@ export function isMobileDevice(): boolean {
 export async function getDeviceSerial(): Promise<string> {
   let serial = localStorage.getItem('venom_device_serial');
   if (!serial) {
-    const fp = await getDeviceFingerprint();
+    const fp = await getFingerprint();
     // Generate a deterministic serial from the fingerprint
     const part1 = fp.substring(0, 5).toUpperCase();
     const part2 = fp.substring(5, 14).toUpperCase();
