@@ -54,11 +54,11 @@ export default function Header({
         </div>
 
         {/* Center Graphic */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0 w-full max-w-[200px] sm:max-w-[250px]">
           <img 
-            src="https://hostit.ai.studio/1787469157380-46364-removebg-preview.png" 
+            src="https://i.ibb.co/67hD2dB0/46364-removebg-preview.png" 
             alt="Center Graphic" 
-            className="h-12 object-contain pointer-events-auto cursor-pointer select-none"
+            className="h-20 sm:h-24 object-contain pointer-events-auto cursor-pointer select-none transition-transform hover:scale-105"
             referrerPolicy="no-referrer"
             onClick={() => onNavigate('/')}
           />
