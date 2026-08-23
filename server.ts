@@ -76,9 +76,26 @@ async function startServer() {
     });
   }
 
+  // Parse JSON bodies
+  app.use(express.json());
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Admin auth endpoint
+  app.post('/api/admin-auth', (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (username === 'theakshatpopat' && password === 'Aprt9311') {
+        res.json({ success: true, token: "V3n0m!@#2026AdminSecureKey!!" });
+      } else {
+        res.status(401).json({ success: false, error: 'Invalid Administrator credentials.' });
+      }
+    } catch (e) {
+      res.status(400).json({ error: 'Invalid JSON' });
+    }
   });
 
   // Get IP endpoint to resolve real device public IP behind proxies
