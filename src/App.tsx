@@ -366,7 +366,7 @@ export default function App() {
     const setupBlockSubscription = async () => {
       try {
         const ip = await getClientIp();
-        const imei = getDeviceImei();
+        const imei = await getDeviceImei();
         if (!active) return;
         setUserIp(ip);
 
@@ -449,7 +449,7 @@ export default function App() {
       if (!db) return;
       try {
         const userIp = await getClientIp();
-        const deviceImei = getDeviceImei();
+        const deviceImei = await getDeviceImei();
         
         // Query by IMEI primarily (100% stable device-level persistent tracking)
         const qImei = query(collection(db, 'interactions'), where('imei', '==', deviceImei));

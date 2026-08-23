@@ -36,7 +36,7 @@ export async function submitPostReport(
   const duplicateCheckRef = doc(db, 'reports', duplicateCheckId);
 
   // Retrieve IMEI of reporter to ensure single device reporting restriction
-  const reporterImei = getDeviceImei();
+  const reporterImei = await getDeviceImei();
   const duplicateCheckImeiId = `dup_imei_${postId}_${reporterImei}`;
   const duplicateCheckImeiRef = doc(db, 'reports', duplicateCheckImeiId);
 

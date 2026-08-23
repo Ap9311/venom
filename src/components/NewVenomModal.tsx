@@ -195,7 +195,7 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
 
     try {
       const userIp = await getClientIp();
-      const userImei = getDeviceImei();
+      const userImei = await getDeviceImei();
       const deviceDetails = getDeviceDetails();
 
       // Check if user is blocked by IP address or IMEI before writing to firestore
@@ -224,8 +224,8 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
         encryptedHash: cipherHash,
         postedFromIp: userIp,
         postedFromDevice: deviceDetails,
-        postedFromImei: getDeviceImei(),
-        postedFromSerial: getDeviceSerial(),
+        postedFromImei: await getDeviceImei(),
+        postedFromSerial: await getDeviceSerial(),
         postedFromDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
       };
 

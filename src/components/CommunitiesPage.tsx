@@ -520,7 +520,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         password: cPassword.trim() || '',
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
-        createdBySerial: getDeviceSerial(),
+        createdBySerial: await getDeviceSerial(),
         createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
         createdAt: serverTimestamp(),
         reportsCount: 0,
@@ -712,7 +712,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         createdAt: serverTimestamp(),
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
-        createdBySerial: getDeviceSerial(),
+        createdBySerial: await getDeviceSerial(),
         createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
         encryptedHash: hash,
         likesCount: 0,
@@ -828,7 +828,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         createdAt: serverTimestamp(),
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
-        createdBySerial: getDeviceSerial(),
+        createdBySerial: await getDeviceSerial(),
         createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP'
       };
 

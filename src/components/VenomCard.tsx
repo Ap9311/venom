@@ -141,7 +141,7 @@ export default function VenomCard({
     let active = true;
     const syncInteractions = async () => {
       try {
-        const deviceImei = getDeviceImei();
+        const deviceImei = await getDeviceImei();
         if (!deviceImei) return;
 
         // Fetch like interaction
@@ -260,7 +260,7 @@ export default function VenomCard({
 
     try {
       const userIp = await getClientIp();
-      const deviceImei = getDeviceImei();
+      const deviceImei = await getDeviceImei();
       const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_like`);
       const postRef = doc(db, 'posts', post.id);
 
@@ -330,7 +330,7 @@ export default function VenomCard({
 
     try {
       const userIp = await getClientIp();
-      const deviceImei = getDeviceImei();
+      const deviceImei = await getDeviceImei();
       const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_vote`);
       const postRef = doc(db, 'posts', post.id);
 
@@ -437,7 +437,7 @@ export default function VenomCard({
 
     try {
       const userIp = await getClientIp();
-      const deviceImei = getDeviceImei();
+      const deviceImei = await getDeviceImei();
       const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_poll`);
       const postRef = doc(db, 'posts', post.id);
 
@@ -623,7 +623,7 @@ Post Venom Now: https://myvenom.vercel.app`;
 
     try {
       const userIp = await getClientIp();
-      const deviceImei = getDeviceImei();
+      const deviceImei = await getDeviceImei();
       const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_reaction`);
       const postRef = doc(db, 'posts', post.id);
 

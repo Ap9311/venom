@@ -58,16 +58,32 @@ export function getDeviceDetails(): string {
   return `${os} (${browser})`;
 }
 
+import fpPromise from '@fingerprintjs/fingerprintjs';
+
+let fpInstance: any = null;
+
+async function getFingerprint(): Promise<string> {
+  if (!fpInstance) {
+    fpInstance = await fpPromise.load();
+  }
+  const result = await fpInstance.get();
+  return result.visitorId;
+}
+
 /**
  * Retrieves a persistent, unique 15-digit IMEI signature for this device.
  */
-export function getDeviceImei(): string {
+export async function getDeviceImei(): Promise<string> {
   let imei = localStorage.getItem('venom_device_imei');
   if (!imei) {
-    // Generate standard 15-digit IMEI starting with 35
+    // Generate standard 15-digit IMEI starting with 35 using deterministic fingerprint hash
+    const fp = await getFingerprint();
+    // Use the first few characters of the hex string to create deterministic digits
     let digits = '35';
     for (let i = 0; i < 13; i++) {
-      digits += Math.floor(Math.random() * 10).toString();
+      const hexChar = fp[i % fp.length];
+      const num = parseInt(hexChar, 16) % 10;
+      digits += num.toString();
     }
     imei = digits;
     localStorage.setItem('venom_device_imei', imei);
@@ -86,11 +102,14 @@ export function isMobileDevice(): boolean {
 /**
  * Retrieves a persistent, unique 12-character alphanumeric hardware Serial Number for PCs/Laptops/Tablets.
  */
-export function getDeviceSerial(): string {
+export async function getDeviceSerial(): Promise<string> {
   let serial = localStorage.getItem('venom_device_serial');
   if (!serial) {
-    // Pre-seed with user's real serial number by default
-    serial = '72669/X6R700058';
+    const fp = await getFingerprint();
+    // Generate a deterministic serial from the fingerprint
+    const part1 = fp.substring(0, 5).toUpperCase();
+    const part2 = fp.substring(5, 14).toUpperCase();
+    serial = `${part1}/${part2}`;
     localStorage.setItem('venom_device_serial', serial);
   }
   return serial;
@@ -99,10 +118,11 @@ export function getDeviceSerial(): string {
 /**
  * Returns the active device identifier (either IMEI or Serial Number) based on device type.
  */
-export function getDeviceIdentifier(): { type: 'IMEI' | 'SERIAL'; value: string } {
+export async function getDeviceIdentifier(): Promise<{ type: 'IMEI' | 'SERIAL'; value: string }> {
   if (isMobileDevice()) {
-    return { type: 'IMEI', value: getDeviceImei() };
+    return { type: 'IMEI', value: await getDeviceImei() };
   } else {
-    return { type: 'SERIAL', value: getDeviceSerial() };
+    return { type: 'SERIAL', value: await getDeviceSerial() };
   }
 }
+

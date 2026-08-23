@@ -27,7 +27,7 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
     return { isBlocked: false };
   }
 
-  const deviceImei = imei || getDeviceImei();
+  const deviceImei = imei || await getDeviceImei();
 
   try {
     // 1. Prioritize check by IMEI to prevent evasion by IP hopping
