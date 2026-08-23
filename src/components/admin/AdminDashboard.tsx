@@ -58,7 +58,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const data = await res.json();
+      const text = await res.text(); let data; try { data = JSON.parse(text); } catch(e) { throw new Error(`Invalid JSON response (Status ${res.status}): ${text.substring(0, 100)}`); }
 
       if (data.success && data.token) {
         if (!db || !auth) {

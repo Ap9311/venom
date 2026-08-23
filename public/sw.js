@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const CACHE_NAME = 'venom-obsidian-cache-v1';
+const CACHE_NAME = 'venom-obsidian-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

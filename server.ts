@@ -78,6 +78,12 @@ async function startServer() {
 
   // Parse JSON bodies
   app.use(express.json());
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({ success: false, error: 'Invalid JSON payload' });
+    }
+    next();
+  });
 
   // Health check endpoint
   app.get('/api/health', (req, res) => {
