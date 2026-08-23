@@ -40,29 +40,32 @@ export default function Header({
 
   return (
     <header className="border-b border-zinc-900 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6">
-      <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+      <div className="max-w-2xl mx-auto flex items-center justify-between gap-4 relative">
         
         {/* Brand Logo & Title */}
         <div className="flex items-center gap-3">
           <img 
             src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
             alt="Venom Logo" 
-            className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
+            className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer z-10 relative"
             referrerPolicy="no-referrer"
             onClick={() => onNavigate('/')}
           />
-          <div className="cursor-pointer" onClick={() => onNavigate('/')}>
-            <h1 className="text-lg font-black tracking-widest font-display text-emerald-400 select-none">
-              VENOM
-            </h1>
-            <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none">
-              By Obsidian
-            </p>
-          </div>
+        </div>
+
+        {/* Center Graphic */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0">
+          <img 
+            src="https://hostit.ai.studio/1787469157380-46364-removebg-preview.png" 
+            alt="Center Graphic" 
+            className="h-12 object-contain pointer-events-auto cursor-pointer select-none"
+            referrerPolicy="no-referrer"
+            onClick={() => onNavigate('/')}
+          />
         </div>
 
         {/* Action Controls - Menu beside Refresh, beside Create Post */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 z-10 relative">
           
           {/* Refresh Button */}
           <button
