@@ -60,9 +60,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
       });
       const data = await res.json();
 
-      if (data.success && data.token && auth.currentUser) {
+      if (data.success && data.token) {
+        if (!db || !auth) {
+          setLoginError('Authentication server error: Database connection not established.');
+          return;
+        }
+
+        // Ensure anonymous auth is ready
+        let currentUser = auth.currentUser;
+        if (!currentUser) {
+          try {
+            const { signInAnonymously } = await import('firebase/auth');
+            const cred = await signInAnonymously(auth);
+            currentUser = cred.user;
+          } catch (authErr: any) {
+            setLoginError('Authentication server error: Failed to establish security session. ' + authErr.message);
+            return;
+          }
+        }
+
+        if (!currentUser) {
+           setLoginError('Authentication server error: Could not establish anonymous security session.');
+           return;
+        }
+
         // Register this device's anonymous UID as an admin in Firestore
-        const adminRef = doc(db, 'admins', auth.currentUser.uid);
+        const adminRef = doc(db, 'admins', currentUser.uid);
         await setDoc(adminRef, {
           isAdmin: true,
           secretKey: data.token,
@@ -70,14 +93,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
         });
 
         setIsAuthenticated(true);
-        sessionStorage.setItem('venom_admin_auth', 'true');
+        try {
+          sessionStorage.setItem('venom_admin_auth', 'true');
+        } catch (e) {
+          console.warn('Session storage blocked or full', e);
+        }
         setUsername('');
         setPassword('');
       } else {
         setLoginError(data.error || 'Invalid Administrator credentials.');
       }
-    } catch (err) {
-      setLoginError('Authentication server error.');
+    } catch (err: any) {
+      console.error(err);
+      setLoginError('Authentication server error: ' + (err.message || String(err)));
     }
   };
 
