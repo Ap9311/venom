@@ -109,6 +109,7 @@ export default function VenomCard({
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [showMobileReactions, setShowMobileReactions] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
+  const [showGiantHeart, setShowGiantHeart] = useState(false);
 
   // Local locks to prevent concurrent rapid double clicks
   const [isLiking, setIsLiking] = useState(false);
@@ -593,6 +594,24 @@ Post Venom Now: https://myvenom.vercel.app`;
     }, 2500);
   };
 
+  const handleDoubleTap = (e: React.MouseEvent) => {
+    // Prevent double tap from selecting text on some browsers (though CSS user-select is better)
+    e.preventDefault();
+    if (isBlocked) {
+      if (onBlockedActionTriggered) onBlockedActionTriggered();
+      return;
+    }
+    
+    // Show the giant heart animation
+    setShowGiantHeart(true);
+    setTimeout(() => setShowGiantHeart(false), 1000);
+
+    // Toggle like if it is not already liked
+    if (!liked) {
+      handleLikeToggle();
+    }
+  };
+
   const handleReact = async (reactionKey: string) => {
     setShowMobileReactions(false);
     if (isBlocked) {
@@ -714,13 +733,29 @@ Post Venom Now: https://myvenom.vercel.app`;
   return (
     <article 
       id={`post-${post.id}`} 
-      className={`relative border rounded-xl overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-300 font-sans text-zinc-300 ${
+      onDoubleClick={handleDoubleTap}
+      className={`relative border rounded-xl overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-300 font-sans text-zinc-300 select-none ${
         highlighted 
           ? 'border-emerald-500/50 bg-emerald-950/10 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30' 
           : 'border-zinc-900 bg-zinc-950/70 hover:border-emerald-500/10'
       }`}
     >
       
+      {/* Giant Heart Double Tap Animation */}
+      <AnimatePresence>
+        {showGiantHeart && (
+          <motion.div
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1.1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+          >
+            <Heart className="w-20 h-20 text-rose-500 fill-rose-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.5)]" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Meta Info Header */}
       <div className={`px-4 py-3 flex items-center justify-between border-b border-zinc-900/40 text-[10px] text-zinc-500 font-mono gap-3 flex-wrap ${compact ? 'px-2.5 py-2 text-[9px]' : ''}`}>
         
