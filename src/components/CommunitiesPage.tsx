@@ -56,7 +56,7 @@ import {
   Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial } from '../utils/ip';
+import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getLegacyDeviceImei } from '../utils/ip';
 import { generatePostHash } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
 import { checkIpBlockStatus } from '../utils/blockChecker';
@@ -83,6 +83,19 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Device details
   const [deviceIp, setDeviceIp] = useState('');
   const [deviceSig, setDeviceSig] = useState({ type: 'SERIAL', value: '' });
+
+  // Cross-browser device creator & ownership validator (pure hardware signature matching)
+  const checkIsCreator = (item: any): boolean => {
+    if (!item || !deviceSig?.value) return false;
+    const legacyImei = getLegacyDeviceImei();
+    const targetImei = item.createdByImei;
+    const targetSerial = item.createdBySerial;
+    return (
+      targetImei === deviceSig.value ||
+      (targetSerial && targetSerial === deviceSig.value) ||
+      Boolean(legacyImei && targetImei === legacyImei)
+    );
+  };
 
   // Custom designed in-app Share Modal states
   const [showShareModal, setShowShareModal] = useState(false);
@@ -219,7 +232,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   useEffect(() => {
     const initDevice = async () => {
       const ip = await getClientIp();
-      const sig = getDeviceIdentifier();
+      const sig = await getDeviceIdentifier();
       setDeviceIp(ip);
       setDeviceSig(sig);
 
@@ -372,7 +385,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         setInitialDeepLinkProcessed(true);
 
         // If password is set on shared community, check if unlocked with current password
-        if (targetComm.password && targetComm.createdByImei !== deviceSig.value) {
+        if (targetComm.password && !checkIsCreator(targetComm)) {
           const isUnlocked = localStorage.getItem(`unlocked_comm_${targetComm.id}`) === 'true';
           const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${targetComm.id}`) || '';
           if (!isUnlocked || storedPwd !== targetComm.password) {
@@ -393,7 +406,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     if (!activeCommunity || communities.length === 0 || !deviceSig?.value) return;
     const latestComm = communities.find(c => c.id === activeCommunity.id);
     if (latestComm) {
-      const isCreator = latestComm.createdByImei === deviceSig.value;
+      const isCreator = checkIsCreator(latestComm);
       if (latestComm.password && !isCreator) {
         const isUnlocked = localStorage.getItem(`unlocked_comm_${latestComm.id}`) === 'true';
         const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${latestComm.id}`) || '';
@@ -570,7 +583,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Submit Community Settings Update (Creator-only)
   const handleUpdateSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeCommunity || activeCommunity.createdByImei !== deviceSig.value) {
+    if (!activeCommunity || !checkIsCreator(activeCommunity)) {
       setEditError('SECURITY ALERT: Authorization mismatch.');
       return;
     }
@@ -660,7 +673,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     if (!activeCommunity) return;
 
     // Check if posting is restricted to owner only
-    const isOwner = activeCommunity.createdByImei === deviceSig.value;
+    const isOwner = checkIsCreator(activeCommunity);
     if (!activeCommunity.allowUserPost && !isOwner) {
       setChatError('RESTRICTED GATEWAY: Only the owner is authorized to dispatch chats inside this community.');
       return;
@@ -1251,7 +1264,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                   onClick={() => {
                     const isUnlocked = localStorage.getItem(`unlocked_comm_${comm.id}`) === 'true';
                     const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${comm.id}`) || '';
-                    const isCreator = comm.createdByImei === deviceSig.value;
+                    const isCreator = checkIsCreator(comm);
 
                     if (comm.password && !isCreator) {
                       if (!isUnlocked || storedPwd !== comm.password) {
@@ -1363,7 +1376,7 @@ Post Venom Now: https://myvenom.vercel.app`;
       <div className={`flex-1 bg-zinc-950 flex flex-col h-[calc(100vh-4rem)] md:h-screen ${activeCommunity ? 'flex' : 'hidden md:flex items-center justify-center p-8 bg-[#020202]'}`}>
         
         {activeCommunity ? (() => {
-          const isOwner = activeCommunity.createdByImei === deviceSig.value;
+          const isOwner = checkIsCreator(activeCommunity);
           const canPost = activeCommunity.allowUserPost || isOwner;
           return (
             <>
@@ -1407,7 +1420,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                   <Share2 className="w-4 h-4" />
                 </button>
 
-                {activeCommunity.createdByImei === deviceSig.value && (
+                {checkIsCreator(activeCommunity) && (
                   <button
                     onClick={handleOpenSettings}
                     className="p-2 border border-zinc-850 hover:border-emerald-500/20 rounded bg-zinc-900 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
@@ -1475,7 +1488,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                 </div>
               ) : (
                 chats.map((chat) => {
-                  const isUserSender = chat.createdByImei === deviceSig.value;
+                  const isUserSender = checkIsCreator(chat);
                   const chatReaction = userChatReactions[chat.id];
                   const hasUserLiked = likedChats.includes(chat.id);
 
@@ -1731,7 +1744,7 @@ Post Venom Now: https://myvenom.vercel.app`;
             </div>
 
             {/* Bottom active entry messaging panel (WhatsApp styled) */}
-            {(!activeCommunity.allowUserPost && activeCommunity.createdByImei !== deviceSig.value) ? null : (
+            {(!activeCommunity.allowUserPost && !checkIsCreator(activeCommunity)) ? null : (
               <form onSubmit={handleSendChatSubmit} className="p-3 border-t border-zinc-900 bg-zinc-950 flex flex-col shrink-0 gap-2 relative">
                 {chatError && (
                   <div className="absolute top-0 left-0 right-0 -translate-y-full bg-rose-950/25 border-t border-rose-500/20 text-rose-400 text-[10px] py-1.5 px-4 z-20 flex justify-between items-center leading-relaxed">
@@ -2324,7 +2337,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                 chatComments.map((comm) => (
                   <div key={comm.id} className="p-3 border border-zinc-900 rounded-xl bg-zinc-950/80 space-y-1.5">
                     <div className="flex justify-between items-center text-[8px] font-mono text-zinc-500">
-                      <span>{comm.createdByImei === deviceSig.value ? 'YOU' : `MEMBER (${comm.createdByIp})`}</span>
+                      <span>{checkIsCreator(comm) ? 'YOU' : `MEMBER (${comm.createdByIp})`}</span>
                       <span>{comm.createdAt ? new Date(comm.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}</span>
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed">

@@ -44,7 +44,7 @@ import {
 } from '../utils/storage';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, runTransaction } from 'firebase/firestore';
-import { getClientIp, getDeviceImei } from '../utils/ip';
+import { getClientIp, getDeviceImei, getLegacyDeviceImei } from '../utils/ip';
 import { copyToClipboard } from '../utils/clipboard';
 import { formatTimeAgo, formatShortCount } from '../utils/time';
 import CommentsPane from './CommentsPane';
@@ -143,10 +143,22 @@ export default function VenomCard({
       try {
         const deviceImei = await getDeviceImei();
         if (!deviceImei) return;
+        const legacyImei = getLegacyDeviceImei();
 
         // Fetch like interaction
         const likeRef = doc(db, 'interactions', `${post.id}_${deviceImei}_like`);
-        const likeSnap = await getDoc(likeRef);
+        let likeSnap = await getDoc(likeRef);
+        if (!likeSnap.exists() && legacyImei) {
+          const legacyLikeRef = doc(db, 'interactions', `${post.id}_${legacyImei}_like`);
+          const legacyLikeSnap = await getDoc(legacyLikeRef);
+          if (legacyLikeSnap.exists()) {
+            await setDoc(likeRef, {
+              ...legacyLikeSnap.data(),
+              imei: deviceImei
+            });
+            likeSnap = legacyLikeSnap;
+          }
+        }
         if (!active) return;
         
         const state = getInteractionState();
@@ -168,7 +180,18 @@ export default function VenomCard({
 
         // Fetch vote interaction
         const voteRef = doc(db, 'interactions', `${post.id}_${deviceImei}_vote`);
-        const voteSnap = await getDoc(voteRef);
+        let voteSnap = await getDoc(voteRef);
+        if (!voteSnap.exists() && legacyImei) {
+          const legacyVoteRef = doc(db, 'interactions', `${post.id}_${legacyImei}_vote`);
+          const legacyVoteSnap = await getDoc(legacyVoteRef);
+          if (legacyVoteSnap.exists()) {
+            await setDoc(voteRef, {
+              ...legacyVoteSnap.data(),
+              imei: deviceImei
+            });
+            voteSnap = legacyVoteSnap;
+          }
+        }
         if (!active) return;
         
         const currentVoteInStore = state.votedPosts[post.id];
@@ -187,7 +210,18 @@ export default function VenomCard({
 
         // Fetch poll interaction
         const pollRef = doc(db, 'interactions', `${post.id}_${deviceImei}_poll`);
-        const pollSnap = await getDoc(pollRef);
+        let pollSnap = await getDoc(pollRef);
+        if (!pollSnap.exists() && legacyImei) {
+          const legacyPollRef = doc(db, 'interactions', `${post.id}_${legacyImei}_poll`);
+          const legacyPollSnap = await getDoc(legacyPollRef);
+          if (legacyPollSnap.exists()) {
+            await setDoc(pollRef, {
+              ...legacyPollSnap.data(),
+              imei: deviceImei
+            });
+            pollSnap = legacyPollSnap;
+          }
+        }
         if (!active) return;
         
         const currentPollInStore = state.votedPolls[post.id];
@@ -201,7 +235,18 @@ export default function VenomCard({
 
         // Fetch reaction interaction
         const reactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_reaction`);
-        const reactionSnap = await getDoc(reactionRef);
+        let reactionSnap = await getDoc(reactionRef);
+        if (!reactionSnap.exists() && legacyImei) {
+          const legacyReactionRef = doc(db, 'interactions', `${post.id}_${legacyImei}_reaction`);
+          const legacyReactionSnap = await getDoc(legacyReactionRef);
+          if (legacyReactionSnap.exists()) {
+            await setDoc(reactionRef, {
+              ...legacyReactionSnap.data(),
+              imei: deviceImei
+            });
+            reactionSnap = legacyReactionSnap;
+          }
+        }
         if (!active) return;
         
         const currentReactionInStore = state.reactedPosts ? state.reactedPosts[post.id] : null;

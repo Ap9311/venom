@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Post } from './types';
-import { getClientIp, getDeviceImei } from './utils/ip';
+import { getClientIp, getDeviceImei, getLegacyDeviceImei } from './utils/ip';
 import Header from './components/Header';
 import VenomCard from './components/VenomCard';
 import NewVenomModal from './components/NewVenomModal';
@@ -450,16 +450,19 @@ export default function App() {
       try {
         const userIp = await getClientIp();
         const deviceImei = await getDeviceImei();
+        const legacyImei = getLegacyDeviceImei();
         
         // Query by IMEI primarily (100% stable device-level persistent tracking)
         const qImei = query(collection(db, 'interactions'), where('imei', '==', deviceImei));
         // Query by IP as legacy fallback (in case IMEI is not set on older documents)
         const qIp = query(collection(db, 'interactions'), where('ip', '==', userIp));
         
-        const [snapImei, snapIp] = await Promise.all([
-          getDocs(qImei),
-          getDocs(qIp)
-        ]);
+        const queries = [getDocs(qImei), getDocs(qIp)];
+        if (legacyImei) {
+          queries.push(getDocs(query(collection(db, 'interactions'), where('imei', '==', legacyImei))));
+        }
+        
+        const snapshots = await Promise.all(queries);
         
         const likedPosts: string[] = [];
         const votedPosts: { [postId: string]: 'up' | 'down' } = {};
@@ -482,8 +485,7 @@ export default function App() {
           }
         };
 
-        snapImei.forEach(processDoc);
-        snapIp.forEach(processDoc);
+        snapshots.forEach(snap => snap.forEach(processDoc));
         
         const existing = localStorage.getItem('venom_user_interactions');
         let parsed: any = { likedComments: [], likedReplies: [] };
