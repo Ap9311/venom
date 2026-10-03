@@ -291,7 +291,14 @@ export async function registerAdminDevice(
       return { success: false, error: 'Authentication server unreachable. Please try again.' };
     }
 
-    const regData = await serverRes.json();
+    let regData: any = {};
+    try {
+      const rawText = await serverRes.text();
+      regData = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      regData = {};
+    }
+
     if (!serverRes.ok || !regData.success) {
       return { success: false, error: regData.error || 'Access Denied: Invalid credentials.' };
     }
@@ -352,7 +359,13 @@ export async function verifyAdminCredentials(
         password: passwordInput.trim()
       })
     });
-    const data = await res.json();
+    let data: any = {};
+    try {
+      const rawText = await res.text();
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = {};
+    }
     if (data.success && data.token) {
       sessionStorage.setItem('venom_admin_token', data.token);
       sessionStorage.setItem('venom_admin_auth', 'true');

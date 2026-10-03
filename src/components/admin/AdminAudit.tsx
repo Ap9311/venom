@@ -53,7 +53,13 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const rawText = await res.text();
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
 
       if (data.success && data.token && auth.currentUser) {
         const adminRef = doc(db, 'admins', auth.currentUser.uid);

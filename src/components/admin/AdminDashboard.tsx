@@ -74,7 +74,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const rawText = await res.text();
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
 
       if (data.success && data.token && auth.currentUser) {
         // Register this device's anonymous UID as an admin in Firestore
