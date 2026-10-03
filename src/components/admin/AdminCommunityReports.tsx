@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
+import { ensureFirestoreAdminClaim, checkIsAdminDevice } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -85,19 +85,18 @@ export default function AdminCommunityReports() {
   }, [isAuthenticated]);
 
   // Handle administrator credentials authentication
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
-    const res = await verifyAdminCredentials(username, password);
-    if (res.success) {
+    if (username === 'theakshatpopat' && password === 'Aprt9311') {
       setIsAuthenticated(true);
       sessionStorage.setItem('venom_admin_auth', 'true');
       ensureFirestoreAdminClaim().catch(console.warn);
       setUsername('');
       setPassword('');
     } else {
-      setLoginError(res.error || 'Invalid administrator credentials. Authentication denied.');
+      setLoginError('Invalid administrator credentials. Authentication denied.');
     }
   };
 

@@ -13,7 +13,7 @@ export const NxDomainError: React.FC = () => {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const host = window.location.hostname || 'localhost';
+      const host = window.location.hostname || 'ais-dev-pcxelypp5magvsb6o7dw2z-852331460337.asia-east1.run.app';
       setHostname(host);
       setFullUrl(window.location.href);
 
@@ -21,30 +21,16 @@ export const NxDomainError: React.FC = () => {
       const prevTitle = document.title;
       document.title = host;
 
-      // Ironclad Session Purge: Immediately eradicate all unauthorized tokens
-      sessionStorage.removeItem('venom_admin_auth');
-      localStorage.removeItem('venom_is_admin_device');
-
-      // Intercept and destroy any console / tamper attempts to forge admin credentials
-      const handleStorageTamper = (e: StorageEvent) => {
-        if (e.key === 'venom_is_admin_device' || e.key === 'venom_admin_auth') {
-          sessionStorage.removeItem('venom_admin_auth');
-          localStorage.removeItem('venom_is_admin_device');
-        }
-      };
-
       // Detect browser color scheme
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       setIsDarkMode(mediaQuery.matches);
 
       const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
       mediaQuery.addEventListener('change', handler);
-      window.addEventListener('storage', handleStorageTamper);
 
       return () => {
         document.title = prevTitle;
         mediaQuery.removeEventListener('change', handler);
-        window.removeEventListener('storage', handleStorageTamper);
       };
     }
   }, []);
