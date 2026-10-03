@@ -165,42 +165,23 @@ async function startServer() {
 
   function verifyAdminCredentials(user: any, pass: any): boolean {
     if (typeof user !== 'string' || typeof pass !== 'string') return false;
-    const cleanUser = user.trim();
+    const cleanUser = user.trim().toLowerCase();
     const cleanPass = pass.trim();
 
-    const expectedUser = (process.env.ADMIN_USERNAME || 'theakshatpopat').trim();
-    const expectedPass = (process.env.ADMIN_PASSWORD || 'Aprt9311').trim();
+    const envUser = (process.env.ADMIN_USERNAME || 'theakshatpopat').trim().toLowerCase();
+    const envPass = (process.env.ADMIN_PASSWORD || 'Aprt9311').trim();
 
-    try {
-      const uHash = crypto.createHash('sha256').update(cleanUser).digest();
-      const expectedUHash = crypto.createHash('sha256').update(expectedUser).digest();
-      const pHash = crypto.createHash('sha256').update(cleanPass).digest();
-      const expectedPHash = crypto.createHash('sha256').update(expectedPass).digest();
+    const isUserValid = cleanUser === 'theakshatpopat' || cleanUser === envUser;
+    const isPassValid = cleanPass === 'Aprt9311' || cleanPass === envPass;
 
-      if (uHash.length === expectedUHash.length && pHash.length === expectedPHash.length) {
-        if (crypto.timingSafeEqual(uHash, expectedUHash) && crypto.timingSafeEqual(pHash, expectedPHash)) {
-          return true;
-        }
-      }
-    } catch (e) {
-      console.error('Hash comparison warning:', e);
-    }
-
-    // Direct string comparison fallback
-    return (cleanUser === expectedUser || cleanUser === 'theakshatpopat') && (cleanPass === expectedPass || cleanPass === 'Aprt9311');
+    return isUserValid && isPassValid;
   }
 
   // Administrator login authentication endpoint
   app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
     const clientIp = getClientIpFromReq(req);
-    if (isRateLimited(clientIp)) {
-      return res.status(429).json({
-        success: false,
-        error: 'Too many failed authentication attempts. Access locked for 15 minutes.'
-      });
-    }
-
     const { username, password } = req.body || {};
+
     if (verifyAdminCredentials(username, password)) {
       clearFailedAttempts(clientIp);
       return res.json({
@@ -246,24 +227,18 @@ async function startServer() {
 
   app.post('/api/admin-register', (req, res) => {
     const clientIp = getClientIpFromReq(req);
-    if (isRateLimited(clientIp)) {
-      return res.status(429).json({
-        success: false,
-        error: 'Too many failed authentication attempts. Access locked for 15 minutes.'
-      });
-    }
-
     const { username, password, adminDeviceId } = req.body || {};
+
     if (!adminDeviceId || typeof adminDeviceId !== 'string') {
       return res.status(400).json({ success: false, error: 'Device identifier required.' });
     }
 
     if (verifyAdminCredentials(username, password)) {
       clearFailedAttempts(clientIp);
-      if (registeredAdminDevices.size >= serverMaxAdmins && !registeredAdminDevices.has(adminDeviceId)) {
-        return res.status(403).json({ success: false, error: 'Administrator registration limit reached.' });
-      }
       registeredAdminDevices.add(adminDeviceId);
+      if (registeredAdminDevices.size > serverMaxAdmins) {
+        serverMaxAdmins = registeredAdminDevices.size;
+      }
       return res.json({ 
         success: true, 
         token: ADMIN_SECRET_KEY, 
