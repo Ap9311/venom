@@ -1720,12 +1720,11 @@ Post Venom Now: https://myvenom.vercel.app`;
 
                       {/* Image content */}
                       {chat.imageUrl && (
-                        <div className="mt-2.5 rounded-lg overflow-hidden bg-zinc-900/60 border border-zinc-850 max-h-64 flex justify-center items-center">
+                        <div className="mt-2.5 rounded-lg overflow-hidden bg-zinc-900/60 border border-zinc-850 max-h-64 flex justify-center items-center select-none">
                           <img
                             src={chat.imageUrl}
                             alt="Dispatch graphic"
-                            className="w-full h-full object-contain cursor-zoom-in"
-                            onClick={() => window.open(chat.imageUrl, '_blank')}
+                            className="w-full h-full object-contain select-none"
                             referrerPolicy="no-referrer"
                           />
                         </div>
@@ -2609,38 +2608,6 @@ Post Venom Now: https://myvenom.vercel.app`;
                     SHARE VIA DEVICE APPS
                   </button>
                 )}
-
-                {/* Grid of Social Platform Shortcuts */}
-                <div className="space-y-2">
-                  <div className="text-[9px] text-zinc-600 font-mono font-bold tracking-wider uppercase text-left">
-                    Social Quick Links
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {sharePlatforms.map((platform) => {
-                      const PlatformIcon = platform.icon;
-                      return (
-                        <a
-                          key={platform.name}
-                          href={platform.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => {
-                            if (platform.name === 'Instagram') {
-                              navigator.clipboard.writeText(shareModalFormattedMessage);
-                              setIsCopiedLink(true);
-                              setTimeout(() => setIsCopiedLink(false), 2000);
-                            }
-                            setTimeout(() => setShowShareModal(false), 500);
-                          }}
-                          className={`flex items-center gap-2.5 p-2 rounded-lg border border-zinc-900 bg-zinc-900/10 text-zinc-400 text-xs transition-all duration-200 ${platform.color} cursor-pointer hover:bg-zinc-900/40 font-sans`}
-                        >
-                          <PlatformIcon className="w-4 h-4 shrink-0" />
-                          <span>{platform.name}</span>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
 
                 {/* Copy Link input box */}
                 <div className="space-y-1.5 pt-1">

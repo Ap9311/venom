@@ -153,18 +153,6 @@ export default function Header({
                           onNavigate('/report');
                           setShowMenuDropdown(false);
                         }
-                      },
-                      {
-                        label: 'Install App',
-                        desc: 'Download PWA Desktop/Mobile',
-                        icon: Download,
-                        color: 'text-sky-400 bg-sky-500/5 border border-sky-500/10',
-                        onClick: () => {
-                          if ((window as any).triggerPwaInstall) {
-                            (window as any).triggerPwaInstall('main');
-                          }
-                          setShowMenuDropdown(false);
-                        }
                       }
                     ].map((item, idx) => (
                       <button

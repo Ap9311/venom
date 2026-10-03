@@ -100,16 +100,19 @@ export default function VenomCard({
   compact = false
 }: VenomCardProps) {
   const [showComments, setShowComments] = useState(false);
-  const [isExpandingImage, setIsExpandingImage] = useState(false);
   const [isCopingHash, setIsCopingHash] = useState(false);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isCopiedLink, setIsCopiedLink] = useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const lastTapRef = React.useRef<number>(0);
+  const lastTouchPosRef = React.useRef<{ clientX: number; clientY: number }>({ clientX: 0, clientY: 0 });
+  const lastTriggerTimeRef = React.useRef<number>(0);
+  const [activeHeart, setActiveHeart] = useState<{ id: number; x: number; y: number; theme: { id: string; stop1: string; stop2: string } } | null>(null);
   
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [showMobileReactions, setShowMobileReactions] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
-  const [showGiantHeart, setShowGiantHeart] = useState(false);
 
   // Local locks to prevent concurrent rapid double clicks
   const [isLiking, setIsLiking] = useState(false);
@@ -126,16 +129,16 @@ export default function VenomCard({
     setActiveReaction(getPostReaction(post.id));
   }, [post.id]);
 
-  // Lock body scroll when overlay screens (Share Modal or Expanded Image lightbox) are active
+  // Lock body scroll when share modal overlay is active
   React.useEffect(() => {
-    if (showShareModal || isExpandingImage) {
+    if (showShareModal) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = originalOverflow;
       };
     }
-  }, [showShareModal, isExpandingImage]);
+  }, [showShareModal]);
 
   React.useEffect(() => {
     let active = true;
@@ -639,21 +642,111 @@ Post Venom Now: https://myvenom.vercel.app`;
     }, 2500);
   };
 
-  const handleDoubleTap = (e: React.MouseEvent) => {
-    // Prevent double tap from selecting text on some browsers (though CSS user-select is better)
-    e.preventDefault();
+  const VENOM_GRADIENT_THEMES = [
+    {
+      id: 'white',
+      stop1: '#ffffff',
+      stop2: '#f4f4f5',
+    },
+    {
+      id: 'emerald',
+      stop1: '#10b981',
+      stop2: '#059669',
+    },
+    {
+      id: 'magenta',
+      stop1: '#a855f7',
+      stop2: '#ec4899',
+    }
+  ];
+
+  const triggerDoubleTapLike = (clientX?: number, clientY?: number) => {
+    // Prevent duplicate triggers caused by touchEnd + doubleClick firing in quick succession
+    const now = Date.now();
+    if (now - lastTriggerTimeRef.current < 600) {
+      return;
+    }
+    lastTriggerTimeRef.current = now;
+
     if (isBlocked) {
       if (onBlockedActionTriggered) onBlockedActionTriggered();
       return;
     }
-    
-    // Show the giant heart animation
-    setShowGiantHeart(true);
-    setTimeout(() => setShowGiantHeart(false), 1000);
+
+    let x = 0;
+    let y = 0;
+
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
+      if (clientX !== undefined && clientY !== undefined && clientX > 0 && clientY > 0) {
+        x = clientX - rect.left;
+        y = clientY - rect.top;
+      } else {
+        x = rect.width / 2;
+        y = rect.height / 2;
+      }
+    }
+
+    // Weighted probability selection:
+    // Pure White: 1 in 100 (rare 1% easter egg)
+    // Cyber Emerald: ~2 in 5 (40%)
+    // Venom Magenta: ~3 in 5 (59%)
+    const roll = Math.random();
+    let randomTheme = VENOM_GRADIENT_THEMES[2]; // Venom Magenta
+    if (roll < 0.01) {
+      randomTheme = VENOM_GRADIENT_THEMES[0]; // Pure White
+    } else if (roll < 0.406) {
+      randomTheme = VENOM_GRADIENT_THEMES[1]; // Cyber Emerald
+    }
+    const heartId = Date.now();
+
+    setActiveHeart({
+      id: heartId,
+      x,
+      y,
+      theme: randomTheme
+    });
+
+    setTimeout(() => {
+      setActiveHeart((current) => (current?.id === heartId ? null : current));
+    }, 750);
 
     // Toggle like if it is not already liked
     if (!liked) {
       handleLikeToggle();
+    }
+  };
+
+  const handleDoubleTap = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, textarea, a, [role="button"]')) {
+      return;
+    }
+    // Prevent double tap from selecting text on some browsers
+    e.preventDefault();
+    triggerDoubleTapLike(e.clientX, e.clientY);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      lastTouchPosRef.current = {
+        clientX: e.touches[0].clientX,
+        clientY: e.touches[0].clientY,
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, textarea, a, [role="button"]')) {
+      return;
+    }
+    const now = Date.now();
+    if (now - lastTapRef.current < 350 && now - lastTapRef.current > 50) {
+      lastTapRef.current = 0;
+      triggerDoubleTapLike(lastTouchPosRef.current.clientX, lastTouchPosRef.current.clientY);
+    } else {
+      lastTapRef.current = now;
     }
   };
 
@@ -777,8 +870,11 @@ Post Venom Now: https://myvenom.vercel.app`;
 
   return (
     <article 
+      ref={cardRef}
       id={`post-${post.id}`} 
       onDoubleClick={handleDoubleTap}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       className={`relative border rounded-xl overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-300 font-sans text-zinc-300 select-none ${
         highlighted 
           ? 'border-emerald-500/50 bg-emerald-950/10 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30' 
@@ -786,17 +882,35 @@ Post Venom Now: https://myvenom.vercel.app`;
       }`}
     >
       
-      {/* Giant Heart Double Tap Animation */}
-      <AnimatePresence>
-        {showGiantHeart && (
+      {/* Venom UI Clean Single Gradient Heart Double Tap Animation */}
+      <AnimatePresence mode="wait">
+        {activeHeart && (
           <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1.1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+            key={activeHeart.id}
+            initial={{ scale: 0, opacity: 0, x: activeHeart.x, y: activeHeart.y }}
+            animate={{ scale: [0, 1.25, 1], opacity: [0, 1, 1], y: activeHeart.y - 12 }}
+            exit={{ scale: 0.85, opacity: 0, y: activeHeart.y - 25 }}
+            transition={{ duration: 0.65, ease: 'easeOut' }}
+            className="absolute pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2"
+            style={{ left: 0, top: 0 }}
           >
-            <Heart className="w-20 h-20 text-rose-500 fill-rose-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.5)]" />
+            <svg 
+              className="w-20 h-20 sm:w-24 sm:h-24 filter drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <linearGradient id={`venom-heart-grad-${activeHeart.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={activeHeart.theme.stop1} />
+                  <stop offset="100%" stopColor={activeHeart.theme.stop2} />
+                </linearGradient>
+              </defs>
+              <path 
+                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
+                fill={`url(#venom-heart-grad-${activeHeart.id})`}
+              />
+            </svg>
           </motion.div>
         )}
       </AnimatePresence>
@@ -885,13 +999,12 @@ Post Venom Now: https://myvenom.vercel.app`;
 
         {/* --- Image Attachment (Optional for all post types) --- */}
         {post.imageUrl && (
-          <div className="relative rounded overflow-hidden bg-zinc-900/30 border border-zinc-900 mb-4 max-h-80 flex items-center justify-center">
+          <div className="relative rounded overflow-hidden bg-zinc-900/30 border border-zinc-900 mb-4 max-h-80 flex items-center justify-center select-none">
             <img 
               src={post.imageUrl} 
               alt={post.title} 
               referrerPolicy="no-referrer"
-              className="max-h-80 object-contain w-full cursor-zoom-in hover:brightness-105 transition-all"
-              onClick={() => setIsExpandingImage(true)}
+              className="max-h-80 object-contain w-full pointer-events-none select-none"
             />
           </div>
         )}
@@ -1196,27 +1309,6 @@ Post Venom Now: https://myvenom.vercel.app`;
         )}
       </AnimatePresence>
 
-      {/* Image expanded modal */}
-      {isExpandingImage && post.imageUrl && (
-        <div 
-          className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => setIsExpandingImage(false)}
-        >
-          <button 
-            className="absolute top-4 right-4 p-2 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-emerald-400 rounded"
-            onClick={() => setIsExpandingImage(false)}
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <img 
-            src={post.imageUrl} 
-            alt={post.title} 
-            referrerPolicy="no-referrer"
-            className="max-h-full max-w-full object-contain rounded border border-zinc-800 shadow-2xl animate-fade-in"
-          />
-        </div>
-      )}
-
       {/* Premium Social Sharing Modal */}
       <AnimatePresence>
         {showShareModal && (
@@ -1281,38 +1373,6 @@ Post Venom Now: https://myvenom.vercel.app`;
                     SHARE VIA DEVICE APPS
                   </button>
                 )}
-
-                {/* Grid of Social Platform Shortcuts */}
-                <div className="space-y-2">
-                  <div className="text-[9px] text-zinc-600 font-mono font-bold tracking-wider uppercase text-left">
-                    Social Quick Links
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {sharePlatforms.map((platform) => {
-                      const PlatformIcon = platform.icon;
-                      return (
-                        <a
-                          key={platform.name}
-                          href={platform.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => {
-                            if (platform.name === 'Instagram') {
-                              navigator.clipboard.writeText(dispatchText);
-                              setIsCopiedLink(true);
-                              setTimeout(() => setIsCopiedLink(false), 2000);
-                            }
-                            setTimeout(() => setShowShareModal(false), 500);
-                          }}
-                          className={`flex items-center gap-2.5 p-2 rounded-lg border border-zinc-900 bg-zinc-900/10 text-zinc-400 text-xs transition-all duration-200 ${platform.color} cursor-pointer hover:bg-zinc-900/40 font-sans`}
-                        >
-                          <PlatformIcon className="w-4 h-4 shrink-0" />
-                          <span>{platform.name}</span>
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
 
                 {/* Copy Link input box */}
                 <div className="space-y-1.5 pt-1">

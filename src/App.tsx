@@ -31,6 +31,7 @@ import AdminReports from './components/admin/AdminReports';
 import CommunitiesPage from './components/CommunitiesPage';
 import AdminCommunities from './components/admin/AdminCommunities';
 import AdminCommunityReports from './components/admin/AdminCommunityReports';
+import AdminAudit from './components/admin/AdminAudit';
 import LoginPage from './components/LoginPage';
 import NxDomainError from './components/NxDomainError';
 import { checkIsAdminDevice, getAdminDeviceId } from './utils/adminAuth';
@@ -689,6 +690,21 @@ export default function App() {
         return <div className="min-h-screen bg-[#202124]" />;
       }
       return <NxDomainError />;
+    }
+
+    // Admin audit & gate security terminal route check
+    if (currentPath.startsWith('/admin/audit')) {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="min-h-screen bg-[#030303]"
+        >
+          <AdminAudit onNavigateHome={handleBackToHome} />
+        </motion.div>
+      );
     }
 
     // Admin community reports terminal route check

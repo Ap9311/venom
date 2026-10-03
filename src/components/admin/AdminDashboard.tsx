@@ -11,10 +11,10 @@ import { AdminTelemetry } from './AdminTelemetry';
 import { AdminSecurity } from './AdminSecurity';
 import { AdminPosts } from './AdminPosts';
 import { AdminEditModal } from './AdminEditModal';
-import { AdminDeviceManager } from './AdminDeviceManager';
 import { checkIsAdminDevice, ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { 
   ShieldAlert, 
+  ShieldCheck,
   Lock, 
   Key, 
   X, 
@@ -182,6 +182,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             {isAuthenticated && (
               <button
                 onClick={() => {
+                  window.history.pushState({}, '', '/admin/audit');
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
+                className="px-3 py-1 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
+              >
+                Admin Audit
+              </button>
+            )}
+            {isAuthenticated && (
+              <button
+                onClick={() => {
                   window.history.pushState({}, '', '/admin/communities');
                   window.dispatchEvent(new PopStateEvent('popstate'));
                 }}
@@ -275,14 +286,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             animate={{ opacity: 1 }}
             className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 pb-28 md:pb-12 space-y-6 relative z-10"
           >
-            {/* DUAL HARDWARE ADMIN IDENTITY & /LOGIN GATE MANAGER */}
-            <AdminDeviceManager />
-
             {/* STATS & SVG GRAPHS SECTION */}
             <AdminTelemetry posts={posts} />
 
             {/* THREAT RAPID-RESPONSE ACCESS BAR & COMMUNITY CONTROL PANEL */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Report Triage */}
               <div className="bg-zinc-950 border border-emerald-500/10 p-4 rounded-xl flex flex-col items-stretch justify-between gap-4 shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/[0.02] rounded-full blur-xl pointer-events-none" />
@@ -366,6 +374,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                   className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Admin Communities</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                </button>
+              </div>
+
+              {/* Admin Audit & Gate Security */}
+              <div className="bg-zinc-950 border border-emerald-500/10 p-4 rounded-xl flex flex-col items-stretch justify-between gap-4 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/[0.02] rounded-full blur-xl pointer-events-none" />
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block leading-none">
+                      Admin Identity & Gate Audit
+                    </span>
+                    <span className="text-[9px] text-zinc-500 uppercase font-sans mt-1.5 block leading-relaxed">
+                      Review admin authorization key, session clearance, system privileges, and gate security status.
+                    </span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/admin/audit');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+                >
+                  <span>Launch Audit Terminal</span>
                   <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
                 </button>
               </div>
