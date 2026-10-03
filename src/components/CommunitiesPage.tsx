@@ -56,7 +56,7 @@ import {
   Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceImei, getLegacyDeviceImei } from '../utils/ip';
+import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getLegacyDeviceImei } from '../utils/ip';
 import { generatePostHash } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
 import { checkIpBlockStatus } from '../utils/blockChecker';
@@ -83,22 +83,17 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Device details
   const [deviceIp, setDeviceIp] = useState('');
   const [deviceSig, setDeviceSig] = useState({ type: 'SERIAL', value: '' });
-  const [deviceImei, setDeviceImei] = useState('');
-  const [deviceSerial, setDeviceSerial] = useState('');
-  const [unlockedCommIds, setUnlockedCommIds] = useState<string[]>([]);
 
   // Cross-browser device creator & ownership validator (pure hardware signature matching)
   const checkIsCreator = (item: any): boolean => {
-    if (!item) return false;
+    if (!item || !deviceSig?.value) return false;
     const legacyImei = getLegacyDeviceImei();
     const targetImei = item.createdByImei;
     const targetSerial = item.createdBySerial;
-    const currentImei = deviceImei || (typeof window !== 'undefined' ? localStorage.getItem('venom_device_imei') : '');
-    const currentSerial = deviceSerial || (typeof window !== 'undefined' ? localStorage.getItem('venom_device_serial') : '');
-
-    return Boolean(
-      (targetImei && (targetImei === currentImei || targetImei === deviceSig?.value || targetImei === legacyImei)) ||
-      (targetSerial && (targetSerial === currentSerial || targetSerial === deviceSig?.value))
+    return (
+      targetImei === deviceSig.value ||
+      (targetSerial && targetSerial === deviceSig.value) ||
+      Boolean(legacyImei && targetImei === legacyImei)
     );
   };
 
@@ -235,101 +230,25 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
   // Load user identities & local persistent interaction lists
   useEffect(() => {
-    let isMounted = true;
     const initDevice = async () => {
       const ip = await getClientIp();
       const sig = await getDeviceIdentifier();
-      const imei = await getDeviceImei();
-      const serial = await getDeviceSerial();
-      const legacyImei = getLegacyDeviceImei();
+      setDeviceIp(ip);
+      setDeviceSig(sig);
 
-      if (isMounted) {
-        setDeviceIp(ip);
-        setDeviceSig(sig);
-        setDeviceImei(imei);
-        setDeviceSerial(serial);
-      }
-
-      // Check if user has posted at least 1 post on the main feed (hardware verified)
+      // Check if user has posted at least 1 post on the main feed
       const hasPosted = posts.some(
-        p => p.postedFromIp === ip || 
-             p.postedFromImei === imei || 
-             p.postedFromImei === sig.value || 
-             (legacyImei && p.postedFromImei === legacyImei)
+        p => p.postedFromIp === ip || p.postedFromImei === sig.value
       ) || localStorage.getItem('venom_has_posted_at_least_once') === 'true';
-
-      if (hasPosted && isMounted) {
+      if (hasPosted) {
         setHasPostedAtLeastOnce(true);
         localStorage.setItem('venom_has_posted_at_least_once', 'true');
-      }
-
-      // Query Firestore interactions collection to restore all user actions even when cookies are wiped
-      if (db && imei) {
-        try {
-          const qImei = query(collection(db, 'interactions'), where('imei', '==', imei));
-          const qDocs = [getDocs(qImei)];
-          if (legacyImei) {
-            qDocs.push(getDocs(query(collection(db, 'interactions'), where('imei', '==', legacyImei))));
-          }
-
-          const snaps = await Promise.all(qDocs);
-          const restoredLikes: string[] = [];
-          const restoredReactions: { [chatId: string]: string } = {};
-          const restoredPolls: { [chatId: string]: number } = {};
-          const restoredUnlocks: string[] = [];
-          let restoredPins: string[] | null = null;
-
-          snaps.forEach(snap => {
-            snap.forEach(d => {
-              const data = d.data();
-              if (data.type === 'chat_like' && data.chatId) {
-                if (!restoredLikes.includes(data.chatId)) restoredLikes.push(data.chatId);
-              } else if (data.type === 'chat_reaction' && data.chatId && data.reactionKey) {
-                restoredReactions[data.chatId] = data.reactionKey;
-              } else if (data.type === 'chat_poll' && data.chatId && typeof data.optionIndex === 'number') {
-                restoredPolls[data.chatId] = data.optionIndex;
-              } else if (d.id.startsWith('unlocked_comm_') && data.communityId) {
-                if (!restoredUnlocks.includes(data.communityId)) restoredUnlocks.push(data.communityId);
-                localStorage.setItem(`unlocked_comm_${data.communityId}`, 'true');
-                if (data.password) {
-                  localStorage.setItem(`unlocked_comm_pwd_${data.communityId}`, data.password);
-                }
-              } else if (d.id.startsWith('pinned_comms_') && Array.isArray(data.pinnedIds)) {
-                restoredPins = data.pinnedIds;
-              }
-            });
-          });
-
-          if (isMounted) {
-            if (restoredLikes.length > 0) {
-              setLikedChats(prev => Array.from(new Set([...prev, ...restoredLikes])));
-              localStorage.setItem('venom_liked_chats', JSON.stringify(restoredLikes));
-            }
-            if (Object.keys(restoredReactions).length > 0) {
-              setUserChatReactions(prev => ({ ...prev, ...restoredReactions }));
-              localStorage.setItem('venom_chat_reactions', JSON.stringify(restoredReactions));
-            }
-            if (Object.keys(restoredPolls).length > 0) {
-              setVotedChatsPolls(prev => ({ ...prev, ...restoredPolls }));
-              localStorage.setItem('venom_voted_chats_polls', JSON.stringify(restoredPolls));
-            }
-            if (restoredUnlocks.length > 0) {
-              setUnlockedCommIds(prev => Array.from(new Set([...prev, ...restoredUnlocks])));
-            }
-            if (restoredPins && (restoredPins as string[]).length > 0) {
-              setPinnedIds(restoredPins);
-              localStorage.setItem('venom_pinned_communities', JSON.stringify(restoredPins));
-            }
-          }
-        } catch (err) {
-          console.warn('Could not restore community interactions from Firestore:', err);
-        }
       }
     };
 
     initDevice();
 
-    // Load pinned list from local storage fallback
+    // Load pinned list from local storage
     const savedPins = localStorage.getItem('venom_pinned_communities');
     if (savedPins) {
       try {
@@ -339,27 +258,23 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       }
     }
 
-    // Load liked chats list from local storage fallback
+    // Load liked chats list from local storage
     const savedLiked = localStorage.getItem('venom_liked_chats');
     if (savedLiked) {
       try { setLikedChats(JSON.parse(savedLiked)); } catch(e){}
     }
 
-    // Load voted chats polls from local storage fallback
+    // Load voted chats polls from local storage
     const savedVotedPolls = localStorage.getItem('venom_voted_chats_polls');
     if (savedVotedPolls) {
       try { setVotedChatsPolls(JSON.parse(savedVotedPolls)); } catch(e){}
     }
 
-    // Load chat reactions from local storage fallback
+    // Load chat reactions from local storage
     const savedReactions = localStorage.getItem('venom_chat_reactions');
     if (savedReactions) {
       try { setUserChatReactions(JSON.parse(savedReactions)); } catch(e){}
     }
-
-    return () => {
-      isMounted = false;
-    };
   }, [posts]);
 
   // Listen to all Communities from Firestore in real-time
@@ -471,9 +386,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
         // If password is set on shared community, check if unlocked with current password
         if (targetComm.password && !checkIsCreator(targetComm)) {
-          const isUnlocked = unlockedCommIds.includes(targetComm.id) || localStorage.getItem(`unlocked_comm_${targetComm.id}`) === 'true';
+          const isUnlocked = localStorage.getItem(`unlocked_comm_${targetComm.id}`) === 'true';
           const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${targetComm.id}`) || '';
-          if (!isUnlocked || (storedPwd && storedPwd !== targetComm.password)) {
+          if (!isUnlocked || storedPwd !== targetComm.password) {
             setShowPasswordGate(targetComm);
           } else {
             handleEnterCommunityDirect(targetComm, sharedChatId);
@@ -484,7 +399,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         }
       }
     }
-  }, [communities, initialDeepLinkProcessed, unlockedCommIds]);
+  }, [communities, initialDeepLinkProcessed]);
 
   // Synchronize activeCommunity and verify password gate in real-time
   useEffect(() => {
@@ -493,9 +408,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     if (latestComm) {
       const isCreator = checkIsCreator(latestComm);
       if (latestComm.password && !isCreator) {
-        const isUnlocked = unlockedCommIds.includes(latestComm.id) || localStorage.getItem(`unlocked_comm_${latestComm.id}`) === 'true';
+        const isUnlocked = localStorage.getItem(`unlocked_comm_${latestComm.id}`) === 'true';
         const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${latestComm.id}`) || '';
-        if (!isUnlocked || (storedPwd && storedPwd !== latestComm.password)) {
+        if (!isUnlocked || storedPwd !== latestComm.password) {
           // Password has changed, kick the user out of activeCommunity and show password gate modal
           setActiveCommunity(null);
           setShowPasswordGate(latestComm);
@@ -578,15 +493,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     }
     setPinnedIds(updatedPins);
     localStorage.setItem('venom_pinned_communities', JSON.stringify(updatedPins));
-
-    if (deviceImei && db) {
-      setDoc(doc(db, 'interactions', `pinned_comms_${deviceImei}`), {
-        type: 'pinned_communities',
-        pinnedIds: updatedPins,
-        imei: deviceImei,
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(console.error);
-    }
   };
 
   // Submit Community Creation
@@ -749,23 +655,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       if (rememberPassword) {
         localStorage.setItem(`unlocked_comm_${targetComm.id}`, 'true');
         localStorage.setItem(`unlocked_comm_pwd_${targetComm.id}`, targetComm.password);
-        if (deviceImei && db) {
-          setDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`), {
-            type: 'unlocked_community',
-            communityId: targetComm.id,
-            password: targetComm.password,
-            imei: deviceImei,
-            unlockedAt: new Date().toISOString()
-          }, { merge: true }).catch(console.error);
-        }
-        setUnlockedCommIds(prev => Array.from(new Set([...prev, targetComm.id])));
       } else {
         localStorage.removeItem(`unlocked_comm_${targetComm.id}`);
         localStorage.removeItem(`unlocked_comm_pwd_${targetComm.id}`);
-        if (deviceImei && db) {
-          deleteDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`)).catch(console.error);
-        }
-        setUnlockedCommIds(prev => prev.filter(id => id !== targetComm.id));
       }
       setShowPasswordGate(null);
       setGatePasswordInput('');
@@ -887,21 +779,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       setLikedChats(updatedLikes);
       localStorage.setItem('venom_liked_chats', JSON.stringify(updatedLikes));
-
-      if (deviceImei && db) {
-        const intRef = doc(db, 'interactions', `chat_like_${chatId}_${deviceImei}`);
-        if (isLiked) {
-          deleteDoc(intRef).catch(console.error);
-        } else {
-          setDoc(intRef, {
-            type: 'chat_like',
-            chatId,
-            communityId: activeCommunity.id,
-            imei: deviceImei,
-            createdAt: new Date().toISOString()
-          }).catch(console.error);
-        }
-      }
     } catch (err: any) {
       console.error('Like action failed:', err);
     }
@@ -941,22 +818,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       setUserChatReactions(updatedReactions);
       localStorage.setItem('venom_chat_reactions', JSON.stringify(updatedReactions));
       setReactionMenuChatId(null);
-
-      if (deviceImei && db) {
-        const intRef = doc(db, 'interactions', `chat_reaction_${chatId}_${deviceImei}`);
-        if (previousReaction === reactionKey) {
-          deleteDoc(intRef).catch(console.error);
-        } else {
-          setDoc(intRef, {
-            type: 'chat_reaction',
-            chatId,
-            reactionKey,
-            communityId: activeCommunity.id,
-            imei: deviceImei,
-            createdAt: new Date().toISOString()
-          }).catch(console.error);
-        }
-      }
     } catch (err) {
       console.error('Reaction failed:', err);
     }
@@ -1045,19 +906,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       return;
     }
 
-    // Hardware-locked duplicate check from Firestore
-    if (deviceImei && db) {
-      try {
-        const repRef = doc(db, 'interactions', `${deviceReportKey}_${deviceImei}`);
-        const repSnap = await getDoc(repRef);
-        if (repSnap.exists()) {
-          localStorage.setItem(deviceReportKey, 'true');
-          setReportError('POLICY SHIELD: You can submit a report for this specific content only once from this device.');
-          return;
-        }
-      } catch (err) {}
-    }
-
     setReportSubmitting(true);
     setReportError('');
 
@@ -1107,16 +955,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       // Lock reporting for this content on this device
       localStorage.setItem(deviceReportKey, 'true');
-
-      if (deviceImei && db) {
-        setDoc(doc(db, 'interactions', `${deviceReportKey}_${deviceImei}`), {
-          type: isChat ? 'chat_report' : 'comm_report',
-          targetId,
-          chatId: reportChatId || null,
-          imei: deviceImei,
-          createdAt: new Date().toISOString()
-        }).catch(console.error);
-      }
 
       setReportSuccess('Report submitted successfully. Thank you for keeping the grid secure.');
 
@@ -1271,17 +1109,6 @@ Post Venom Now: https://myvenom.vercel.app`;
       const updatedVoted = { ...votedChatsPolls, [chatId]: optionIdx };
       setVotedChatsPolls(updatedVoted);
       localStorage.setItem('venom_voted_chats_polls', JSON.stringify(updatedVoted));
-
-      if (deviceImei && db) {
-        setDoc(doc(db, 'interactions', `chat_poll_${chatId}_${deviceImei}`), {
-          type: 'chat_poll',
-          chatId,
-          optionIndex: optionIdx,
-          communityId: activeCommunity.id,
-          imei: deviceImei,
-          createdAt: new Date().toISOString()
-        }).catch(console.error);
-      }
     } catch (err) {
       console.error('Failed to submit poll vote:', err);
     }
@@ -1435,12 +1262,12 @@ Post Venom Now: https://myvenom.vercel.app`;
                 <div
                   key={comm.id}
                   onClick={() => {
-                    const isUnlocked = unlockedCommIds.includes(comm.id) || localStorage.getItem(`unlocked_comm_${comm.id}`) === 'true';
+                    const isUnlocked = localStorage.getItem(`unlocked_comm_${comm.id}`) === 'true';
                     const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${comm.id}`) || '';
                     const isCreator = checkIsCreator(comm);
 
                     if (comm.password && !isCreator) {
-                      if (!isUnlocked || (storedPwd && storedPwd !== comm.password)) {
+                      if (!isUnlocked || storedPwd !== comm.password) {
                         setShowPasswordGate(comm);
                       } else {
                         handleEnterCommunityDirect(comm);

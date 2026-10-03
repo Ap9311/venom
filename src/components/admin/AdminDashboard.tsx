@@ -11,8 +11,6 @@ import { AdminTelemetry } from './AdminTelemetry';
 import { AdminSecurity } from './AdminSecurity';
 import { AdminPosts } from './AdminPosts';
 import { AdminEditModal } from './AdminEditModal';
-import { AdminDeviceManager } from './AdminDeviceManager';
-import { checkIsAdminDevice } from '../../utils/adminAuth';
 import { 
   ShieldAlert, 
   Lock, 
@@ -41,25 +39,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
   
   const [selectedPostToEdit, setSelectedPostToEdit] = useState<Post | null>(null);
 
-  // Check existing session authorization or hardware admin device identity on load
+  // Check existing session authorization on load
   useEffect(() => {
-    let isMounted = true;
-    const checkAuth = async () => {
-      const isAdminDevice = await checkIsAdminDevice();
-      if (isAdminDevice && isMounted) {
-        setIsAuthenticated(true);
-        sessionStorage.setItem('venom_admin_auth', 'true');
-        return;
-      }
-      const authSession = sessionStorage.getItem('venom_admin_auth');
-      if (authSession === 'true' && isMounted) {
-        setIsAuthenticated(true);
-      }
-    };
-    checkAuth();
-    return () => {
-      isMounted = false;
-    };
+    const authSession = sessionStorage.getItem('venom_admin_auth');
+    if (authSession === 'true') {
+      setIsAuthenticated(true);
+    }
   }, []);
 
   // Handle administrator credentials authentication
@@ -272,9 +257,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             animate={{ opacity: 1 }}
             className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 pb-28 md:pb-12 space-y-6 relative z-10"
           >
-            {/* DUAL HARDWARE ADMIN IDENTITY & /LOGIN GATE MANAGER */}
-            <AdminDeviceManager />
-
             {/* STATS & SVG GRAPHS SECTION */}
             <AdminTelemetry posts={posts} />
 

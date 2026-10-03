@@ -30,9 +30,6 @@ import AdminReports from './components/admin/AdminReports';
 import CommunitiesPage from './components/CommunitiesPage';
 import AdminCommunities from './components/admin/AdminCommunities';
 import AdminCommunityReports from './components/admin/AdminCommunityReports';
-import LoginPage from './components/LoginPage';
-import NxDomainError from './components/NxDomainError';
-import { checkIsAdminDevice } from './utils/adminAuth';
 import { 
   Cpu, 
   Search,
@@ -75,39 +72,6 @@ export default function App() {
   const [showQuarantineModal, setShowQuarantineModal] = useState(false);
   const [showInstallPwaModal, setShowInstallPwaModal] = useState(false);
   const [installPwaAppType, setInstallPwaAppType] = useState<'main' | 'admin'>('main');
-  const [isAdminDevice, setIsAdminDevice] = useState<boolean | null>(null);
-
-  // Verify whether this physical device holds permanent administrative clearance
-  useEffect(() => {
-    let isMounted = true;
-    const verifyDeviceAdminStatus = async () => {
-      try {
-        const isAdm = await checkIsAdminDevice();
-        if (isMounted) {
-          setIsAdminDevice(isAdm);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setIsAdminDevice(false);
-        }
-      }
-    };
-
-    verifyDeviceAdminStatus();
-
-    const handleSync = () => {
-      verifyDeviceAdminStatus();
-    };
-
-    window.addEventListener('storage', handleSync);
-    window.addEventListener('popstate', handleSync);
-
-    return () => {
-      isMounted = false;
-      window.removeEventListener('storage', handleSync);
-      window.removeEventListener('popstate', handleSync);
-    };
-  }, []);
 
   useEffect(() => {
     (window as any).openPwaInstallModal = (type: 'main' | 'admin' = 'main') => {
@@ -504,25 +468,9 @@ export default function App() {
         const votedPosts: { [postId: string]: 'up' | 'down' } = {};
         const votedPolls: { [postId: string]: number } = {};
         const reactedPosts: { [postId: string]: string } = {};
-        const likedComments: string[] = [];
-        const likedReplies: string[] = [];
-        const reportedPosts: string[] = [];
         
         const processDoc = (docSnap: any) => {
           const data = docSnap.data();
-          if (data.type === 'like_comment' && data.commentKey) {
-            if (!likedComments.includes(data.commentKey)) likedComments.push(data.commentKey);
-            return;
-          }
-          if (data.type === 'like_reply' && data.replyKey) {
-            if (!likedReplies.includes(data.replyKey)) likedReplies.push(data.replyKey);
-            return;
-          }
-          if (data.type === 'report_post' && data.postId) {
-            if (!reportedPosts.includes(data.postId)) reportedPosts.push(data.postId);
-            return;
-          }
-
           const pId = data.postId;
           if (!pId) return;
           
@@ -546,18 +494,14 @@ export default function App() {
             parsed = JSON.parse(existing);
           } catch (e) {}
         }
-
-        const mergedComments = Array.from(new Set([...likedComments, ...(parsed.likedComments || [])]));
-        const mergedReplies = Array.from(new Set([...likedReplies, ...(parsed.likedReplies || [])]));
         
         localStorage.setItem('venom_user_interactions', JSON.stringify({
           likedPosts,
           votedPosts,
           votedPolls,
-          likedComments: mergedComments,
-          likedReplies: mergedReplies,
+          likedComments: parsed.likedComments || [],
+          likedReplies: parsed.likedReplies || [],
           reactedPosts,
-          reportedPosts,
         }));
         
         // Dispatch storage event to notify components of synchronized state
@@ -637,88 +581,47 @@ export default function App() {
           return timeB - timeA;
         });
 
-  // Administrator Clearance Gate (/login)
-  if (currentPath.startsWith('/login')) {
-    return (
-      <LoginPage 
-        onNavigateAdmin={handleNavigateAdmin} 
-        onBackToHome={handleBackToHome} 
-      />
-    );
-  }
-
-  // Cryptographic Administrative Access Gate (/admin and sub-routes)
-  // ONLY devices with registered hardware admin fingerprint identity can access /admin.
-  // All other devices see the authentic browser "This site can't be reached" (DNS_PROBE_FINISHED_NXDOMAIN).
-  if (currentPath.startsWith('/admin')) {
-    const isLocalAdmin = typeof window !== 'undefined' && 
-      (sessionStorage.getItem('venom_admin_auth') === 'true' || localStorage.getItem('venom_is_admin_device') === 'true');
-
-    if (!isAdminDevice && !isLocalAdmin) {
-      if (isAdminDevice === null) {
-        return <div className="min-h-screen bg-[#202124]" />;
-      }
-      return <NxDomainError />;
-    }
-
-    // Admin community reports terminal route check
-    if (currentPath.startsWith('/admin/report-communities') || currentPath.startsWith('/admin/community-reports')) {
-      return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminCommunityReports />
-        </motion.div>
-      );
-    }
-
-    // Admin reports terminal route check
-    if (currentPath.startsWith('/admin/report')) {
-      return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminReports />
-        </motion.div>
-      );
-    }
-
-    // Admin communities terminal route check
-    if (currentPath.startsWith('/admin/communities')) {
-      return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminCommunities onNavigateHome={handleBackToHome} />
-        </motion.div>
-      );
-    }
-
-    // Admin dashboard root
+  // Admin community reports terminal route check
+  if (currentPath.startsWith('/admin/report-communities') || currentPath.startsWith('/admin/community-reports')) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -15 }}
         transition={{ duration: 0.22, ease: 'easeOut' }}
-        className="min-h-screen bg-zinc-950"
+        className="min-h-screen bg-[#030303]"
       >
-        <AdminPanel 
-          posts={posts} 
-          onNavigateHome={handleBackToHome} 
-        />
+        <AdminCommunityReports />
+      </motion.div>
+    );
+  }
+
+  // Admin reports terminal route check
+  if (currentPath.startsWith('/admin/report')) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -15 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        className="min-h-screen bg-[#030303]"
+      >
+        <AdminReports />
+      </motion.div>
+    );
+  }
+
+  // Admin communities terminal route check
+  if (currentPath.startsWith('/admin/communities')) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -15 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        className="min-h-screen bg-[#030303]"
+      >
+        <AdminCommunities onNavigateHome={handleBackToHome} />
       </motion.div>
     );
   }
@@ -734,6 +637,24 @@ export default function App() {
         className="min-h-screen bg-zinc-950"
       >
         <CommunitiesPage onBackToHome={handleBackToHome} posts={posts} />
+      </motion.div>
+    );
+  }
+
+  // Admin route check
+  if (currentPath.startsWith('/admin')) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -15 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        className="min-h-screen bg-zinc-950"
+      >
+        <AdminPanel 
+          posts={posts} 
+          onNavigateHome={handleBackToHome} 
+        />
       </motion.div>
     );
   }
