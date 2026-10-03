@@ -1,6 +1,6 @@
 import { doc, getDoc, updateDoc, runTransaction, collection } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getDeviceImei } from './ip';
+import { getDeviceImei, getLegacyDeviceImei } from './ip';
 
 export interface ReportPayload {
   postId: string;
@@ -37,8 +37,11 @@ export async function submitPostReport(
 
   // Retrieve IMEI of reporter to ensure single device reporting restriction
   const reporterImei = await getDeviceImei();
+  const legacyImei = getLegacyDeviceImei();
   const duplicateCheckImeiId = `dup_imei_${postId}_${reporterImei}`;
   const duplicateCheckImeiRef = doc(db, 'reports', duplicateCheckImeiId);
+  const duplicateCheckLegacyRef = legacyImei ? doc(db, 'reports', `dup_imei_${postId}_${legacyImei}`) : null;
+  const interactionReportRef = doc(db, 'interactions', `${postId}_${reporterImei}_report`);
 
   // Generate a unique identifier for the actual report log entry
   const uniqueReportId = doc(collection(db, 'reports')).id;
@@ -56,6 +59,13 @@ export async function submitPostReport(
     const dupImeiSnap = await transaction.get(duplicateCheckImeiRef);
     if (dupImeiSnap.exists()) {
       throw new Error("This device has already submitted a security report for this post. Duplicate report ignored.");
+    }
+
+    if (duplicateCheckLegacyRef) {
+      const dupLegacySnap = await transaction.get(duplicateCheckLegacyRef);
+      if (dupLegacySnap.exists()) {
+        throw new Error("This device has already submitted a security report for this post. Duplicate report ignored.");
+      }
     }
 
     // 2. Retrieve the target post document
@@ -186,6 +196,13 @@ export async function submitPostReport(
       postId,
       reporterIp,
       reporterImei,
+      createdAt: new Date().toISOString()
+    });
+
+    transaction.set(interactionReportRef, {
+      type: 'report_post',
+      postId,
+      imei: reporterImei,
       createdAt: new Date().toISOString()
     });
 

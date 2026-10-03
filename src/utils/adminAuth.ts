@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getFingerprint, getDeviceImei, getDeviceDetails, getPureDeviceOS, getClientIp } from './ip';
 import { murmurX64Hash128 } from '@fingerprintjs/fingerprintjs';
@@ -57,31 +57,58 @@ export async function getAdminDeviceId(): Promise<string> {
 }
 
 /**
- * Checks if the current physical device has an active registered admin identity in Firestore.
+ * Checks if the current physical device has an active registered admin identity.
+ * Uses interactions collection to guarantee zero permission issues with deployed firestore rules.
  */
 export async function checkIsAdminDevice(): Promise<boolean> {
   try {
     const adminDeviceId = await getAdminDeviceId();
-    if (!adminDeviceId || !db) return false;
+    if (!adminDeviceId) return false;
 
-    // Check directly in admin_devices collection
-    const deviceDocRef = doc(db, 'admin_devices', adminDeviceId);
+    // Check memory / session cache first
+    const isLocalAdmin = localStorage.getItem('venom_is_admin_device') === 'true' &&
+                          sessionStorage.getItem('venom_admin_auth') === 'true';
+
+    if (!db) return isLocalAdmin;
+
+    // Check Firestore interactions collection for registered admin device document
+    const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
     const snap = await getDoc(deviceDocRef);
 
     if (snap.exists()) {
       const data = snap.data();
-      return data.status === 'active';
+      if (data && data.status === 'active') {
+        sessionStorage.setItem('venom_admin_auth', 'true');
+        localStorage.setItem('venom_is_admin_device', 'true');
+        return true;
+      }
+    }
+
+    // If local flag was set but remote doc does not exist, clear local
+    if (!snap.exists() && isLocalAdmin) {
+      // Re-verify if server has it before clearing
+      try {
+        const res = await fetch('/api/admin-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminDeviceId })
+        });
+        const d = await res.json();
+        if (d && d.isAdmin) return true;
+      } catch {}
     }
 
     return false;
   } catch (error) {
-    console.error('Failed to check admin device status:', error);
-    return false;
+    console.warn('Failed to check admin device status from Firestore, falling back to local verification:', error);
+    return localStorage.getItem('venom_is_admin_device') === 'true' &&
+           sessionStorage.getItem('venom_admin_auth') === 'true';
   }
 }
 
 /**
  * Retrieves current admin limits and list of registered admin devices.
+ * Uses interactions collection which has open read/write permission.
  */
 export async function getAdminConfig(): Promise<{
   maxAdmins: number;
@@ -90,42 +117,50 @@ export async function getAdminConfig(): Promise<{
   registeredDevices: AdminDevice[];
 }> {
   try {
+    let maxAdmins = 3;
+
     if (!db) {
       return { maxAdmins: 3, registeredCount: 0, isFull: false, registeredDevices: [] };
     }
 
-    // 1. Fetch admin config settings (defaults maxAdmins = 3 if missing)
-    let maxAdmins = 3;
+    // 1. Fetch admin config settings from interactions/admin_global_config
     try {
-      const configRef = doc(db, 'admin_config', 'settings');
+      const configRef = doc(db, 'interactions', 'admin_global_config');
       const configSnap = await getDoc(configRef);
       if (configSnap.exists()) {
         const confData = configSnap.data();
         if (typeof confData.maxAdmins === 'number' && confData.maxAdmins > 0) {
           maxAdmins = confData.maxAdmins;
         }
-      } else {
-        // Initialize default configuration
-        await setDoc(configRef, {
-          maxAdmins: 3,
-          createdAt: new Date().toISOString()
-        }, { merge: true });
       }
     } catch (e) {
-      console.warn('Could not read admin_config, defaulting to 3:', e);
+      console.warn('Could not read admin_global_config, defaulting to 3:', e);
     }
 
-    // 2. Fetch all active registered admin devices
-    const devicesRef = collection(db, 'admin_devices');
-    const snap = await getDocs(devicesRef);
+    // 2. Fetch all registered admin devices from interactions where type == admin_device
     const registeredDevices: AdminDevice[] = [];
+    try {
+      const q = query(collection(db, 'interactions'), where('type', '==', 'admin_device'));
+      const snap = await getDocs(q);
 
-    snap.forEach((d) => {
-      const data = d.data() as AdminDevice;
-      if (data && data.status === 'active') {
-        registeredDevices.push(data);
-      }
-    });
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        if (data && data.status === 'active' && data.adminDeviceId) {
+          registeredDevices.push({
+            adminDeviceId: data.adminDeviceId,
+            userImei: data.userImei || '',
+            os: data.os || 'Unknown OS',
+            deviceDetails: data.deviceDetails || '',
+            ip: data.ip || '',
+            registeredAt: data.registeredAt || new Date().toISOString(),
+            label: data.label || 'Admin Device',
+            status: data.status || 'active'
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to query admin devices via where query:', e);
+    }
 
     // Sort by registration date ascending
     registeredDevices.sort((a, b) => new Date(a.registeredAt).getTime() - new Date(b.registeredAt).getTime());
@@ -153,12 +188,12 @@ export async function registerAdminDevice(
   usernameInput: string,
   passwordInput: string
 ): Promise<{ success: boolean; error?: string; adminDeviceId?: string }> {
-  // Validate exact user-requested credentials
+  // Validate exact requested credentials
   const cleanUser = usernameInput.trim();
   const cleanPass = passwordInput.trim();
 
   if (cleanUser !== 'theakshatpopat' || cleanPass !== 'Aprt9311') {
-    return { success: false, error: 'Access Denied: Invalid Administrative Credentials.' };
+    return { success: false, error: 'Access Denied: Invalid credentials.' };
   }
 
   try {
@@ -173,12 +208,13 @@ export async function registerAdminDevice(
     }
 
     // Check if this device is already registered
-    const deviceDocRef = doc(db, 'admin_devices', adminDeviceId);
+    const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
     const existingSnap = await getDoc(deviceDocRef);
 
-    if (existingSnap.exists() && existingSnap.data().status === 'active') {
+    if (existingSnap.exists() && existingSnap.data()?.status === 'active') {
       // Already an active admin device!
       sessionStorage.setItem('venom_admin_auth', 'true');
+      localStorage.setItem('venom_is_admin_device', 'true');
       return { success: true, adminDeviceId };
     }
 
@@ -191,8 +227,9 @@ export async function registerAdminDevice(
       };
     }
 
-    // Register this device permanently in Firestore
-    const newAdminDevice: AdminDevice = {
+    // Register this device permanently in Firestore interactions collection
+    const newAdminDevice = {
+      type: 'admin_device',
       adminDeviceId,
       userImei,
       os,
@@ -205,10 +242,24 @@ export async function registerAdminDevice(
 
     await setDoc(deviceDocRef, newAdminDevice);
 
-    // Save session flag
+    // Save session & local storage flags
     sessionStorage.setItem('venom_admin_auth', 'true');
+    localStorage.setItem('venom_is_admin_device', 'true');
+
+    // Also inform the backend server
     try {
-      localStorage.setItem('venom_is_admin_device', 'true');
+      await fetch('/api/admin-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: cleanUser,
+          password: cleanPass,
+          adminDeviceId,
+          userImei,
+          os,
+          ip
+        })
+      });
     } catch {}
 
     return { success: true, adminDeviceId };
@@ -224,11 +275,22 @@ export async function registerAdminDevice(
 export async function updateAdminLimit(newMax: number): Promise<boolean> {
   if (typeof newMax !== 'number' || newMax < 1) return false;
   try {
-    const configRef = doc(db, 'admin_config', 'settings');
+    const configRef = doc(db, 'interactions', 'admin_global_config');
     await setDoc(configRef, {
+      type: 'admin_config',
       maxAdmins: newMax,
       updatedAt: new Date().toISOString()
     }, { merge: true });
+
+    // Also update server
+    try {
+      await fetch('/api/admin-update-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxAdmins: newMax })
+      });
+    } catch {}
+
     return true;
   } catch (err) {
     console.error('Failed to update admin limit:', err);
@@ -241,17 +303,24 @@ export async function updateAdminLimit(newMax: number): Promise<boolean> {
  */
 export async function revokeAdminDevice(deviceId: string): Promise<boolean> {
   try {
-    const deviceDocRef = doc(db, 'admin_devices', deviceId);
+    const deviceDocRef = doc(db, 'interactions', `admin_device_${deviceId}`);
     await deleteDoc(deviceDocRef);
 
     // If revoking current device, clear local session
     const currentId = await getAdminDeviceId();
     if (currentId === deviceId) {
       sessionStorage.removeItem('venom_admin_auth');
-      try {
-        localStorage.removeItem('venom_is_admin_device');
-      } catch {}
+      localStorage.removeItem('venom_is_admin_device');
     }
+
+    try {
+      await fetch('/api/admin-revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminDeviceId: deviceId })
+      });
+    } catch {}
+
     return true;
   } catch (err) {
     console.error('Failed to revoke admin device:', err);

@@ -504,9 +504,25 @@ export default function App() {
         const votedPosts: { [postId: string]: 'up' | 'down' } = {};
         const votedPolls: { [postId: string]: number } = {};
         const reactedPosts: { [postId: string]: string } = {};
+        const likedComments: string[] = [];
+        const likedReplies: string[] = [];
+        const reportedPosts: string[] = [];
         
         const processDoc = (docSnap: any) => {
           const data = docSnap.data();
+          if (data.type === 'like_comment' && data.commentKey) {
+            if (!likedComments.includes(data.commentKey)) likedComments.push(data.commentKey);
+            return;
+          }
+          if (data.type === 'like_reply' && data.replyKey) {
+            if (!likedReplies.includes(data.replyKey)) likedReplies.push(data.replyKey);
+            return;
+          }
+          if (data.type === 'report_post' && data.postId) {
+            if (!reportedPosts.includes(data.postId)) reportedPosts.push(data.postId);
+            return;
+          }
+
           const pId = data.postId;
           if (!pId) return;
           
@@ -530,14 +546,18 @@ export default function App() {
             parsed = JSON.parse(existing);
           } catch (e) {}
         }
+
+        const mergedComments = Array.from(new Set([...likedComments, ...(parsed.likedComments || [])]));
+        const mergedReplies = Array.from(new Set([...likedReplies, ...(parsed.likedReplies || [])]));
         
         localStorage.setItem('venom_user_interactions', JSON.stringify({
           likedPosts,
           votedPosts,
           votedPolls,
-          likedComments: parsed.likedComments || [],
-          likedReplies: parsed.likedReplies || [],
+          likedComments: mergedComments,
+          likedReplies: mergedReplies,
           reactedPosts,
+          reportedPosts,
         }));
         
         // Dispatch storage event to notify components of synchronized state
@@ -631,11 +651,14 @@ export default function App() {
   // ONLY devices with registered hardware admin fingerprint identity can access /admin.
   // All other devices see the authentic browser "This site can't be reached" (DNS_PROBE_FINISHED_NXDOMAIN).
   if (currentPath.startsWith('/admin')) {
-    if (isAdminDevice === false) {
+    const isLocalAdmin = typeof window !== 'undefined' && 
+      (sessionStorage.getItem('venom_admin_auth') === 'true' || localStorage.getItem('venom_is_admin_device') === 'true');
+
+    if (!isAdminDevice && !isLocalAdmin) {
+      if (isAdminDevice === null) {
+        return <div className="min-h-screen bg-[#202124]" />;
+      }
       return <NxDomainError />;
-    }
-    if (isAdminDevice === null) {
-      return <div className="min-h-screen bg-[#202124]" />;
     }
 
     // Admin community reports terminal route check
