@@ -33,8 +33,9 @@ let cachedAdminDeviceId: string | null = null;
  * Ensures that the active Firebase Auth anonymous session UID is registered
  * in Firestore `/admins/{uid}` with the required `secretKey` to satisfy the
  * `isAdmin()` function in Firestore rules (`allow delete: if isAdmin()`).
+ * The secretKey is dynamically fetched from server or session, never hardcoded.
  */
-export async function ensureFirestoreAdminClaim(): Promise<boolean> {
+export async function ensureFirestoreAdminClaim(providedToken?: string): Promise<boolean> {
   try {
     if (!auth || !db) return false;
     let currentUser = auth.currentUser;
@@ -47,10 +48,31 @@ export async function ensureFirestoreAdminClaim(): Promise<boolean> {
       }
     }
     if (currentUser) {
+      let secretKey = providedToken || sessionStorage.getItem('venom_admin_token');
+      if (!secretKey) {
+        const adminDeviceId = await getAdminDeviceId();
+        try {
+          const res = await fetch('/api/admin-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminDeviceId })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.token) {
+              secretKey = data.token;
+              sessionStorage.setItem('venom_admin_token', secretKey);
+            }
+          }
+        } catch {}
+      }
+
+      if (!secretKey) return false;
+
       const adminDocRef = doc(db, 'admins', currentUser.uid);
       await setDoc(adminDocRef, {
         isAdmin: true,
-        secretKey: "V3n0m!@#2026AdminSecureKey!!",
+        secretKey,
         registeredAt: new Date().toISOString()
       }, { merge: true });
       return true;
@@ -91,43 +113,64 @@ export async function getAdminDeviceId(): Promise<string> {
 
 /**
  * Checks if the current physical device has an active registered admin identity.
- * Uses interactions collection to guarantee zero permission issues with deployed firestore rules.
+ * Zero-Trust verification: Evaluates Firestore interactions registry AND server verification.
+ * NEVER trusts client localStorage/sessionStorage alone to prevent auth bypass.
  */
 export async function checkIsAdminDevice(): Promise<boolean> {
   try {
     const adminDeviceId = await getAdminDeviceId();
     if (!adminDeviceId) return false;
 
-    if (!db) {
-      return localStorage.getItem('venom_is_admin_device') === 'true' &&
-             sessionStorage.getItem('venom_admin_auth') === 'true';
-    }
-
     // Check Firestore interactions collection for registered admin device document
-    const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-    const snap = await getDoc(deviceDocRef);
+    if (db) {
+      try {
+        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
+        const snap = await getDoc(deviceDocRef);
 
-    if (snap.exists()) {
-      const data = snap.data();
-      if (data && data.status === 'active') {
-        sessionStorage.setItem('venom_admin_auth', 'true');
-        localStorage.setItem('venom_is_admin_device', 'true');
-        ensureFirestoreAdminClaim().catch(console.warn);
-        return true;
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && data.status === 'active') {
+            sessionStorage.setItem('venom_admin_auth', 'true');
+            localStorage.setItem('venom_is_admin_device', 'true');
+            ensureFirestoreAdminClaim().catch(console.warn);
+            return true;
+          }
+        }
+      } catch (fbErr) {
+        console.warn('Firestore admin device check warning:', fbErr);
       }
     }
 
-    // Document does NOT exist or status is NOT active: device was revoked or unauthorized.
+    // Secondary Zero-Trust verification via backend server API
+    try {
+      const res = await fetch('/api/admin-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminDeviceId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.isAdmin === true) {
+          sessionStorage.setItem('venom_admin_auth', 'true');
+          localStorage.setItem('venom_is_admin_device', 'true');
+          ensureFirestoreAdminClaim().catch(console.warn);
+          return true;
+        }
+      }
+    } catch {}
+
+    // Device does NOT exist or status is NOT active: device was revoked or unauthorized.
     // Immediately eradicate all local tokens and session permissions.
     sessionStorage.removeItem('venom_admin_auth');
+    sessionStorage.removeItem('venom_admin_token');
     localStorage.removeItem('venom_is_admin_device');
-    if (auth?.currentUser) {
+    if (auth?.currentUser && db) {
       deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
     }
 
     return false;
   } catch (error) {
-    console.warn('Failed to check admin device status from Firestore:', error);
+    console.warn('Failed to check admin device status:', error);
     return false;
   }
 }
@@ -207,19 +250,19 @@ export async function getAdminConfig(): Promise<{
 }
 
 /**
- * Authenticates username & password and registers this physical device as an administrative device.
- * Credentials: theakshatpopat / Aprt9311
+ * Authenticates username & password securely via backend server and registers
+ * this physical device as an administrative device.
+ * Eliminates all hardcoded credentials from client bundles.
  */
 export async function registerAdminDevice(
   usernameInput: string,
   passwordInput: string
 ): Promise<{ success: boolean; error?: string; adminDeviceId?: string }> {
-  // Validate exact requested credentials
   const cleanUser = usernameInput.trim();
   const cleanPass = passwordInput.trim();
 
-  if (cleanUser !== 'theakshatpopat' || cleanPass !== 'Aprt9311') {
-    return { success: false, error: 'Access Denied: Invalid credentials.' };
+  if (!cleanUser || !cleanPass) {
+    return { success: false, error: 'Username and password are required.' };
   }
 
   try {
@@ -229,55 +272,10 @@ export async function registerAdminDevice(
     const deviceDetails = getDeviceDetails();
     const ip = await getClientIp();
 
-    if (!db) {
-      return { success: false, error: 'Database service is currently unreachable.' };
-    }
-
-    // Check if this device is already registered
-    const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-    const existingSnap = await getDoc(deviceDocRef);
-
-    if (existingSnap.exists() && existingSnap.data()?.status === 'active') {
-      // Already an active admin device!
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
-      return { success: true, adminDeviceId };
-    }
-
-    // Check capacity limit
-    const config = await getAdminConfig();
-    if (config.registeredCount >= config.maxAdmins) {
-      return { 
-        success: false, 
-        error: `Administrator Registration Gate is currently locked (${config.registeredCount}/${config.maxAdmins} slots filled).` 
-      };
-    }
-
-    // Register this device permanently in Firestore interactions collection
-    const newAdminDevice = {
-      type: 'admin_device',
-      adminDeviceId,
-      userImei,
-      os,
-      deviceDetails,
-      ip,
-      registeredAt: new Date().toISOString(),
-      label: `Admin Device #${config.registeredCount + 1}`,
-      status: 'active'
-    };
-
-    await setDoc(deviceDocRef, newAdminDevice);
-
-    // Save session & local storage flags
-    sessionStorage.setItem('venom_admin_auth', 'true');
-    localStorage.setItem('venom_is_admin_device', 'true');
-
-    // Also register Firestore admin claim
-    await ensureFirestoreAdminClaim();
-
-    // Also inform the backend server
+    // 1. Authorize directly with the server-side security engine
+    let serverRes: Response;
     try {
-      await fetch('/api/admin-register', {
+      serverRes = await fetch('/api/admin-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -289,12 +287,82 @@ export async function registerAdminDevice(
           ip
         })
       });
-    } catch {}
+    } catch {
+      return { success: false, error: 'Authentication server unreachable. Please try again.' };
+    }
+
+    const regData = await serverRes.json();
+    if (!serverRes.ok || !regData.success) {
+      return { success: false, error: regData.error || 'Access Denied: Invalid credentials.' };
+    }
+
+    const adminToken = regData.token;
+    if (adminToken) {
+      sessionStorage.setItem('venom_admin_token', adminToken);
+    }
+
+    // 2. Persist device in Firestore interactions collection
+    if (db) {
+      const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
+      const config = await getAdminConfig();
+
+      const newAdminDevice = {
+        type: 'admin_device',
+        adminDeviceId,
+        userImei,
+        os,
+        deviceDetails,
+        ip,
+        registeredAt: new Date().toISOString(),
+        label: `Admin Device #${config.registeredCount + 1}`,
+        status: 'active'
+      };
+
+      await setDoc(deviceDocRef, newAdminDevice, { merge: true });
+    }
+
+    // 3. Set verified session state
+    sessionStorage.setItem('venom_admin_auth', 'true');
+    localStorage.setItem('venom_is_admin_device', 'true');
+
+    // 4. Register Firestore admin claim
+    await ensureFirestoreAdminClaim(adminToken);
 
     return { success: true, adminDeviceId };
   } catch (err: any) {
     console.error('Failed to register admin device:', err);
-    return { success: false, error: err?.message || 'Database error during registration.' };
+    return { success: false, error: err?.message || 'Security system error during registration.' };
+  }
+}
+
+/**
+ * Validates administrator credentials against the server without bundle leakage.
+ * Sets session token and registers the Firestore administrative write claim.
+ */
+export async function verifyAdminCredentials(
+  usernameInput: string,
+  passwordInput: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/admin-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: usernameInput.trim(),
+        password: passwordInput.trim()
+      })
+    });
+    const data = await res.json();
+    if (data.success && data.token) {
+      sessionStorage.setItem('venom_admin_token', data.token);
+      sessionStorage.setItem('venom_admin_auth', 'true');
+      localStorage.setItem('venom_is_admin_device', 'true');
+      await ensureFirestoreAdminClaim(data.token);
+      return { success: true };
+    }
+    return { success: false, error: data.error || 'Invalid administrator credentials.' };
+  } catch {
+    return { success: false, error: 'Authentication server unreachable.' };
   }
 }
 

@@ -87,6 +87,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
 
         setIsAuthenticated(true);
         sessionStorage.setItem('venom_admin_auth', 'true');
+        sessionStorage.setItem('venom_admin_token', data.token);
+        localStorage.setItem('venom_is_admin_device', 'true');
         setUsername('');
         setPassword('');
       } else {

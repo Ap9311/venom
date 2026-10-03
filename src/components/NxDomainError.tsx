@@ -12,6 +12,13 @@ export const NxDomainError: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   useEffect(() => {
+    // Immediately eradicate all admin tokens to prevent session spoofing or bypass attempts
+    try {
+      sessionStorage.removeItem('venom_admin_auth');
+      sessionStorage.removeItem('venom_admin_token');
+      localStorage.removeItem('venom_is_admin_device');
+    } catch {}
+
     if (typeof window !== 'undefined') {
       const host = window.location.hostname || 'ais-dev-pcxelypp5magvsb6o7dw2z-852331460337.asia-east1.run.app';
       setHostname(host);
@@ -28,9 +35,24 @@ export const NxDomainError: React.FC = () => {
       const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
       mediaQuery.addEventListener('change', handler);
 
+      // Defense-in-depth: Neutralize inspection shortcut attempts on error gate
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (
+          e.key === 'F12' ||
+          (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) ||
+          (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.key === 'j' || e.key === 'J' || e.key === 'c' || e.key === 'C'))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown, true);
+
       return () => {
         document.title = prevTitle;
         mediaQuery.removeEventListener('change', handler);
+        window.removeEventListener('keydown', handleKeyDown, true);
       };
     }
   }, []);
@@ -43,6 +65,7 @@ export const NxDomainError: React.FC = () => {
 
   return (
     <div 
+      onContextMenu={(e) => e.preventDefault()}
       className={`fixed inset-0 z-[9999999] overflow-y-auto select-none ${
         isDarkMode ? 'bg-[#202124] text-[#e8eaed]' : 'bg-[#ffffff] text-[#202124]'
       }`}

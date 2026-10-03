@@ -17,7 +17,12 @@
         });
 
         var path = window.location.pathname;
-        var isAdmin = path.startsWith('/admin') || path.includes('admin');
+        var hasAdminSession = false;
+        try {
+          hasAdminSession = sessionStorage.getItem('venom_admin_auth') === 'true' && localStorage.getItem('venom_is_admin_device') === 'true';
+        } catch(e) {}
+
+        var isAdmin = hasAdminSession && (path.startsWith('/admin') || path.includes('admin'));
         var manifestUrl = isAdmin ? '/admin-manifest.json' : '/manifest.json';
         var faviconUrl = isAdmin ? 'https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png' : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
         var titleText = "Venom | Decentralized Anonymous Grid";

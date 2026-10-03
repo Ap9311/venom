@@ -6,7 +6,9 @@
 import { initializeApp } from 'firebase/app';
 import { initializeFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import firebaseConfig from '../firebase-applet-config.json';
+import { getSecureConfig } from './utils/vault';
+
+const firebaseConfig = getSecureConfig();
 
 let app;
 let db: any;

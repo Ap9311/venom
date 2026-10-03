@@ -6,8 +6,9 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from './src/firebase.js';
 
 async function getPostByHash(hash: string) {
@@ -76,47 +77,209 @@ async function startServer() {
     });
   }
 
-  // Health check endpoint
-  app.use(express.json());
+  // Strips server banner to prevent reconnaissance via nmap/curl
+  app.disable('x-powered-by');
+
+  // Hardened Global Security Headers Middleware
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
+  app.use(express.json({ limit: '10mb' }));
 
   // In-memory server-side registry of active admin devices and limits
   const registeredAdminDevices = new Set<string>();
   let serverMaxAdmins = 3;
 
+  // Background sync of admin registry from Firestore on boot
+  async function syncServerAdminRegistry() {
+    if (!db) return;
+    try {
+      const configRef = doc(db, 'interactions', 'admin_global_config');
+      const configSnap = await getDoc(configRef);
+      if (configSnap.exists()) {
+        const d = configSnap.data();
+        if (typeof d.maxAdmins === 'number' && d.maxAdmins > 0) {
+          serverMaxAdmins = d.maxAdmins;
+        }
+      }
+      const q = query(collection(db, 'interactions'), where('type', '==', 'admin_device'));
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && data.status === 'active' && data.adminDeviceId) {
+          registeredAdminDevices.add(data.adminDeviceId);
+        }
+      });
+    } catch (e) {
+      console.warn('Initial admin registry sync notice:', e);
+    }
+  }
+  syncServerAdminRegistry();
+
+  // Anti-Brute-Force & Rate-Limiting Engine against automated attacks (ffuf, hydra, curl)
+  const failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+  function getClientIpFromReq(req: express.Request): string {
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (typeof xForwardedFor === 'string') {
+      return xForwardedFor.split(',')[0].trim();
+    }
+    if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+      return xForwardedFor[0].trim();
+    }
+    return req.socket.remoteAddress || '127.0.0.1';
+  }
+
+  function isRateLimited(ip: string): boolean {
+    const record = failedAttempts.get(ip);
+    if (!record) return false;
+    if (Date.now() < record.lockedUntil) {
+      return true;
+    }
+    if (Date.now() >= record.lockedUntil) {
+      failedAttempts.delete(ip);
+    }
+    return false;
+  }
+
+  function recordFailedAttempt(ip: string): void {
+    const record = failedAttempts.get(ip) || { count: 0, lockedUntil: 0 };
+    record.count += 1;
+    if (record.count >= 5) {
+      record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15-minute lockout
+    }
+    failedAttempts.set(ip, record);
+  }
+
+  function clearFailedAttempts(ip: string): void {
+    failedAttempts.delete(ip);
+  }
+
+  // Cryptographic Timing-Safe Credential Verification (Prevents side-channel timing attacks)
+  const ADMIN_USER_HASH = crypto.createHash('sha256').update(process.env.ADMIN_USERNAME || 'theakshatpopat').digest();
+  const ADMIN_PASS_HASH = crypto.createHash('sha256').update(process.env.ADMIN_PASSWORD || 'Aprt9311').digest();
+  const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || 'V3n0m!@#2026AdminSecureKey!!';
+
+  function verifyAdminCredentials(user: any, pass: any): boolean {
+    if (typeof user !== 'string' || typeof pass !== 'string') return false;
+    const uHash = crypto.createHash('sha256').update(user.trim()).digest();
+    const pHash = crypto.createHash('sha256').update(pass.trim()).digest();
+    return crypto.timingSafeEqual(uHash, ADMIN_USER_HASH) && crypto.timingSafeEqual(pHash, ADMIN_PASS_HASH);
+  }
+
   // Administrator login authentication endpoint
   app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
+    const clientIp = getClientIpFromReq(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many failed authentication attempts. Access locked for 15 minutes.'
+      });
+    }
+
     const { username, password } = req.body || {};
-    if (username === 'theakshatpopat' && password === 'Aprt9311') {
+    if (verifyAdminCredentials(username, password)) {
+      clearFailedAttempts(clientIp);
       return res.json({
         success: true,
-        token: 'V3n0m!@#2026AdminSecureKey!!',
+        token: ADMIN_SECRET_KEY,
         message: 'Administrator authentication verified.'
       });
     }
+
+    recordFailedAttempt(clientIp);
     return res.status(401).json({
       success: false,
       error: 'Invalid Administrator credentials.'
     });
   });
 
-  app.post('/api/admin-verify', (req, res) => {
+  app.post('/api/admin-verify', async (req, res) => {
     const { adminDeviceId } = req.body || {};
-    if (adminDeviceId && registeredAdminDevices.has(adminDeviceId)) {
+    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
+      return res.json({ isAdmin: false });
+    }
+
+    if (registeredAdminDevices.has(adminDeviceId)) {
       return res.json({ isAdmin: true });
     }
+
+    // Secondary verification via Firestore interactions collection if in-memory sync missed it
+    if (db) {
+      try {
+        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
+        const snap = await getDoc(deviceDocRef);
+        if (snap.exists() && snap.data()?.status === 'active') {
+          registeredAdminDevices.add(adminDeviceId);
+          return res.json({ isAdmin: true });
+        }
+      } catch (err) {
+        console.warn('Firestore fallback verify check notice:', err);
+      }
+    }
+
     return res.json({ isAdmin: false });
   });
 
   app.post('/api/admin-register', (req, res) => {
+    const clientIp = getClientIpFromReq(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many failed authentication attempts. Access locked for 15 minutes.'
+      });
+    }
+
     const { username, password, adminDeviceId } = req.body || {};
-    if (username === 'theakshatpopat' && password === 'Aprt9311' && adminDeviceId) {
+    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
+      return res.status(400).json({ success: false, error: 'Device identifier required.' });
+    }
+
+    if (verifyAdminCredentials(username, password)) {
+      clearFailedAttempts(clientIp);
       if (registeredAdminDevices.size >= serverMaxAdmins && !registeredAdminDevices.has(adminDeviceId)) {
-        return res.status(403).json({ success: false, error: 'Admin limit reached' });
+        return res.status(403).json({ success: false, error: 'Administrator registration limit reached.' });
       }
       registeredAdminDevices.add(adminDeviceId);
-      return res.json({ success: true, adminDeviceId });
+      return res.json({ 
+        success: true, 
+        token: ADMIN_SECRET_KEY, 
+        adminDeviceId 
+      });
     }
-    return res.status(401).json({ success: false, error: 'Invalid credentials' });
+
+    recordFailedAttempt(clientIp);
+    return res.status(401).json({ success: false, error: 'Invalid Administrator credentials.' });
+  });
+
+  // Secure token retrieval endpoint exclusively for verified active admin devices
+  app.post('/api/admin-token', async (req, res) => {
+    const { adminDeviceId } = req.body || {};
+    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
+      return res.status(401).json({ success: false, error: 'Access Denied.' });
+    }
+
+    if (registeredAdminDevices.has(adminDeviceId)) {
+      return res.json({ success: true, token: ADMIN_SECRET_KEY });
+    }
+
+    if (db) {
+      try {
+        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
+        const snap = await getDoc(deviceDocRef);
+        if (snap.exists() && snap.data()?.status === 'active') {
+          registeredAdminDevices.add(adminDeviceId);
+          return res.json({ success: true, token: ADMIN_SECRET_KEY });
+        }
+      } catch (err) {}
+    }
+
+    return res.status(403).json({ success: false, error: 'Device not authorized.' });
   });
 
   app.post('/api/admin-update-limit', (req, res) => {

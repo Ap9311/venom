@@ -107,8 +107,9 @@ export default function App() {
             // Revoked or does not exist in active registry!
             setIsAdminDevice(false);
             sessionStorage.removeItem('venom_admin_auth');
+            sessionStorage.removeItem('venom_admin_token');
             localStorage.removeItem('venom_is_admin_device');
-            if (auth?.currentUser) {
+            if (auth?.currentUser && db) {
               deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
             }
           }
