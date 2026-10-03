@@ -11,7 +11,7 @@ import { AdminTelemetry } from './AdminTelemetry';
 import { AdminSecurity } from './AdminSecurity';
 import { AdminPosts } from './AdminPosts';
 import { AdminEditModal } from './AdminEditModal';
-import { checkIsAdminDevice, ensureFirestoreAdminClaim } from '../../utils/adminAuth';
+import { checkIsAdminDevice, ensureFirestoreAdminClaim, verifyAdminCredentials } from '../../utils/adminAuth';
 import { 
   ShieldAlert, 
   ShieldCheck,
@@ -68,40 +68,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
     e.preventDefault();
     setLoginError(null);
 
-    try {
-      const res = await fetch('/api/admin-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      let data: any = {};
-      try {
-        const rawText = await res.text();
-        data = rawText ? JSON.parse(rawText) : {};
-      } catch {
-        data = {};
-      }
-
-      if (data.success && data.token && auth.currentUser) {
-        // Register this device's anonymous UID as an admin in Firestore
-        const adminRef = doc(db, 'admins', auth.currentUser.uid);
-        await setDoc(adminRef, {
-          isAdmin: true,
-          secretKey: data.token,
-          registeredAt: new Date().toISOString()
-        });
-
-        setIsAuthenticated(true);
-        sessionStorage.setItem('venom_admin_auth', 'true');
-        sessionStorage.setItem('venom_admin_token', data.token);
-        localStorage.setItem('venom_is_admin_device', 'true');
-        setUsername('');
-        setPassword('');
-      } else {
-        setLoginError(data.error || 'Invalid Administrator credentials.');
-      }
-    } catch (err) {
-      setLoginError('Authentication server error.');
+    const res = await verifyAdminCredentials(username, password);
+    if (res.success) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('venom_admin_auth', 'true');
+      setUsername('');
+      setPassword('');
+    } else {
+      setLoginError(res.error || 'Invalid Administrator credentials.');
     }
   };
 
