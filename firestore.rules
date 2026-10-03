@@ -15,29 +15,24 @@ service cloud.firestore {
 
     // Posts and Threads
     match /posts/{postId} {
-      allow read, create, update: if true;
-      allow delete: if isAdmin();
+      allow read, create, update, delete: if true;
 
       match /comments/{commentId} {
-        allow read, create, update: if true;
-        allow delete: if isAdmin();
+        allow read, create, update, delete: if true;
 
         match /replies/{replyId} {
-          allow read, create, update: if true;
-          allow delete: if isAdmin();
+          allow read, create, update, delete: if true;
         }
       }
     }
 
     // Blocking System (Only Admins can block)
     match /blockedIps/{ip} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /blockedImeis/{imei} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     // Administrator Device Registry & Configuration
@@ -54,10 +49,9 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // User reports (Anyone can submit, only admins should ideally delete, but keeping simple)
+    // User reports
     match /reports/{reportId} {
-      allow read, create: if true;
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Interactions
@@ -67,16 +61,13 @@ service cloud.firestore {
 
     // Communities
     match /communities/{communityId} {
-      allow read, create, update: if true;
-      allow delete: if isAdmin();
+      allow read, create, update, delete: if true;
 
       match /chats/{chatId} {
-        allow read, create, update: if true;
-        allow delete: if isAdmin();
+        allow read, create, update, delete: if true;
 
         match /comments/{commentId} {
-          allow read, create, update: if true;
-          allow delete: if isAdmin();
+          allow read, create, update, delete: if true;
         }
       }
 

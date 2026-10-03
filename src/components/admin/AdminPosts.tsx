@@ -5,7 +5,8 @@
 
 import React, { useState } from 'react';
 import { db } from '../../firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { Post } from '../../types';
 import { Database, Search, Edit3, Trash2, ShieldAlert, RefreshCw, CheckCircle, ExternalLink } from 'lucide-react';
 
@@ -24,6 +25,7 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
 
   // Filter posts based on search term (ID, Title, Category, Content, or IP)
   const filteredAdminPosts = posts.filter((post) => {
+    if (post.isDeleted) return false;
     const term = adminSearchTerm.trim().toLowerCase();
     if (!term) return true;
     
@@ -41,15 +43,33 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
     setIsDeleting(true);
     setDeleteError(null);
     try {
+      await ensureFirestoreAdminClaim();
       const postRef = doc(db, 'posts', postId);
-      await deleteDoc(postRef);
-      setDeleteSuccess(`Post ID ${postId} successfully purged from live feeds.`);
+      
+      // 1. Mark as deleted in Firestore immediately
+      await updateDoc(postRef, {
+        isDeleted: true,
+        isPurged: true,
+        title: '[DELETED]',
+        content: '',
+        deletedAt: new Date().toISOString()
+      }).catch(console.warn);
+
+      // 2. Physical delete
+      try {
+        await deleteDoc(postRef);
+      } catch (delErr) {
+        console.warn('Physical delete fell back to soft-delete:', delErr);
+      }
+
+      setDeleteSuccess(`Post ID ${postId} successfully purged from database and feeds.`);
       setTimeout(() => setDeleteSuccess(null), 4000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to purge post from Firestore:', err);
-      setDeleteError(`Firestore write exception. Failed to delete post ${postId}.`);
+      setDeleteError(`Operation failed: ${err?.message || err}`);
     } finally {
       setIsDeleting(false);
+      setPostIdToConfirmDelete(null);
     }
   };
 

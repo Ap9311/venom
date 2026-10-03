@@ -1301,8 +1301,8 @@ Post Venom Now: https://myvenom.vercel.app`;
   // Render sorting & filtering
   const sortedAndFilteredComms = communities
     .filter(c => {
-      // 1. Filter blocked/quarantined communities
-      if (isCommunityBlocked(c) || (c.reportsCount || 0) >= 100) return false;
+      // 1. Filter deleted, blocked or quarantined communities
+      if (c.isDeleted || isCommunityBlocked(c) || (c.reportsCount || 0) >= 100) return false;
 
       // 2. Search query by Name, Description
       if (searchTerm.trim() !== '') {
@@ -1653,14 +1653,14 @@ Post Venom Now: https://myvenom.vercel.app`;
                   <span className="animate-spin text-emerald-400 mb-2">●</span>
                   <span>SYNCING CRYPTO CHATS...</span>
                 </div>
-              ) : chats.length === 0 ? (
+              ) : chats.filter(c => !c.isDeleted).length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-zinc-500 font-mono text-[10px] space-y-2 max-w-sm mx-auto text-center leading-relaxed relative z-10">
                   <BookOpen className="w-8 h-8 text-zinc-700" />
                   <span>GRID SECURELY INITIALISED</span>
                   <span>Welcome to the secure encryption pipeline. No dispatches have been posted here yet.</span>
                 </div>
               ) : (
-                chats.map((chat) => {
+                chats.filter(c => !c.isDeleted).map((chat) => {
                   const isUserSender = checkIsCreator(chat);
                   const chatReaction = userChatReactions[chat.id];
                   const hasUserLiked = likedChats.includes(chat.id);

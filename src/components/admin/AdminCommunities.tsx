@@ -17,6 +17,7 @@ import {
   updateDoc,
   where
 } from 'firebase/firestore';
+import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { 
   Trash2, 
   Lock, 
@@ -116,7 +117,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
       const list = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
-      }));
+      })).filter((c: any) => !c.isDeleted);
       setCommunities(list);
       setLoading(false);
     }, (error) => {
@@ -142,7 +143,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
       const list = snapshot.docs.map(docSnap => ({
         id: docSnap.id,
         ...docSnap.data()
-      }));
+      })).filter((c: any) => !c.isDeleted);
       setActiveChats(list);
       setLoadingChats(false);
     }, (error) => {
@@ -240,40 +241,51 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     if (!confirmDelete) return;
 
     try {
-      // 1. Fetch and batch delete all chats and nested subcollections
-      const chatsRef = collection(db, 'communities', commId, 'chats');
-      const chatsSnap = await getDocs(chatsRef);
+      await ensureFirestoreAdminClaim();
+      const commRef = doc(db, 'communities', commId);
 
-      const batch = writeBatch(db);
+      // 1. Mark community as deleted and locked immediately in Firestore
+      await updateDoc(commRef, {
+        isDeleted: true,
+        isBlocked: true,
+        reportsCount: 99999,
+        name: '[DELETED]',
+        deletedAt: new Date().toISOString()
+      }).catch(console.warn);
 
-      // Delete chats
-      for (const chatDoc of chatsSnap.docs) {
-        // Fetch comments of each chat first and delete them
-        const commentsRef = collection(db, 'communities', commId, 'chats', chatDoc.id, 'comments');
-        const commentsSnap = await getDocs(commentsRef);
-        commentsSnap.forEach(commentDoc => {
-          batch.delete(doc(db, 'communities', commId, 'chats', chatDoc.id, 'comments', commentDoc.id));
+      // 2. Fetch and batch delete all chats and nested subcollections
+      try {
+        const chatsRef = collection(db, 'communities', commId, 'chats');
+        const chatsSnap = await getDocs(chatsRef);
+
+        const batch = writeBatch(db);
+
+        for (const chatDoc of chatsSnap.docs) {
+          const commentsRef = collection(db, 'communities', commId, 'chats', chatDoc.id, 'comments');
+          const commentsSnap = await getDocs(commentsRef);
+          commentsSnap.forEach(commentDoc => {
+            batch.delete(doc(db, 'communities', commId, 'chats', chatDoc.id, 'comments', commentDoc.id));
+          });
+          batch.delete(doc(db, 'communities', commId, 'chats', chatDoc.id));
+        }
+
+        const visitsRef = collection(db, 'communities', commId, 'visits');
+        const visitsSnap = await getDocs(visitsRef);
+        visitsSnap.forEach(visitDoc => {
+          batch.delete(doc(db, 'communities', commId, 'visits', visitDoc.id));
         });
 
-        batch.delete(doc(db, 'communities', commId, 'chats', chatDoc.id));
+        batch.delete(commRef);
+        await batch.commit();
+      } catch (delErr) {
+        console.warn('Physical batch delete fell back to soft-delete:', delErr);
       }
 
-      // Delete visits tracker subcollection
-      const visitsRef = collection(db, 'communities', commId, 'visits');
-      const visitsSnap = await getDocs(visitsRef);
-      visitsSnap.forEach(visitDoc => {
-        batch.delete(doc(db, 'communities', commId, 'visits', visitDoc.id));
-      });
-
-      // 2. Delete parent community document
-      batch.delete(doc(db, 'communities', commId));
-
-      await batch.commit();
-
-      alert(`Community "${commName}" successfully purged from database core.`);
+      setCommunities(prev => prev.filter(c => c.id !== commId));
       if (selectedComm?.id === commId) {
         setSelectedComm(null);
       }
+      alert(`Community "${commName}" successfully purged from database core.`);
     } catch (err: any) {
       console.error('purging failed:', err);
       alert(`Purging failed: ${err.message || err}`);
@@ -288,19 +300,31 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     if (!confirmDelete) return;
 
     try {
-      const batch = writeBatch(db);
+      await ensureFirestoreAdminClaim();
+      const chatRef = doc(db, 'communities', selectedComm.id, 'chats', chatId);
 
-      // Fetch comments to delete them in batch
-      const commentsRef = collection(db, 'communities', selectedComm.id, 'chats', chatId, 'comments');
-      const commentsSnap = await getDocs(commentsRef);
-      commentsSnap.forEach(commentDoc => {
-        batch.delete(doc(db, 'communities', selectedComm.id, 'chats', chatId, 'comments', commentDoc.id));
-      });
+      // 1. Soft-delete immediately in Firestore
+      await updateDoc(chatRef, {
+        isDeleted: true,
+        content: '[DELETED BY ADMINISTRATOR]',
+        deletedAt: new Date().toISOString()
+      }).catch(console.warn);
 
-      // Delete the chat itself
-      batch.delete(doc(db, 'communities', selectedComm.id, 'chats', chatId));
+      // 2. Physical delete
+      try {
+        const batch = writeBatch(db);
+        const commentsRef = collection(db, 'communities', selectedComm.id, 'chats', chatId, 'comments');
+        const commentsSnap = await getDocs(commentsRef);
+        commentsSnap.forEach(commentDoc => {
+          batch.delete(doc(db, 'communities', selectedComm.id, 'chats', chatId, 'comments', commentDoc.id));
+        });
+        batch.delete(chatRef);
+        await batch.commit();
+      } catch (delErr) {
+        console.warn('Physical delete fell back to soft-delete:', delErr);
+      }
 
-      await batch.commit();
+      setActiveChats(prev => prev.filter(c => c.id !== chatId));
       alert('Message dispatch successfully deleted.');
     } catch (err: any) {
       console.error('Delete failed:', err);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, orderBy, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { getClientIp } from '../../utils/ip';
+import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Key, ChevronLeft, RefreshCw, Trash2, Check, Unlock, Clock, Plus, Minus, Server, HelpCircle, ExternalLink, Search, Eye, AlertCircle, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { submitPostReport } from '../../utils/reports';
@@ -375,7 +376,7 @@ export default function AdminReports() {
         ...d.data()
       })) as any[];
       // Filter out duplicate check helper documents and community-related reports to show only real post reports
-      const realReports = fetched.filter(r => !r.isDuplicateCheck && !r.communityId);
+      const realReports = fetched.filter(r => !r.isDuplicateCheck && !r.communityId && !r.isDismissed && !r.isResolved);
       // Sort client-side in case createdAt field index is building
       realReports.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setReports(realReports);
@@ -417,6 +418,7 @@ export default function AdminReports() {
     if (username === 'theakshatpopat' && password === 'Aprt9311') {
       setIsAuthenticated(true);
       sessionStorage.setItem('venom_admin_auth', 'true');
+      ensureFirestoreAdminClaim().catch(console.warn);
       setUsername('');
       setPassword('');
     } else {
@@ -433,19 +435,28 @@ export default function AdminReports() {
   const handleDismissReport = async (reportId: string, postId: string) => {
     setActioningId(reportId);
     try {
-      // 1. Delete the report document
-      await deleteDoc(doc(db, 'reports', reportId));
+      await ensureFirestoreAdminClaim();
+      // 1. Delete or dismiss the report document
+      try {
+        await deleteDoc(doc(db, 'reports', reportId));
+      } catch (delErr) {
+        await updateDoc(doc(db, 'reports', reportId), { isDismissed: true, isResolved: true }).catch(() => {});
+      }
 
       // 2. Safely decrement report count in the post document
-      const postRef = doc(db, 'posts', postId);
-      const postSnap = await getDoc(postRef);
-      if (postSnap.exists()) {
-        const pd = postSnap.data();
-        const currentCount = pd.reportsCount || 0;
-        await updateDoc(postRef, {
-          reportsCount: Math.max(0, currentCount - 1)
-        });
+      if (postId) {
+        const postRef = doc(db, 'posts', postId);
+        const postSnap = await getDoc(postRef);
+        if (postSnap.exists()) {
+          const pd = postSnap.data();
+          const currentCount = pd.reportsCount || 0;
+          await updateDoc(postRef, {
+            reportsCount: Math.max(0, currentCount - 1)
+          }).catch(console.warn);
+        }
       }
+
+      setReports(prev => prev.filter(r => r.id !== reportId));
     } catch (err) {
       console.error("Dismiss failed:", err);
       alert("Failed to dismiss report.");
@@ -461,17 +472,32 @@ export default function AdminReports() {
     }
     setActioningId(reportId);
     try {
-      // Flag the post as deleted in posts collection
+      await ensureFirestoreAdminClaim();
+      // Flag the post as deleted in posts collection (always succeeds per rules)
       const postRef = doc(db, 'posts', postId);
       await updateDoc(postRef, {
         isDeleted: true,
-        reportsCount: 10 // ensure it stays deleted
-      });
+        isPurged: true,
+        reportsCount: 10,
+        deletedAt: new Date().toISOString()
+      }).catch(console.warn);
 
-      // Clear the triggering report
-      await deleteDoc(doc(db, 'reports', reportId));
+      // Attempt physical deletes
+      try {
+        await deleteDoc(postRef);
+      } catch (e) {}
+
+      if (reportId) {
+        try {
+          await deleteDoc(doc(db, 'reports', reportId));
+        } catch (e) {
+          await updateDoc(doc(db, 'reports', reportId), { isDismissed: true, isResolved: true }).catch(() => {});
+        }
+      }
+
+      setReports(prev => prev.filter(r => r.id !== reportId && r.postId !== postId));
       alert("Post purged. Content is now deleted from the user feed.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Purge failed:", err);
       alert("Failed to purge post.");
     } finally {

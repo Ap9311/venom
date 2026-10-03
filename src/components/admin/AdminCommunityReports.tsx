@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -42,7 +43,7 @@ export default function AdminCommunityReports() {
         id: d.id,
         ...d.data()
       }));
-      setCommunities(fetched);
+      setCommunities(fetched.filter((c: any) => !c.isDeleted));
       setIsLoading(false);
     }, (err) => {
       console.error("Failed to read communities:", err);
@@ -63,7 +64,7 @@ export default function AdminCommunityReports() {
         ...d.data()
       })) as any[];
       // Filter for reports targetting communities (has communityId)
-      const communityReports = fetched.filter(r => r.communityId);
+      const communityReports = fetched.filter(r => r.communityId && !r.isDismissed && !r.isResolved);
       setReports(communityReports);
     }, (err) => {
       console.error("Failed to read community reports:", err);
@@ -80,6 +81,7 @@ export default function AdminCommunityReports() {
     if (username === 'theakshatpopat' && password === 'Aprt9311') {
       setIsAuthenticated(true);
       sessionStorage.setItem('venom_admin_auth', 'true');
+      ensureFirestoreAdminClaim().catch(console.warn);
       setUsername('');
       setPassword('');
     } else {
@@ -99,6 +101,7 @@ export default function AdminCommunityReports() {
     }
     setActioningId(communityId);
     try {
+      await ensureFirestoreAdminClaim();
       // 1. Reset reportsCount
       const commRef = doc(db, 'communities', communityId);
       await updateDoc(commRef, {
@@ -108,9 +111,15 @@ export default function AdminCommunityReports() {
       // 2. Clear related reports in db
       const q = query(collection(db, 'reports'), where('communityId', '==', communityId));
       const snap = await getDocs(q);
-      const batchDeletes = snap.docs.map(d => deleteDoc(doc(db, 'reports', d.id)));
-      await Promise.all(batchDeletes);
+      for (const d of snap.docs) {
+        try {
+          await deleteDoc(doc(db, 'reports', d.id));
+        } catch (delErr) {
+          await updateDoc(doc(db, 'reports', d.id), { isDismissed: true, isResolved: true }).catch(() => {});
+        }
+      }
 
+      setReports(prev => prev.filter(r => r.communityId !== communityId));
       alert("All active complaints for this community have been dismissed.");
     } catch (err) {
       console.error("Dismiss community failed:", err);
@@ -124,6 +133,7 @@ export default function AdminCommunityReports() {
   const handleBlockCommunity = async (communityId: string, type: 'temporary' | 'permanent', days: number) => {
     setActioningId(communityId);
     try {
+      await ensureFirestoreAdminClaim();
       const commRef = doc(db, 'communities', communityId);
       let blockedUntil: string | null = null;
       if (type === 'temporary') {
@@ -151,6 +161,7 @@ export default function AdminCommunityReports() {
   const handleUnblockCommunity = async (communityId: string) => {
     setActioningId(communityId);
     try {
+      await ensureFirestoreAdminClaim();
       const commRef = doc(db, 'communities', communityId);
       await updateDoc(commRef, {
         isBlocked: false,
@@ -161,9 +172,15 @@ export default function AdminCommunityReports() {
       // Also dismiss old reports
       const q = query(collection(db, 'reports'), where('communityId', '==', communityId));
       const snap = await getDocs(q);
-      const batchDeletes = snap.docs.map(d => deleteDoc(doc(db, 'reports', d.id)));
-      await Promise.all(batchDeletes);
+      for (const d of snap.docs) {
+        try {
+          await deleteDoc(doc(db, 'reports', d.id));
+        } catch (delErr) {
+          await updateDoc(doc(db, 'reports', d.id), { isDismissed: true, isResolved: true }).catch(() => {});
+        }
+      }
 
+      setReports(prev => prev.filter(r => r.communityId !== communityId));
       alert("Community unblocked successfully. Active reports have been cleared.");
     } catch (err) {
       console.error("Failed to unblock community:", err);

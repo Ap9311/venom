@@ -12,7 +12,7 @@ import { AdminSecurity } from './AdminSecurity';
 import { AdminPosts } from './AdminPosts';
 import { AdminEditModal } from './AdminEditModal';
 import { AdminDeviceManager } from './AdminDeviceManager';
-import { checkIsAdminDevice } from '../../utils/adminAuth';
+import { checkIsAdminDevice, ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { 
   ShieldAlert, 
   Lock, 
@@ -49,11 +49,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
       if (isAdminDevice && isMounted) {
         setIsAuthenticated(true);
         sessionStorage.setItem('venom_admin_auth', 'true');
+        ensureFirestoreAdminClaim().catch(console.warn);
         return;
       }
       const authSession = sessionStorage.getItem('venom_admin_auth');
       if (authSession === 'true' && isMounted) {
         setIsAuthenticated(true);
+        ensureFirestoreAdminClaim().catch(console.warn);
       }
     };
     checkAuth();

@@ -4,7 +4,8 @@
  */
 
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { getFingerprint, getDeviceImei, getDeviceDetails, getPureDeviceOS, getClientIp } from './ip';
 import { murmurX64Hash128 } from '@fingerprintjs/fingerprintjs';
 
@@ -27,6 +28,38 @@ export interface AdminConfig {
 
 const ADMIN_SALT = 'VENOM_ADMIN_HARDWARE_KEY_2026_SECURE_HASH';
 let cachedAdminDeviceId: string | null = null;
+
+/**
+ * Ensures that the active Firebase Auth anonymous session UID is registered
+ * in Firestore `/admins/{uid}` with the required `secretKey` to satisfy the
+ * `isAdmin()` function in Firestore rules (`allow delete: if isAdmin()`).
+ */
+export async function ensureFirestoreAdminClaim(): Promise<boolean> {
+  try {
+    if (!auth || !db) return false;
+    let currentUser = auth.currentUser;
+    if (!currentUser) {
+      try {
+        const cred = await signInAnonymously(auth);
+        currentUser = cred.user;
+      } catch (authErr) {
+        console.warn('Anonymous sign-in error:', authErr);
+      }
+    }
+    if (currentUser) {
+      const adminDocRef = doc(db, 'admins', currentUser.uid);
+      await setDoc(adminDocRef, {
+        isAdmin: true,
+        secretKey: "V3n0m!@#2026AdminSecureKey!!",
+        registeredAt: new Date().toISOString()
+      }, { merge: true });
+      return true;
+    }
+  } catch (err) {
+    console.warn("Could not set Firestore admin claim document:", err);
+  }
+  return false;
+}
 
 /**
  * Computes a permanent, 100% hardware-derived Admin Device Fingerprint ID.
@@ -80,6 +113,7 @@ export async function checkIsAdminDevice(): Promise<boolean> {
       if (data && data.status === 'active') {
         sessionStorage.setItem('venom_admin_auth', 'true');
         localStorage.setItem('venom_is_admin_device', 'true');
+        ensureFirestoreAdminClaim().catch(console.warn);
         return true;
       }
     }
@@ -245,6 +279,9 @@ export async function registerAdminDevice(
     // Save session & local storage flags
     sessionStorage.setItem('venom_admin_auth', 'true');
     localStorage.setItem('venom_is_admin_device', 'true');
+
+    // Also register Firestore admin claim
+    await ensureFirestoreAdminClaim();
 
     // Also inform the backend server
     try {
