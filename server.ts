@@ -77,6 +77,66 @@ async function startServer() {
   }
 
   // Health check endpoint
+  app.use(express.json());
+
+  // In-memory server-side registry of active admin devices and limits
+  const registeredAdminDevices = new Set<string>();
+  let serverMaxAdmins = 3;
+
+  // Administrator login authentication endpoint
+  app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
+    const { username, password } = req.body || {};
+    if (username === 'theakshatpopat' && password === 'Aprt9311') {
+      return res.json({
+        success: true,
+        token: 'V3n0m!@#2026AdminSecureKey!!',
+        message: 'Administrator authentication verified.'
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid Administrator credentials.'
+    });
+  });
+
+  app.post('/api/admin-verify', (req, res) => {
+    const { adminDeviceId } = req.body || {};
+    if (adminDeviceId && registeredAdminDevices.has(adminDeviceId)) {
+      return res.json({ isAdmin: true });
+    }
+    return res.json({ isAdmin: false });
+  });
+
+  app.post('/api/admin-register', (req, res) => {
+    const { username, password, adminDeviceId } = req.body || {};
+    if (username === 'theakshatpopat' && password === 'Aprt9311' && adminDeviceId) {
+      if (registeredAdminDevices.size >= serverMaxAdmins && !registeredAdminDevices.has(adminDeviceId)) {
+        return res.status(403).json({ success: false, error: 'Admin limit reached' });
+      }
+      registeredAdminDevices.add(adminDeviceId);
+      return res.json({ success: true, adminDeviceId });
+    }
+    return res.status(401).json({ success: false, error: 'Invalid credentials' });
+  });
+
+  app.post('/api/admin-update-limit', (req, res) => {
+    const { maxAdmins } = req.body || {};
+    if (typeof maxAdmins === 'number' && maxAdmins > 0) {
+      serverMaxAdmins = maxAdmins;
+      return res.json({ success: true, maxAdmins });
+    }
+    return res.status(400).json({ success: false });
+  });
+
+  app.post('/api/admin-revoke', (req, res) => {
+    const { adminDeviceId } = req.body || {};
+    if (adminDeviceId) {
+      registeredAdminDevices.delete(adminDeviceId);
+      return res.json({ success: true });
+    }
+    return res.status(400).json({ success: false });
+  });
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });

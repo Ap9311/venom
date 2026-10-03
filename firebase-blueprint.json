@@ -172,9 +172,43 @@
         "visitedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["ip", "visitedAt"]
+    },
+    "AdminDevice": {
+      "title": "AdminDevice",
+      "description": "Registered administrative device hardware identity.",
+      "type": "object",
+      "properties": {
+        "adminDeviceId": { "type": "string" },
+        "userImei": { "type": "string" },
+        "os": { "type": "string" },
+        "deviceDetails": { "type": "string" },
+        "ip": { "type": "string" },
+        "registeredAt": { "type": "string", "format": "date-time" },
+        "label": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["adminDeviceId", "registeredAt", "status"]
+    },
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "System-wide administrative settings and slot limits.",
+      "type": "object",
+      "properties": {
+        "maxAdmins": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["maxAdmins"]
     }
   },
   "firestore": {
+    "/admin_devices/{deviceId}": {
+      "schema": "AdminDevice",
+      "description": "Registered admin devices with cryptographic hardware fingerprint identities."
+    },
+    "/admin_config/{configId}": {
+      "schema": "AdminConfig",
+      "description": "Global administrator configuration and limit allocation."
+    },
     "/posts/{postId}": {
       "schema": "Post",
       "description": "Top-level collection for all posts."

@@ -9,6 +9,7 @@ import {
   doc, 
   setDoc, 
   updateDoc, 
+  deleteDoc,
   query, 
   orderBy, 
   onSnapshot, 
@@ -17,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
+import { getDeviceImei } from '../utils/ip';
 import { 
   isCommentLiked, 
   toggleCommentLikeStore, 
@@ -232,6 +234,22 @@ function CommentItem({
       await updateDoc(commentRef, {
         likesCount: increment(liked ? 1 : -1),
       });
+
+      // Persist to interactions collection for device fingerprint tracking
+      const deviceImei = await getDeviceImei();
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_comment_like`);
+      if (liked) {
+        setDoc(interactionRef, {
+          type: 'like_comment',
+          commentKey: key,
+          postId,
+          commentId: comment.id,
+          imei: deviceImei,
+          createdAt: new Date().toISOString()
+        }).catch(console.error);
+      } else {
+        deleteDoc(interactionRef).catch(console.error);
+      }
     } catch (error) {
       // Revert local state and storage on failure
       toggleCommentLikeStore(key);
@@ -257,6 +275,22 @@ function CommentItem({
       await updateDoc(replyRef, {
         likesCount: increment(liked ? 1 : -1),
       });
+
+      // Persist to interactions collection for device fingerprint tracking
+      const deviceImei = await getDeviceImei();
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_reply_like`);
+      if (liked) {
+        setDoc(interactionRef, {
+          type: 'like_reply',
+          replyKey: key,
+          commentId: comment.id,
+          replyId,
+          imei: deviceImei,
+          createdAt: new Date().toISOString()
+        }).catch(console.error);
+      } else {
+        deleteDoc(interactionRef).catch(console.error);
+      }
     } catch (error) {
       // Revert
       toggleReplyLikeStore(key);
