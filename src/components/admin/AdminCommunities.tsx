@@ -17,7 +17,7 @@ import {
   updateDoc,
   where
 } from 'firebase/firestore';
-import { ensureFirestoreAdminClaim, checkIsAdminDevice } from '../../utils/adminAuth';
+import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
 import { 
   Trash2, 
   Lock, 
@@ -226,18 +226,18 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     return () => unsubscribe();
   }, [selectedComm]);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
-    // Matches main admin credentials
-    if (username === 'theakshatpopat' && password === 'Aprt9311') {
+    const res = await verifyAdminCredentials(username, password);
+    if (res.success) {
       setIsAuthenticated(true);
       sessionStorage.setItem('venom_admin_auth', 'true');
       setUsername('');
       setPassword('');
     } else {
-      setLoginError('Invalid Administrator credentials. Security breach log generated.');
+      setLoginError(res.error || 'Invalid Administrator credentials. Security breach log generated.');
     }
   };
 
