@@ -98,11 +98,10 @@ export async function checkIsAdminDevice(): Promise<boolean> {
     const adminDeviceId = await getAdminDeviceId();
     if (!adminDeviceId) return false;
 
-    // Check memory / session cache first
-    const isLocalAdmin = localStorage.getItem('venom_is_admin_device') === 'true' &&
-                          sessionStorage.getItem('venom_admin_auth') === 'true';
-
-    if (!db) return isLocalAdmin;
+    if (!db) {
+      return localStorage.getItem('venom_is_admin_device') === 'true' &&
+             sessionStorage.getItem('venom_admin_auth') === 'true';
+    }
 
     // Check Firestore interactions collection for registered admin device document
     const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
@@ -118,25 +117,18 @@ export async function checkIsAdminDevice(): Promise<boolean> {
       }
     }
 
-    // If local flag was set but remote doc does not exist, clear local
-    if (!snap.exists() && isLocalAdmin) {
-      // Re-verify if server has it before clearing
-      try {
-        const res = await fetch('/api/admin-verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ adminDeviceId })
-        });
-        const d = await res.json();
-        if (d && d.isAdmin) return true;
-      } catch {}
+    // Document does NOT exist or status is NOT active: device was revoked or unauthorized.
+    // Immediately eradicate all local tokens and session permissions.
+    sessionStorage.removeItem('venom_admin_auth');
+    localStorage.removeItem('venom_is_admin_device');
+    if (auth?.currentUser) {
+      deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
     }
 
     return false;
   } catch (error) {
-    console.warn('Failed to check admin device status from Firestore, falling back to local verification:', error);
-    return localStorage.getItem('venom_is_admin_device') === 'true' &&
-           sessionStorage.getItem('venom_admin_auth') === 'true';
+    console.warn('Failed to check admin device status from Firestore:', error);
+    return false;
   }
 }
 
@@ -341,13 +333,23 @@ export async function updateAdminLimit(newMax: number): Promise<boolean> {
 export async function revokeAdminDevice(deviceId: string): Promise<boolean> {
   try {
     const deviceDocRef = doc(db, 'interactions', `admin_device_${deviceId}`);
-    await deleteDoc(deviceDocRef);
+    // 1. Mark as revoked explicitly in Firestore so any listener immediately sees 'revoked'
+    await setDoc(deviceDocRef, {
+      status: 'revoked',
+      revokedAt: new Date().toISOString()
+    }, { merge: true }).catch(() => {});
+
+    // 2. Delete the doc
+    await deleteDoc(deviceDocRef).catch(() => {});
 
     // If revoking current device, clear local session
     const currentId = await getAdminDeviceId();
     if (currentId === deviceId) {
       sessionStorage.removeItem('venom_admin_auth');
       localStorage.removeItem('venom_is_admin_device');
+      if (auth?.currentUser) {
+        deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
+      }
     }
 
     try {
@@ -357,6 +359,9 @@ export async function revokeAdminDevice(deviceId: string): Promise<boolean> {
         body: JSON.stringify({ adminDeviceId: deviceId })
       });
     } catch {}
+
+    // Dispatch event so any local tabs sync immediately
+    window.dispatchEvent(new Event('storage'));
 
     return true;
   } catch (err) {

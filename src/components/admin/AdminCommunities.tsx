@@ -17,7 +17,7 @@ import {
   updateDoc,
   where
 } from 'firebase/firestore';
-import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
+import { ensureFirestoreAdminClaim, checkIsAdminDevice } from '../../utils/adminAuth';
 import { 
   Trash2, 
   Lock, 
@@ -99,12 +99,23 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
   const [editChatDeviceType, setEditChatDeviceType] = useState('DESKTOP');
   const [editChatMsgType, setEditChatMsgType] = useState('text');
 
-  // Check existing session auth
+  // Check existing admin device status
   useEffect(() => {
-    const authSession = sessionStorage.getItem('venom_admin_auth');
-    if (authSession === 'true') {
-      setIsAuthenticated(true);
-    }
+    let isMounted = true;
+    const verify = async () => {
+      const isAdm = await checkIsAdminDevice();
+      if (!isMounted) return;
+      if (isAdm) {
+        setIsAuthenticated(true);
+        ensureFirestoreAdminClaim().catch(console.warn);
+      } else {
+        setIsAuthenticated(false);
+        sessionStorage.removeItem('venom_admin_auth');
+        localStorage.removeItem('venom_is_admin_device');
+      }
+    };
+    verify();
+    return () => { isMounted = false; };
   }, []);
 
   // Listen to all communities (including blocked ones)

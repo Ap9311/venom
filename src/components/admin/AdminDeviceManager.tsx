@@ -97,10 +97,15 @@ export const AdminDeviceManager: React.FC = () => {
     if (!deviceToRevoke) return;
 
     try {
+      const isSelf = deviceToRevoke.adminDeviceId === currentDeviceId;
       const ok = await revokeAdminDevice(deviceToRevoke.adminDeviceId);
       if (ok) {
         setActionSuccess(`Device ${deviceToRevoke.adminDeviceId} revoked. Slot has been freed.`);
         setDeviceToRevoke(null);
+        if (isSelf) {
+          window.location.href = '/';
+          return;
+        }
         await fetchConfig();
         setTimeout(() => setActionSuccess(null), 4000);
       } else {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, orderBy, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { getClientIp } from '../../utils/ip';
-import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
+import { ensureFirestoreAdminClaim, checkIsAdminDevice } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Key, ChevronLeft, RefreshCw, Trash2, Check, Unlock, Clock, Plus, Minus, Server, HelpCircle, ExternalLink, Search, Eye, AlertCircle, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { submitPostReport } from '../../utils/reports';
@@ -355,11 +355,24 @@ export default function AdminReports() {
 
   // Check login session on load
   useEffect(() => {
-    const authSession = sessionStorage.getItem('venom_admin_auth');
-    if (authSession === 'true') {
-      setIsAuthenticated(true);
-    }
-    getClientIp().then(ip => setAdminIp(ip)).catch(console.error);
+    let isMounted = true;
+    const verify = async () => {
+      const isAdm = await checkIsAdminDevice();
+      if (!isMounted) return;
+      if (isAdm) {
+        setIsAuthenticated(true);
+        ensureFirestoreAdminClaim().catch(console.warn);
+      } else {
+        setIsAuthenticated(false);
+        sessionStorage.removeItem('venom_admin_auth');
+        localStorage.removeItem('venom_is_admin_device');
+      }
+    };
+    verify();
+    getClientIp().then(ip => {
+      if (isMounted) setAdminIp(ip);
+    }).catch(console.error);
+    return () => { isMounted = false; };
   }, []);
 
   // Real-time Reports listener

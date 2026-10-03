@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
+import { ensureFirestoreAdminClaim, checkIsAdminDevice } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -26,10 +26,21 @@ export default function AdminCommunityReports() {
 
   // Check login session on load
   useEffect(() => {
-    const authSession = sessionStorage.getItem('venom_admin_auth');
-    if (authSession === 'true') {
-      setIsAuthenticated(true);
-    }
+    let isMounted = true;
+    const verify = async () => {
+      const isAdm = await checkIsAdminDevice();
+      if (!isMounted) return;
+      if (isAdm) {
+        setIsAuthenticated(true);
+        ensureFirestoreAdminClaim().catch(console.warn);
+      } else {
+        setIsAuthenticated(false);
+        sessionStorage.removeItem('venom_admin_auth');
+        localStorage.removeItem('venom_is_admin_device');
+      }
+    };
+    verify();
+    return () => { isMounted = false; };
   }, []);
 
   // Real-time Communities listener

@@ -9,13 +9,14 @@ import {
   query, 
   orderBy, 
   limit, 
-  onSnapshot,
-  doc,
-  getDoc,
-  where,
-  getDocs
+  onSnapshot, 
+  doc, 
+  getDoc, 
+  where, 
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { Post } from './types';
 import { getClientIp, getDeviceImei, getLegacyDeviceImei } from './utils/ip';
 import Header from './components/Header';
@@ -32,7 +33,7 @@ import AdminCommunities from './components/admin/AdminCommunities';
 import AdminCommunityReports from './components/admin/AdminCommunityReports';
 import LoginPage from './components/LoginPage';
 import NxDomainError from './components/NxDomainError';
-import { checkIsAdminDevice } from './utils/adminAuth';
+import { checkIsAdminDevice, getAdminDeviceId } from './utils/adminAuth';
 import { 
   Cpu, 
   Search,
@@ -77,26 +78,56 @@ export default function App() {
   const [installPwaAppType, setInstallPwaAppType] = useState<'main' | 'admin'>('main');
   const [isAdminDevice, setIsAdminDevice] = useState<boolean | null>(null);
 
-  // Verify whether this physical device holds permanent administrative clearance
+  // Verify whether this physical device holds active administrative clearance in real-time
   useEffect(() => {
     let isMounted = true;
-    const verifyDeviceAdminStatus = async () => {
+    let unsubAdminDoc: (() => void) | null = null;
+
+    const setupAdminVerification = async () => {
       try {
-        const isAdm = await checkIsAdminDevice();
-        if (isMounted) {
-          setIsAdminDevice(isAdm);
+        const adminId = await getAdminDeviceId();
+        if (!adminId || !isMounted) return;
+
+        if (!db) {
+          const isAdm = await checkIsAdminDevice();
+          if (isMounted) setIsAdminDevice(isAdm);
+          return;
         }
+
+        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminId}`);
+
+        // Listen in real-time to this device's registration document in Firestore
+        unsubAdminDoc = onSnapshot(deviceDocRef, (snap) => {
+          if (!isMounted) return;
+          if (snap.exists() && snap.data()?.status === 'active') {
+            setIsAdminDevice(true);
+            sessionStorage.setItem('venom_admin_auth', 'true');
+            localStorage.setItem('venom_is_admin_device', 'true');
+          } else {
+            // Revoked or does not exist in active registry!
+            setIsAdminDevice(false);
+            sessionStorage.removeItem('venom_admin_auth');
+            localStorage.removeItem('venom_is_admin_device');
+            if (auth?.currentUser) {
+              deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
+            }
+          }
+        }, (err) => {
+          console.warn('Real-time admin check fallback:', err);
+          checkIsAdminDevice().then(isAdm => {
+            if (isMounted) setIsAdminDevice(isAdm);
+          });
+        });
       } catch (err) {
-        if (isMounted) {
-          setIsAdminDevice(false);
-        }
+        if (isMounted) setIsAdminDevice(false);
       }
     };
 
-    verifyDeviceAdminStatus();
+    setupAdminVerification();
 
-    const handleSync = () => {
-      verifyDeviceAdminStatus();
+    const handleSync = async () => {
+      const isAdm = await checkIsAdminDevice();
+      if (isMounted) setIsAdminDevice(isAdm);
     };
 
     window.addEventListener('storage', handleSync);
@@ -104,6 +135,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
+      if (unsubAdminDoc) unsubAdminDoc();
       window.removeEventListener('storage', handleSync);
       window.removeEventListener('popstate', handleSync);
     };
@@ -648,13 +680,10 @@ export default function App() {
   }
 
   // Cryptographic Administrative Access Gate (/admin and sub-routes)
-  // ONLY devices with registered hardware admin fingerprint identity can access /admin.
-  // All other devices see the authentic browser "This site can't be reached" (DNS_PROBE_FINISHED_NXDOMAIN).
+  // ONLY devices with registered and active hardware admin fingerprint identity can access /admin.
+  // All other or revoked devices see the authentic browser "This site can't be reached" (DNS_PROBE_FINISHED_NXDOMAIN).
   if (currentPath.startsWith('/admin')) {
-    const isLocalAdmin = typeof window !== 'undefined' && 
-      (sessionStorage.getItem('venom_admin_auth') === 'true' || localStorage.getItem('venom_is_admin_device') === 'true');
-
-    if (!isAdminDevice && !isLocalAdmin) {
+    if (isAdminDevice !== true) {
       if (isAdminDevice === null) {
         return <div className="min-h-screen bg-[#202124]" />;
       }

@@ -46,16 +46,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
     let isMounted = true;
     const checkAuth = async () => {
       const isAdminDevice = await checkIsAdminDevice();
-      if (isAdminDevice && isMounted) {
+      if (!isMounted) return;
+      if (isAdminDevice) {
         setIsAuthenticated(true);
         sessionStorage.setItem('venom_admin_auth', 'true');
         ensureFirestoreAdminClaim().catch(console.warn);
-        return;
-      }
-      const authSession = sessionStorage.getItem('venom_admin_auth');
-      if (authSession === 'true' && isMounted) {
-        setIsAuthenticated(true);
-        ensureFirestoreAdminClaim().catch(console.warn);
+      } else {
+        setIsAuthenticated(false);
+        sessionStorage.removeItem('venom_admin_auth');
+        localStorage.removeItem('venom_is_admin_device');
       }
     };
     checkAuth();
