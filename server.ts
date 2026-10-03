@@ -77,6 +77,24 @@ async function startServer() {
   }
 
   // Health check endpoint
+  app.use(express.json());
+
+  // Administrator login authentication endpoint
+  app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
+    const { username, password } = req.body || {};
+    if (username === 'theakshatpopat' && password === 'Aprt9311') {
+      return res.json({
+        success: true,
+        token: 'V3n0m!@#2026AdminSecureKey!!',
+        message: 'Administrator authentication verified.'
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid Administrator credentials.'
+    });
+  });
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });

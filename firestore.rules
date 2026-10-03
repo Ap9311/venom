@@ -40,6 +40,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Administrator Device Registry & Configuration
+    match /admin_devices/{deviceId} {
+      allow read, write: if true;
+    }
+
+    match /admin_config/{configId} {
+      allow read, write: if true;
+    }
+
     // Connection testing
     match /test/connection {
       allow read: if true;
