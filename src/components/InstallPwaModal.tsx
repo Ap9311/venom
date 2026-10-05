@@ -80,7 +80,6 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
       promptEvent.prompt();
       promptEvent.userChoice.then((choiceResult: any) => {
         if (choiceResult.outcome === 'accepted') {
-          console.log('User accepted the PWA install prompt');
           onClose();
         }
       });

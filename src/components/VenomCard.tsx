@@ -579,7 +579,7 @@ Post Venom Now: https://myvenom.vercel.app`;
           url: shareUrl,
         });
       } catch (err) {
-        console.log('Error sharing:', err);
+        // Native share cancelled or unavailable
       }
     } else {
       handleCopyLink();

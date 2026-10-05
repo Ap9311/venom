@@ -86,40 +86,8 @@ export default function App() {
 
     const setupAdminVerification = async () => {
       try {
-        const adminId = await getAdminDeviceId();
-        if (!adminId || !isMounted) return;
-
-        if (!db) {
-          const isAdm = await checkIsAdminDevice();
-          if (isMounted) setIsAdminDevice(isAdm);
-          return;
-        }
-
-        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminId}`);
-
-        // Listen in real-time to this device's registration document in Firestore
-        unsubAdminDoc = onSnapshot(deviceDocRef, (snap) => {
-          if (!isMounted) return;
-          if (snap.exists() && snap.data()?.status === 'active') {
-            setIsAdminDevice(true);
-            sessionStorage.setItem('venom_admin_auth', 'true');
-            localStorage.setItem('venom_is_admin_device', 'true');
-          } else {
-            // Revoked or does not exist in active registry!
-            setIsAdminDevice(false);
-            sessionStorage.removeItem('venom_admin_auth');
-            sessionStorage.removeItem('venom_admin_token');
-            localStorage.removeItem('venom_is_admin_device');
-            if (auth?.currentUser && db) {
-              deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
-            }
-          }
-        }, (err) => {
-          console.warn('Real-time admin check fallback:', err);
-          checkIsAdminDevice().then(isAdm => {
-            if (isMounted) setIsAdminDevice(isAdm);
-          });
-        });
+        const isAdm = await checkIsAdminDevice();
+        if (isMounted) setIsAdminDevice(isAdm);
       } catch (err) {
         if (isMounted) setIsAdminDevice(false);
       }
@@ -346,7 +314,7 @@ export default function App() {
         promptEvent.prompt();
         promptEvent.userChoice.then((choiceResult: any) => {
           if (choiceResult.outcome === 'accepted') {
-            console.log('PWA installation accepted by user');
+            // User accepted PWA install
           }
         });
         return true;

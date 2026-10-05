@@ -529,7 +529,7 @@ export default function AdminReports() {
     imei?: string
   ) => {
     if (!ip) return;
-    if (ip === '150.129.200.97' || (adminIp && ip === adminIp)) {
+    if (adminIp && ip === adminIp) {
       alert(`Action Aborted: This IP address (${ip}) matches your personal or currently active administrator connection. You cannot block yourself.`);
       return;
     }

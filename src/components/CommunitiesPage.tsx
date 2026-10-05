@@ -469,11 +469,12 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       if (targetComm && !isBlocked) {
         setInitialDeepLinkProcessed(true);
 
-        // If password is set on shared community, check if unlocked with current password
-        if (targetComm.password && !checkIsCreator(targetComm)) {
+        // If password is set on shared community, check if unlocked with current password version
+        if ((targetComm.hasPassword || targetComm.password) && !checkIsCreator(targetComm)) {
           const isUnlocked = unlockedCommIds.includes(targetComm.id) || localStorage.getItem(`unlocked_comm_${targetComm.id}`) === 'true';
-          const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${targetComm.id}`) || '';
-          if (!isUnlocked || (storedPwd && storedPwd !== targetComm.password)) {
+          const storedVersion = localStorage.getItem(`unlocked_comm_v_${targetComm.id}`) || '1';
+          const currentVersion = String(targetComm.passwordVersion || 1);
+          if (!isUnlocked || storedVersion !== currentVersion) {
             setShowPasswordGate(targetComm);
           } else {
             handleEnterCommunityDirect(targetComm, sharedChatId);
@@ -492,10 +493,11 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     const latestComm = communities.find(c => c.id === activeCommunity.id);
     if (latestComm) {
       const isCreator = checkIsCreator(latestComm);
-      if (latestComm.password && !isCreator) {
+      if ((latestComm.hasPassword || latestComm.password) && !isCreator) {
         const isUnlocked = unlockedCommIds.includes(latestComm.id) || localStorage.getItem(`unlocked_comm_${latestComm.id}`) === 'true';
-        const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${latestComm.id}`) || '';
-        if (!isUnlocked || (storedPwd && storedPwd !== latestComm.password)) {
+        const storedVersion = localStorage.getItem(`unlocked_comm_v_${latestComm.id}`) || '1';
+        const currentVersion = String(latestComm.passwordVersion || 1);
+        if (!isUnlocked || storedVersion !== currentVersion) {
           // Password has changed, kick the user out of activeCommunity and show password gate modal
           setActiveCommunity(null);
           setShowPasswordGate(latestComm);
@@ -507,7 +509,8 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       if (
         latestComm.name !== activeCommunity.name ||
         latestComm.description !== activeCommunity.description ||
-        latestComm.password !== activeCommunity.password ||
+        latestComm.hasPassword !== activeCommunity.hasPassword ||
+        latestComm.passwordVersion !== activeCommunity.passwordVersion ||
         latestComm.imageUrl !== activeCommunity.imageUrl ||
         latestComm.allowUserPost !== activeCommunity.allowUserPost ||
         latestComm.userLimit !== activeCommunity.userLimit ||
@@ -617,14 +620,16 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         return;
       }
 
-      const payload = {
+      const hasPasswordSet = !!cPassword.trim();
+      const payload: any = {
         id: commId,
         name: cName.trim(),
         description: cDesc.trim(),
         religion: '',
         userLimit: cUserLimit ? parseInt(cUserLimit) : null,
         allowUserPost: cAllowUserPost,
-        password: cPassword.trim() || '',
+        hasPassword: hasPasswordSet,
+        passwordVersion: Date.now(),
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
         createdBySerial: await getDeviceSerial(),
@@ -637,6 +642,16 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       };
 
       await setDoc(customCommRef, payload);
+
+      if (hasPasswordSet) {
+        try {
+          await fetch('/api/community-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ communityId: commId, password: cPassword.trim() })
+          });
+        } catch {}
+      }
       
       // Persist the clearance as well so user doesn't need to post again
       localStorage.setItem('venom_has_posted_at_least_once', 'true');
@@ -691,17 +706,31 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
     try {
       const commDocRef = doc(db, 'communities', activeCommunity.id);
-      const updatedFields = {
+      const updatedFields: any = {
         name: editName.trim(),
         description: editDesc.trim(),
         religion: '',
         userLimit: editUserLimit ? parseInt(editUserLimit) : null,
         allowUserPost: editAllowUserPost,
-        password: editPassword.trim() || '',
         imageUrl: editImageUrl || activeCommunity.imageUrl
       };
 
-      await updateDoc(commDocRef, updatedFields);
+      if (editPassword.trim()) {
+        try {
+          const passRes = await fetch('/api/community-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ communityId: activeCommunity.id, password: editPassword.trim() })
+          });
+          const passData = await passRes.json();
+          if (passData.success) {
+            updatedFields.hasPassword = passData.hasPassword;
+            updatedFields.passwordVersion = passData.passwordVersion;
+          }
+        } catch {}
+      } else {
+        await updateDoc(commDocRef, updatedFields);
+      }
 
       // Sync active state
       setActiveCommunity((prev: any) => ({
@@ -740,38 +769,45 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     }
   };
 
-  // Password gate trigger
-  const handlePasswordGateSubmit = (e: React.FormEvent) => {
+  // Password gate trigger via server-side scrypt verification
+  const handlePasswordGateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGateError('');
-    if (gatePasswordInput === showPasswordGate.password) {
-      const targetComm = showPasswordGate;
-      if (rememberPassword) {
-        localStorage.setItem(`unlocked_comm_${targetComm.id}`, 'true');
-        localStorage.setItem(`unlocked_comm_pwd_${targetComm.id}`, targetComm.password);
-        if (deviceImei && db) {
-          setDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`), {
-            type: 'unlocked_community',
-            communityId: targetComm.id,
-            password: targetComm.password,
-            imei: deviceImei,
-            unlockedAt: new Date().toISOString()
-          }, { merge: true }).catch(console.error);
+    const targetComm = showPasswordGate;
+    if (!targetComm) return;
+
+    try {
+      const res = await fetch('/api/community-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          communityId: targetComm.id,
+          password: gatePasswordInput.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const passwordVersion = String(data.passwordVersion || targetComm.passwordVersion || 1);
+        if (rememberPassword) {
+          localStorage.setItem(`unlocked_comm_${targetComm.id}`, 'true');
+          localStorage.setItem(`unlocked_comm_v_${targetComm.id}`, passwordVersion);
+          localStorage.removeItem(`unlocked_comm_pwd_${targetComm.id}`);
+          setUnlockedCommIds(prev => Array.from(new Set([...prev, targetComm.id])));
+        } else {
+          localStorage.removeItem(`unlocked_comm_${targetComm.id}`);
+          localStorage.removeItem(`unlocked_comm_v_${targetComm.id}`);
+          localStorage.removeItem(`unlocked_comm_pwd_${targetComm.id}`);
+          setUnlockedCommIds(prev => prev.filter(id => id !== targetComm.id));
         }
-        setUnlockedCommIds(prev => Array.from(new Set([...prev, targetComm.id])));
+        setShowPasswordGate(null);
+        setGatePasswordInput('');
+        handleEnterCommunityDirect(targetComm);
       } else {
-        localStorage.removeItem(`unlocked_comm_${targetComm.id}`);
-        localStorage.removeItem(`unlocked_comm_pwd_${targetComm.id}`);
-        if (deviceImei && db) {
-          deleteDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`)).catch(console.error);
-        }
-        setUnlockedCommIds(prev => prev.filter(id => id !== targetComm.id));
+        setGateError(data.error || 'DECRYPTION FAILURE: Incendiary password. Access denied.');
       }
-      setShowPasswordGate(null);
-      setGatePasswordInput('');
-      handleEnterCommunityDirect(targetComm);
-    } else {
-      setGateError('DECRYPTION FAILURE: Incendiary password. Access denied.');
+    } catch {
+      setGateError('Verification server error.');
     }
   };
 
@@ -1250,7 +1286,7 @@ Post Venom Now: https://myvenom.vercel.app`;
           url: shareModalUrl,
         });
       } catch (err) {
-        console.log('Error sharing:', err);
+        // Share cancelled or unavailable
       }
     } else {
       handleCopyLink();
@@ -1436,11 +1472,12 @@ Post Venom Now: https://myvenom.vercel.app`;
                   key={comm.id}
                   onClick={() => {
                     const isUnlocked = unlockedCommIds.includes(comm.id) || localStorage.getItem(`unlocked_comm_${comm.id}`) === 'true';
-                    const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${comm.id}`) || '';
+                    const storedVersion = localStorage.getItem(`unlocked_comm_v_${comm.id}`) || '1';
+                    const currentVersion = String(comm.passwordVersion || 1);
                     const isCreator = checkIsCreator(comm);
 
-                    if (comm.password && !isCreator) {
-                      if (!isUnlocked || (storedPwd && storedPwd !== comm.password)) {
+                    if ((comm.hasPassword || comm.password) && !isCreator) {
+                      if (!isUnlocked || storedVersion !== currentVersion) {
                         setShowPasswordGate(comm);
                       } else {
                         handleEnterCommunityDirect(comm);
@@ -2509,7 +2546,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                 chatComments.map((comm) => (
                   <div key={comm.id} className="p-3 border border-zinc-900 rounded-xl bg-zinc-950/80 space-y-1.5">
                     <div className="flex justify-between items-center text-[8px] font-mono text-zinc-500">
-                      <span>{checkIsCreator(comm) ? 'YOU' : `MEMBER (${comm.createdByIp})`}</span>
+                      <span>{checkIsCreator(comm) ? 'YOU' : 'MEMBER'}</span>
                       <span>{comm.createdAt ? new Date(comm.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}</span>
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed">

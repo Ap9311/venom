@@ -47,6 +47,10 @@ export async function submitPostReport(
   const uniqueReportId = doc(collection(db, 'reports')).id;
   const reportRef = doc(db, 'reports', uniqueReportId);
 
+  let authorIp = "";
+  let postData: any = null;
+  let blockDataToSet: any = null;
+
   const result = await runTransaction(db, async (transaction) => {
     // === READ OPERATIONS FIRST ===
 
@@ -74,12 +78,12 @@ export async function submitPostReport(
       throw new Error("Target Post ID does not exist in the active database. Verification failed.");
     }
 
-    const postData = postSnap.data();
+    postData = postSnap.data();
     if (postData.isDeleted) {
       throw new Error("This post has already been removed or suspended by automatic security.");
     }
 
-    const authorIp = postData.postedFromIp || "";
+    authorIp = postData.postedFromIp || "";
 
     // 3. Read author IP blocks if available - only if author is not the reporter
     let authorBlockSnap = null;
@@ -117,8 +121,8 @@ export async function submitPostReport(
       // Add to running report totals for this user's IP
       totalReports += 1;
 
-      // Check if cumulative report threshold is violated (never block admin's personal IP automatically)
-      if (totalReports >= 50 && authorIp !== '150.129.200.97') {
+      // Check if cumulative report threshold is violated
+      if (totalReports >= 50) {
         blockCount += 1; // Elevate offense history tier
         isBlocked = true;
         blockedAt = new Date().toISOString();
@@ -147,15 +151,6 @@ export async function submitPostReport(
         // Reset reports to start fresh after suspension
         totalReports = 0;
         blockTriggered = true;
-      }
-
-      if (authorIp === '150.129.200.97') {
-        isBlocked = false;
-        blockTriggered = false;
-        totalReports = 0;
-        blockCount = 0;
-        expiresAt = null;
-        blockType = null;
       }
 
       blockDataToSet = {
@@ -229,7 +224,7 @@ export async function submitPostReport(
     });
 
     // 4. Set the blocked IP status if needed
-    if (authorBlockRef && blockDataToSet) {
+    if (authorBlockRef && blockDataToSet && !blockDataToSet.isBlocked) {
       transaction.set(authorBlockRef, blockDataToSet, { merge: true });
     }
 
@@ -239,6 +234,22 @@ export async function submitPostReport(
       blockTypeLabel
     };
   });
+
+  if (result.blockTriggered && blockDataToSet) {
+    fetch('/api/auto-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ip: authorIp,
+        imei: postData.postedFromImei,
+        reason: blockDataToSet.reason,
+        blockType: blockDataToSet.blockType,
+        expiresAt: blockDataToSet.expiresAt,
+        triggerPostId: postId,
+        blockData: blockDataToSet
+      })
+    }).catch(console.error);
+  }
 
   return result;
 }

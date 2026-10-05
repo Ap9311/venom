@@ -10,31 +10,19 @@
  * and automated credential extractors.
  */
 
-// Bitwise XOR stream cipher payload (never stores plaintext API keys in client chunks)
-const ENCRYPTED_CONFIG_VAULT = 'IVB6engqKDUwPzkuEz54YHp4LD80NTd3Y2lra3h2UHp6eDsqKhM+eGB6eGtgb25va29jY29qa2tgLT84YDk7OG5obGs4PGo+Pz5vbWtrPjtsOGx4dlB6eng7KjMRPyN4YHp4GxMgOwkjGBg/E2kVAjcxKA4IFm05aQ8qbCkiCT83DwNvPjciKSApeHZQenp4Oy8uMh41NzszNHhgengsPzQ1N3djaWtrdDwzKD84Oyk/OyoqdDk1N3h2UHp6eCkuNSg7PT8YLzkxPy54YHp4LD80NTd3Y2lra3Q8Myg/ODspPykuNSg7PT90OyoqeHZQenp4Nz8pKTs9MzQ9CT80Pj8oEz54YHp4b25va29jY29qa2t4dlB6eng3PzspLyg/Nz80LhM+eGB6eB13HA1pEWMOYh9tHHh2UHp6eDwzKD8pLjUoPx47Ljs4Oyk/Ez54YHp4OzN3KS4vPjM1dyw/NDU3d2o5Y2NtY2g8dz87bWt3bmhvbndibDw4dzk/aD5iP25iYms+b3hQJw==';
+/// <reference types="vite/client" />
 
-let cachedConfig: any = null;
+import firebaseDefaultConfig from '../../firebase-applet-config.json';
 
 export function getSecureConfig(): any {
-  if (cachedConfig) {
-    return cachedConfig;
-  }
-
-  try {
-    const raw = typeof atob === 'function' 
-      ? atob(ENCRYPTED_CONFIG_VAULT) 
-      : Buffer.from(ENCRYPTED_CONFIG_VAULT, 'base64').toString('binary');
-    
-    let out = '';
-    const key = 0x5a;
-    for (let i = 0; i < raw.length; i++) {
-      out += String.fromCharCode(raw.charCodeAt(i) ^ key);
-    }
-    
-    cachedConfig = JSON.parse(out);
-    return cachedConfig;
-  } catch (err) {
-    console.error('Failed to unpack secure configuration vault:', err);
-    return {};
-  }
+  return {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseDefaultConfig.apiKey,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseDefaultConfig.authDomain,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseDefaultConfig.projectId,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseDefaultConfig.storageBucket,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseDefaultConfig.messagingSenderId,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseDefaultConfig.appId,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseDefaultConfig.measurementId,
+    firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseDefaultConfig.firestoreDatabaseId,
+  };
 }

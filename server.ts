@@ -8,6 +8,17 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
+import adminLoginHandler from './api/admin-login.js';
+import adminRegisterHandler from './api/admin-register.js';
+import adminVerifyHandler from './api/admin-verify.js';
+import adminRevokeHandler from './api/admin-revoke.js';
+import adminUpdateLimitHandler from './api/admin-update-limit.js';
+import communityPasswordHandler from './api/community-password.js';
+import communityVerifyHandler from './api/community-verify.js';
+import autoBlockHandler from './api/auto-block.js';
+import unblockExpiredHandler from './api/unblock-expired.js';
+import getIpHandler from './api/get-ip.js';
+import healthHandler from './api/health.js';
 import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from './src/firebase.js';
 
@@ -177,125 +188,18 @@ async function startServer() {
     return isUserValid && isPassValid;
   }
 
-  // Administrator login authentication endpoint
-  app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
-    const clientIp = getClientIpFromReq(req);
-    const { username, password } = req.body || {};
-
-    if (verifyAdminCredentials(username, password)) {
-      clearFailedAttempts(clientIp);
-      return res.json({
-        success: true,
-        token: ADMIN_SECRET_KEY,
-        message: 'Administrator authentication verified.'
-      });
-    }
-
-    recordFailedAttempt(clientIp);
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid Administrator credentials.'
-    });
-  });
-
-  app.post('/api/admin-verify', async (req, res) => {
-    const { adminDeviceId } = req.body || {};
-    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-      return res.json({ isAdmin: false });
-    }
-
-    if (registeredAdminDevices.has(adminDeviceId)) {
-      return res.json({ isAdmin: true });
-    }
-
-    // Secondary verification via Firestore interactions collection if in-memory sync missed it
-    if (db) {
-      try {
-        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-        const snap = await getDoc(deviceDocRef);
-        if (snap.exists() && snap.data()?.status === 'active') {
-          registeredAdminDevices.add(adminDeviceId);
-          return res.json({ isAdmin: true });
-        }
-      } catch (err) {
-        console.warn('Firestore fallback verify check notice:', err);
-      }
-    }
-
-    return res.json({ isAdmin: false });
-  });
-
-  app.post('/api/admin-register', (req, res) => {
-    const clientIp = getClientIpFromReq(req);
-    const { username, password, adminDeviceId } = req.body || {};
-
-    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Device identifier required.' });
-    }
-
-    if (verifyAdminCredentials(username, password)) {
-      clearFailedAttempts(clientIp);
-      registeredAdminDevices.add(adminDeviceId);
-      if (registeredAdminDevices.size > serverMaxAdmins) {
-        serverMaxAdmins = registeredAdminDevices.size;
-      }
-      return res.json({ 
-        success: true, 
-        token: ADMIN_SECRET_KEY, 
-        adminDeviceId 
-      });
-    }
-
-    recordFailedAttempt(clientIp);
-    return res.status(401).json({ success: false, error: 'Invalid Administrator credentials.' });
-  });
-
-  // Secure token retrieval endpoint exclusively for verified active admin devices
-  app.post('/api/admin-token', async (req, res) => {
-    const { adminDeviceId } = req.body || {};
-    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-      return res.status(401).json({ success: false, error: 'Access Denied.' });
-    }
-
-    if (registeredAdminDevices.has(adminDeviceId)) {
-      return res.json({ success: true, token: ADMIN_SECRET_KEY });
-    }
-
-    if (db) {
-      try {
-        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-        const snap = await getDoc(deviceDocRef);
-        if (snap.exists() && snap.data()?.status === 'active') {
-          registeredAdminDevices.add(adminDeviceId);
-          return res.json({ success: true, token: ADMIN_SECRET_KEY });
-        }
-      } catch (err) {}
-    }
-
-    return res.status(403).json({ success: false, error: 'Device not authorized.' });
-  });
-
-  app.post('/api/admin-update-limit', (req, res) => {
-    const { maxAdmins } = req.body || {};
-    if (typeof maxAdmins === 'number' && maxAdmins > 0) {
-      serverMaxAdmins = maxAdmins;
-      return res.json({ success: true, maxAdmins });
-    }
-    return res.status(400).json({ success: false });
-  });
-
-  app.post('/api/admin-revoke', (req, res) => {
-    const { adminDeviceId } = req.body || {};
-    if (adminDeviceId) {
-      registeredAdminDevices.delete(adminDeviceId);
-      return res.json({ success: true });
-    }
-    return res.status(400).json({ success: false });
-  });
-
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
+  // Route Vercel-style API handlers directly in Express
+  app.all(['/api/admin-login', '/api/admin-auth'], (req, res) => adminLoginHandler(req as any, res as any));
+  app.all('/api/admin-register', (req, res) => adminRegisterHandler(req as any, res as any));
+  app.all('/api/admin-verify', (req, res) => adminVerifyHandler(req as any, res as any));
+  app.all('/api/admin-revoke', (req, res) => adminRevokeHandler(req as any, res as any));
+  app.all('/api/admin-update-limit', (req, res) => adminUpdateLimitHandler(req as any, res as any));
+  app.all('/api/community-password', (req, res) => communityPasswordHandler(req as any, res as any));
+  app.all('/api/community-verify', (req, res) => communityVerifyHandler(req as any, res as any));
+  app.all('/api/auto-block', (req, res) => autoBlockHandler(req as any, res as any));
+  app.all('/api/unblock-expired', (req, res) => unblockExpiredHandler(req as any, res as any));
+  app.all('/api/get-ip', (req, res) => getIpHandler(req as any, res as any));
+  app.all('/api/health', (req, res) => healthHandler(req as any, res as any));
 
   // Get IP endpoint to resolve real device public IP behind proxies
   app.get('/api/get-ip', (req, res) => {
