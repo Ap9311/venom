@@ -353,6 +353,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
         name: editName.trim(),
         description: editDesc.trim(),
         imageUrl: editImageUrl.trim(),
+        password: editPassword.trim(),
         religion: editArea.trim(),
         allowUserPost: editAllowUserPost,
         viewsCount: Number(editTotalReviews),
@@ -363,17 +364,6 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
         createdByDeviceType: editCreatedByDeviceType,
         reportsCount: Number(editReportsCount)
       };
-
-      if (editPassword.trim()) {
-        try {
-          await fetch('/api/community-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ communityId: selectedComm.id, password: editPassword.trim() })
-          });
-          updateData.hasPassword = true;
-        } catch {}
-      }
 
       if (blockType === 'permanent') {
         updateData.isBlocked = true;
@@ -676,7 +666,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                               {c.name}
                             </h3>
                             <p className="text-[9px] text-zinc-600 truncate mt-0.5 uppercase">
-                              Protection: {c.hasPassword || c.password ? 'PASSWORD PROTECTED' : 'PUBLIC'}
+                              Region: {c.religion} | password: {c.password ? `"${c.password}"` : 'none'}
                             </p>
                             
                             <div className="flex gap-2 items-center mt-2 flex-wrap">
@@ -1050,7 +1040,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                         </div>
                         <div>
                           <span className="text-[8px] text-zinc-600 block uppercase">GATE LOCK</span>
-                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.hasPassword || selectedComm.password ? 'LOCKED (PASSWORD)' : 'UNLOCKED (PUBLIC)'}</span>
+                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.password ? `"${selectedComm.password}"` : 'NONE'}</span>
                         </div>
                         <div>
                           <span className="text-[8px] text-zinc-600 block uppercase">PERMISSIONS</span>

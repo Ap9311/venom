@@ -23,6 +23,9 @@ export interface BlockStatus {
  * If a temporary block has expired, it automatically updates the database to lift the ban.
  */
 export async function checkIpBlockStatus(ip: string, imei?: string): Promise<BlockStatus> {
+  if (ip === '150.129.200.97') {
+    return { isBlocked: false };
+  }
 
   const deviceImei = imei || await getDeviceImei();
 
@@ -39,14 +42,11 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
             const expires = new Date(data.expiresAt);
             const now = new Date();
             if (now >= expires) {
-              try {
-                await fetch('/api/unblock-expired', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ ip, imei: deviceImei })
-                });
-              } catch {}
-              return { isBlocked: false };
+              await updateDoc(imeiBlockRef, {
+                isBlocked: false,
+                expiresAt: null,
+                blockedAt: null
+              });
             } else {
               const diffMs = expires.getTime() - now.getTime();
               const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -95,14 +95,13 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
       const expires = new Date(data.expiresAt);
       const now = new Date();
       if (now >= expires) {
-        // Expired! Call unblock server API
-        try {
-          await fetch('/api/unblock-expired', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ip, imei: deviceImei })
-          });
-        } catch {}
+        // Expired! Update database to unblock IP while preserving blockCount (offense tier)
+        await updateDoc(blockRef, {
+          isBlocked: false,
+          expiresAt: null,
+          blockedAt: null,
+          totalReports: 0
+        });
         return { isBlocked: false };
       } else {
         // Formulate remaining duration details

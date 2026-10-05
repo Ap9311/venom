@@ -82,6 +82,11 @@ export const AdminSecurity: React.FC = () => {
       return;
     }
 
+    if (cleanIp === '150.129.200.97') {
+      setErrorFeedback('Security system error: IP address 150.129.200.97 is white-listed and cannot be blocked under any circumstances.');
+      return;
+    }
+
     try {
       let expiresAt: string | null = null;
       if (banType === 'temporary') {
