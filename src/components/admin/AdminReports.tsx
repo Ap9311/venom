@@ -639,9 +639,12 @@ export default function AdminReports() {
   };
 
   // LIFT IP BLOCK (UNBLOCK)
-  const handleUnblockIp = async (ip: string) => {
+  const handleUnblockIp = async (recordId: string, ipStr?: string) => {
+    const targetId = recordId || ipStr;
+    if (!targetId) return;
     try {
-      const blockRef = doc(db, 'blockedIps', ip);
+      await ensureFirestoreAdminClaim();
+      const blockRef = doc(db, 'blockedIps', targetId);
       const snap = await getDoc(blockRef);
       if (snap.exists()) {
         const data = snap.data();
@@ -651,7 +654,7 @@ export default function AdminReports() {
           blockedAt: null,
           totalReports: 0
         });
-        if (data.imei) {
+        if (data && data.imei) {
           const imeiBlockRef = doc(db, 'blockedImeis', data.imei);
           await updateDoc(imeiBlockRef, {
             isBlocked: false,
@@ -660,46 +663,60 @@ export default function AdminReports() {
           }).catch(() => {});
         }
       } else {
-        await updateDoc(blockRef, {
+        await setDoc(blockRef, {
           isBlocked: false,
           expiresAt: null,
           blockedAt: null,
           totalReports: 0
-        });
+        }, { merge: true });
       }
-      alert(`IP Address ${ip} has been successfully unblocked.`);
-    } catch (err) {
+
+      setBlockedIps(prev => prev.map(b => (b.id === targetId || b.ip === targetId) ? { ...b, isBlocked: false } : b));
+      alert(`IP Address / Record ${targetId} has been successfully unblocked.`);
+    } catch (err: any) {
       console.error("Failed to lift ban:", err);
-      alert("Failed to unblock IP.");
+      alert("Failed to unblock IP: " + (err?.message || err));
     }
   };
 
   // PERMANENTLY DELETE IP BLOCK FROM DATABASE (PURGE BLOCKLIST DATA)
-  const handleDeleteIpBlock = async (ip: string) => {
-    if (!confirm(`Are you sure you want to permanently delete IP block data for ${ip}? This deletes the log record completely.`)) {
+  const handleDeleteIpBlock = async (recordId: string, ipStr?: string) => {
+    const targetId = recordId || ipStr;
+    if (!targetId) {
+      alert("Invalid record ID. Delete operation cancelled.");
+      return;
+    }
+    if (!confirm(`Are you sure you want to permanently delete IP block data for ${targetId}? This deletes the log record completely.`)) {
       return;
     }
     try {
-      const blockRef = doc(db, 'blockedIps', ip);
-      const snap = await getDoc(blockRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.imei) {
-          await deleteDoc(doc(db, 'blockedImeis', data.imei)).catch(() => {});
+      await ensureFirestoreAdminClaim();
+      const blockRef = doc(db, 'blockedIps', targetId);
+      try {
+        const snap = await getDoc(blockRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && data.imei) {
+            await deleteDoc(doc(db, 'blockedImeis', data.imei)).catch(() => {});
+          }
         }
-      }
+      } catch (e) {}
+
       await deleteDoc(blockRef);
-      alert(`IP Block record for ${ip} successfully deleted.`);
-    } catch (err) {
+      setBlockedIps(prev => prev.filter(b => b.id !== targetId && b.ip !== targetId));
+      alert(`IP Block record for ${targetId} successfully deleted.`);
+    } catch (err: any) {
       console.error("Failed to delete IP block:", err);
-      alert("Failed to delete block record.");
+      alert(`Failed to delete block record: ${err?.message || err}`);
     }
   };
 
   // ADJUST EXPRIY TIME (+/- Days)
-  const handleAdjustExpiry = async (ip: string, daysOffset: number) => {
+  const handleAdjustExpiry = async (recordId: string, daysOffset: number) => {
+    if (!recordId) return;
     try {
-      const blockRef = doc(db, 'blockedIps', ip);
+      await ensureFirestoreAdminClaim();
+      const blockRef = doc(db, 'blockedIps', recordId);
       const snap = await getDoc(blockRef);
       if (!snap.exists()) return;
 
@@ -712,7 +729,6 @@ export default function AdminReports() {
       const currentExpiry = new Date(data.expiresAt);
       currentExpiry.setDate(currentExpiry.getDate() + daysOffset);
 
-      // If the adjusted time is in the past, unblock the IP automatically
       if (currentExpiry <= new Date()) {
         await updateDoc(blockRef, {
           isBlocked: false,
@@ -720,16 +736,19 @@ export default function AdminReports() {
           blockedAt: null,
           totalReports: 0
         });
-        alert(`Suspension adjusted below zero. IP ${ip} has been unblocked.`);
+        setBlockedIps(prev => prev.map(b => (b.id === recordId || b.ip === recordId) ? { ...b, isBlocked: false } : b));
+        alert(`Suspension adjusted below zero. Record ${recordId} has been unblocked.`);
       } else {
+        const newExpiryStr = currentExpiry.toISOString();
         await updateDoc(blockRef, {
-          expiresAt: currentExpiry.toISOString()
+          expiresAt: newExpiryStr
         });
+        setBlockedIps(prev => prev.map(b => (b.id === recordId || b.ip === recordId) ? { ...b, expiresAt: newExpiryStr } : b));
         alert(`IP suspension duration ${daysOffset > 0 ? 'increased' : 'decreased'} by ${Math.abs(daysOffset)} day(s).`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to adjust expiry:", err);
-      alert("Failed to update suspension expiry.");
+      alert("Failed to update suspension expiry: " + (err?.message || err));
     }
   };
 
@@ -1153,7 +1172,7 @@ export default function AdminReports() {
                   <div className="grid grid-cols-1 gap-3 font-mono text-[11px]">
                     {blockedIps.map((block) => (
                       <div 
-                        key={block.ip}
+                        key={block.id || block.ip}
                         className={`p-4 border rounded-lg shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
                           block.isBlocked 
                             ? 'bg-zinc-950 border-rose-500/20 hover:border-rose-500/35' 
@@ -1164,7 +1183,7 @@ export default function AdminReports() {
                           {/* IP and status */}
                           <div className="flex items-center gap-2 text-xs">
                             <span className={`font-bold ${block.isBlocked ? 'text-zinc-200' : 'text-zinc-500 line-through'}`}>
-                              IP: {block.ip}
+                              IP: {block.ip || block.id}
                             </span>
                             {block.isBlocked ? (
                               <span className="px-1.5 py-0.5 rounded bg-rose-950/30 border border-rose-500/20 text-rose-400 font-bold uppercase text-[7.5px] tracking-widest flex items-center gap-1">
@@ -1208,7 +1227,7 @@ export default function AdminReports() {
                           {block.isBlocked && block.expiresAt && (
                             <div className="flex items-center border border-zinc-800 bg-zinc-900/40 rounded overflow-hidden text-[9px] font-bold">
                               <button
-                                onClick={() => handleAdjustExpiry(block.ip, -1)}
+                                onClick={() => handleAdjustExpiry(block.id || block.ip, -1)}
                                 className="px-2.5 py-1.5 hover:bg-zinc-800 text-rose-400 flex items-center gap-0.5 uppercase tracking-wide cursor-pointer border-r border-zinc-850"
                                 title="Decrease suspension by 1 Day"
                               >
@@ -1217,7 +1236,7 @@ export default function AdminReports() {
                               </button>
                               <span className="px-2 text-zinc-400 select-none">ADJUST</span>
                               <button
-                                onClick={() => handleAdjustExpiry(block.ip, 1)}
+                                onClick={() => handleAdjustExpiry(block.id || block.ip, 1)}
                                 className="px-2.5 py-1.5 hover:bg-zinc-800 text-emerald-400 flex items-center gap-0.5 uppercase tracking-wide cursor-pointer border-l border-zinc-850"
                                 title="Increase suspension by 1 Day"
                               >
@@ -1229,7 +1248,7 @@ export default function AdminReports() {
 
                           {block.isBlocked ? (
                             <button
-                              onClick={() => handleUnblockIp(block.ip)}
+                              onClick={() => handleUnblockIp(block.id || block.ip, block.ip)}
                               className="px-3 py-1.5 bg-emerald-950/20 border border-emerald-500/25 hover:border-emerald-500 hover:bg-emerald-950/40 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer flex items-center gap-1"
                               title="Unban IP Address"
                             >
@@ -1238,7 +1257,7 @@ export default function AdminReports() {
                             </button>
                           ) : (
                             <button
-                              onClick={() => handleManualBlockIp(block.ip, 'temporary', 15)}
+                              onClick={() => handleManualBlockIp(block.id || block.ip, 'temporary', 15)}
                               className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-zinc-200 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
                               title="Restore default 15 days ban"
                             >
@@ -1247,7 +1266,7 @@ export default function AdminReports() {
                           )}
 
                           <button
-                            onClick={() => handleDeleteIpBlock(block.ip)}
+                            onClick={() => handleDeleteIpBlock(block.id || block.ip, block.ip)}
                             className="p-1.5 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 hover:border-rose-500 text-rose-400 rounded transition-colors cursor-pointer flex items-center justify-center"
                             title="PERMANENTLY DELETE BLOCK RECORD FROM DATABASE"
                           >

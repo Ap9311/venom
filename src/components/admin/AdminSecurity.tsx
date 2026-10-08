@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, query } from 'firebase/firestore';
-import { ShieldAlert, Unlock, RefreshCw, Clock, Ban } from 'lucide-react';
+import { ShieldAlert, Unlock, RefreshCw, Clock, Ban, Trash2 } from 'lucide-react';
+import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { getClientIp } from '../../utils/ip';
 
 export const AdminSecurity: React.FC = () => {
@@ -152,7 +153,9 @@ export const AdminSecurity: React.FC = () => {
 
   // Unblock an IP address
   const handleUnblockIp = async (ip: string) => {
+    if (!ip) return;
     try {
+      await ensureFirestoreAdminClaim();
       const blockRef = doc(db, 'blockedIps', ip);
       await setDoc(blockRef, {
         isBlocked: false,
@@ -161,9 +164,24 @@ export const AdminSecurity: React.FC = () => {
         totalReports: 0
       }, { merge: true });
       setSuccessFeedback(`IP Address ${ip} has been successfully unblocked.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to unblock IP:', err);
-      setErrorFeedback(`Failed to lift IP block on: ${ip}`);
+      setErrorFeedback(`Failed to lift IP block on: ${ip} (${err?.message || err})`);
+    }
+  };
+
+  // Permanently delete IP block document from Firestore
+  const handleDeleteIpBlock = async (ip: string) => {
+    if (!ip) return;
+    if (!confirm(`Permanently delete firewall record for ${ip}?`)) return;
+    try {
+      await ensureFirestoreAdminClaim();
+      const blockRef = doc(db, 'blockedIps', ip);
+      await deleteDoc(blockRef);
+      setSuccessFeedback(`Firewall record for ${ip} permanently deleted.`);
+    } catch (err: any) {
+      console.error('Failed to delete IP block:', err);
+      setErrorFeedback(`Failed to delete record for ${ip}: ${err?.message || err}`);
     }
   };
 
@@ -380,26 +398,35 @@ export const AdminSecurity: React.FC = () => {
                   </div>
                 </div>
                 
-                {isCurrentlyBlocked ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isCurrentlyBlocked ? (
+                    <button
+                      onClick={() => handleUnblockIp(block.id)}
+                      className="p-1.5 bg-zinc-900/50 hover:bg-zinc-850 border border-zinc-850 hover:border-emerald-500/30 text-zinc-500 hover:text-emerald-400 rounded transition-colors cursor-pointer shrink-0"
+                      title="Lift IP Suspension"
+                    >
+                      <Unlock className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setNewIpToBlock(block.id);
+                        setBanType('permanent');
+                      }}
+                      className="p-1.5 bg-zinc-900/50 hover:bg-zinc-850 border border-zinc-850 hover:border-rose-500/30 text-zinc-600 hover:text-rose-450 rounded transition-colors cursor-pointer shrink-0"
+                      title="Reload into Suspension Console"
+                    >
+                      <Ban className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleUnblockIp(block.id)}
-                    className="p-1.5 bg-zinc-900/50 hover:bg-zinc-850 border border-zinc-850 hover:border-emerald-500/30 text-zinc-500 hover:text-emerald-400 rounded transition-colors cursor-pointer shrink-0"
-                    title="Lift IP Suspension"
+                    onClick={() => handleDeleteIpBlock(block.id)}
+                    className="p-1.5 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/20 hover:border-rose-500 text-rose-400 rounded transition-colors cursor-pointer shrink-0"
+                    title="Permanently Delete Record"
                   >
-                    <Unlock className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setNewIpToBlock(block.id);
-                      setBanType('permanent');
-                    }}
-                    className="p-1.5 bg-zinc-900/50 hover:bg-zinc-850 border border-zinc-850 hover:border-rose-500/30 text-zinc-600 hover:text-rose-450 rounded transition-colors cursor-pointer shrink-0"
-                    title="Reload into Suspension Console"
-                  >
-                    <Ban className="w-4 h-4" />
-                  </button>
-                )}
+                </div>
               </div>
             );
           })
