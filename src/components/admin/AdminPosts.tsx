@@ -17,15 +17,21 @@ interface AdminPostsProps {
 }
 
 export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBlockIpClick }) => {
+  const [viewTab, setViewTab] = useState<'active' | 'trash'>('active');
   const [adminSearchTerm, setAdminSearchTerm] = useState('');
   const [postIdToConfirmDelete, setPostIdToConfirmDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPurgingAll, setIsPurgingAll] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
+  const activePostsList = posts.filter(p => !p.isDeleted && !(p as any).isPurged);
+  const trashPostsList = posts.filter(p => p.isDeleted || (p as any).isPurged);
+
+  const currentList = viewTab === 'active' ? activePostsList : trashPostsList;
+
   // Filter posts based on search term (ID, Title, Category, Content, or IP)
-  const filteredAdminPosts = posts.filter((post) => {
-    if (post.isDeleted) return false;
+  const filteredAdminPosts = currentList.filter((post) => {
     const term = adminSearchTerm.trim().toLowerCase();
     if (!term) return true;
     
@@ -38,7 +44,7 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
     );
   });
 
-  // Handle post deletion
+  // Handle individual post physical deletion
   const handleDeletePost = async (postId: string) => {
     setIsDeleting(true);
     setDeleteError(null);
@@ -46,23 +52,19 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
       await ensureFirestoreAdminClaim();
       const postRef = doc(db, 'posts', postId);
       
-      // 1. Mark as deleted in Firestore immediately
-      await updateDoc(postRef, {
-        isDeleted: true,
-        isPurged: true,
-        title: '[DELETED]',
-        content: '',
-        deletedAt: new Date().toISOString()
-      }).catch(console.warn);
-
-      // 2. Physical delete
-      try {
-        await deleteDoc(postRef);
-      } catch (delErr) {
+      // Physical delete
+      await deleteDoc(postRef).catch(async (delErr) => {
         console.warn('Physical delete fell back to soft-delete:', delErr);
-      }
+        await updateDoc(postRef, {
+          isDeleted: true,
+          isPurged: true,
+          title: '[DELETED]',
+          content: '',
+          deletedAt: new Date().toISOString()
+        });
+      });
 
-      setDeleteSuccess(`Post ID ${postId} successfully purged from database and feeds.`);
+      setDeleteSuccess(`Post ID ${postId} successfully purged from database.`);
       setTimeout(() => setDeleteSuccess(null), 4000);
     } catch (err: any) {
       console.error('Failed to purge post from Firestore:', err);
@@ -73,26 +75,90 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
     }
   };
 
+  // Handle purging all soft-deleted trash posts
+  const handlePurgeAllTrash = async () => {
+    if (trashPostsList.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently purge all ${trashPostsList.length} soft-deleted post documents from Firestore database?`)) {
+      return;
+    }
+    setIsPurgingAll(true);
+    setDeleteError(null);
+    try {
+      await ensureFirestoreAdminClaim();
+      let purgedCount = 0;
+      for (const p of trashPostsList) {
+        try {
+          await deleteDoc(doc(db, 'posts', p.id));
+          purgedCount++;
+        } catch (e) {
+          console.warn(`Failed to delete doc ${p.id}:`, e);
+        }
+      }
+      setDeleteSuccess(`Permanently purged ${purgedCount} soft-deleted documents from database.`);
+      setTimeout(() => setDeleteSuccess(null), 4000);
+    } catch (err: any) {
+      setDeleteError(`Failed to purge trash: ${err?.message || err}`);
+    } finally {
+      setIsPurgingAll(false);
+    }
+  };
+
   return (
     <div className="bg-zinc-950 border border-zinc-900 rounded-lg p-5 shadow-xl font-mono text-xs">
       
       {/* Title & Search bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-900 pb-3 mb-4">
-        <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-widest flex items-center gap-2">
-          <Database className="w-4 h-4 text-emerald-500/70" />
-          <span>Venom Core Database Explorer</span>
-        </h3>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-widest flex items-center gap-2">
+            <Database className="w-4 h-4 text-emerald-500/70" />
+            <span>Venom Core Database Explorer</span>
+          </h3>
+
+          {/* View Tab Switcher */}
+          <div className="flex bg-zinc-900/60 p-0.5 rounded border border-zinc-850 text-[10px] font-bold uppercase">
+            <button
+              onClick={() => setViewTab('active')}
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                viewTab === 'active' ? 'bg-emerald-500 text-zinc-950 font-black' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Active ({activePostsList.length})
+            </button>
+            <button
+              onClick={() => setViewTab('trash')}
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                viewTab === 'trash' ? 'bg-rose-500 text-zinc-950 font-black' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Trash ({trashPostsList.length})
+            </button>
+          </div>
+        </div>
         
-        {/* Search bar inside admin console */}
-        <div className="relative max-w-xs w-full">
-          <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-zinc-500" />
-          <input
-            type="text"
-            value={adminSearchTerm}
-            onChange={(e) => setAdminSearchTerm(e.target.value)}
-            placeholder="Search IP, Post ID, keywords..."
-            className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none placeholder-zinc-650 transition-colors"
-          />
+        {/* Search bar & Purge Trash button */}
+        <div className="flex items-center gap-2">
+          {viewTab === 'trash' && trashPostsList.length > 0 && (
+            <button
+              onClick={handlePurgeAllTrash}
+              disabled={isPurgingAll}
+              className="px-2.5 py-1.5 bg-rose-950/30 hover:bg-rose-950/50 border border-rose-500/30 text-rose-400 font-bold uppercase text-[9px] rounded flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+              title="Permanently remove all soft-deleted records"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>{isPurgingAll ? 'Purging...' : `Purge All Trash (${trashPostsList.length})`}</span>
+            </button>
+          )}
+
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-zinc-500" />
+            <input
+              type="text"
+              value={adminSearchTerm}
+              onChange={(e) => setAdminSearchTerm(e.target.value)}
+              placeholder="Search IP, Post ID, keywords..."
+              className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none placeholder-zinc-650 transition-colors"
+            />
+          </div>
         </div>
       </div>
 

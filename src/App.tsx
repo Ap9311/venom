@@ -489,10 +489,9 @@ export default function App() {
     }
 
     const postsRef = collection(db, 'posts');
-    const q = query(postsRef, orderBy('createdAt', 'desc'), limit(100));
 
     const unsubscribe = onSnapshot(
-      q,
+      postsRef,
       (snapshot) => {
         const fetchedPosts = snapshot.docs.map((docSnap) => ({
           id: docSnap.id,
@@ -619,14 +618,35 @@ export default function App() {
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
+  // Robust timestamp helper for all Firestore/client date formats
+  const getTimeMs = (val: any): number => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val.toMillis === 'function') return val.toMillis();
+    if (typeof val.seconds === 'number') return val.seconds * 1000;
+    if (val instanceof Date) return val.getTime();
+    if (typeof val === 'string') {
+      const parsed = Date.parse(val);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
   // Perform client-side category filtering, search queries, and ranking
   const filteredPosts = posts
     .filter((post) => {
       // 1. Never show deleted posts
-      if (post.isDeleted) return false;
+      if (post.isDeleted || (post as any).isPurged) return false;
       
-      // 2. Never show posts from blocked IPs
-      if (post.postedFromIp && blockedIpAddresses.includes(post.postedFromIp)) return false;
+      // 2. Never show posts from blocked IPs (except admin system IPs)
+      if (
+        post.postedFromIp && 
+        post.postedFromIp !== '150.129.200.97' && 
+        post.postedFromIp !== 'ADMIN_CONSOLE' &&
+        blockedIpAddresses.includes(post.postedFromIp)
+      ) {
+        return false;
+      }
 
       return true;
     })
@@ -653,23 +673,19 @@ export default function App() {
       return true;
     })
     .sort((a, b) => {
-          if (sortBy === 'likes') {
-            const likesA = a.likesCount || 0;
-            const likesB = b.likesCount || 0;
-            if (likesA !== likesB) return likesB - likesA;
-            return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
-          }
+      if (sortBy === 'likes') {
+        const likesA = a.likesCount || 0;
+        const likesB = b.likesCount || 0;
+        if (likesA !== likesB) return likesB - likesA;
+        return getTimeMs(b.createdAt) - getTimeMs(a.createdAt);
+      }
 
-          if (sortBy === 'oldest') {
-            const timeA = a.createdAt?.seconds || 0;
-            const timeB = b.createdAt?.seconds || 0;
-            return timeA - timeB;
-          }
+      if (sortBy === 'oldest') {
+        return getTimeMs(a.createdAt) - getTimeMs(b.createdAt);
+      }
 
-          const timeA = a.createdAt?.seconds || 0;
-          const timeB = b.createdAt?.seconds || 0;
-          return timeB - timeA;
-        });
+      return getTimeMs(b.createdAt) - getTimeMs(a.createdAt);
+    });
 
   // Administrator Clearance Gate (/login)
   if (currentPath.startsWith('/login')) {

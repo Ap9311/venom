@@ -13,23 +13,27 @@ interface AdminTelemetryProps {
 }
 
 export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
-  // Real observer count based on actual unique IP addresses that have ever posted + current observer
-  const uniqueIps = Array.from(new Set(posts.map(p => p.postedFromIp).filter(Boolean)));
+  // Compute active vs deleted post metrics
+  const activePosts = posts.filter(p => !p.isDeleted && !(p as any).isPurged);
+  const deletedPostsCount = posts.length - activePosts.length;
+
+  // Real observer count based on actual unique IP addresses of active posts + current observer
+  const uniqueIps = Array.from(new Set(activePosts.map(p => p.postedFromIp).filter(Boolean)));
   const liveObservers = Math.max(1, uniqueIps.length);
 
   // Compute analytics
-  const totalVenomsCount = posts.length;
-  const totalLikes = posts.reduce((acc, p) => acc + (p.likesCount || 0), 0);
-  const totalUpvotes = posts.reduce((acc, p) => acc + (p.upvotesCount || 0), 0);
-  const totalDownvotes = posts.reduce((acc, p) => acc + (p.downvotesCount || 0), 0);
-  const totalComments = posts.reduce((acc, p) => acc + (p.commentsCount || 0), 0);
+  const totalVenomsCount = activePosts.length;
+  const totalLikes = activePosts.reduce((acc, p) => acc + (p.likesCount || 0), 0);
+  const totalUpvotes = activePosts.reduce((acc, p) => acc + (p.upvotesCount || 0), 0);
+  const totalDownvotes = activePosts.reduce((acc, p) => acc + (p.downvotesCount || 0), 0);
+  const totalComments = activePosts.reduce((acc, p) => acc + (p.commentsCount || 0), 0);
   const totalInteractions = totalLikes + totalUpvotes + totalDownvotes + totalComments;
 
   const averageEngagement = totalVenomsCount > 0 
     ? (totalInteractions / totalVenomsCount).toFixed(1) 
     : '0.0';
 
-  const rawBytes = posts.reduce((acc, p) => {
+  const rawBytes = activePosts.reduce((acc, p) => {
     return acc + (p.title?.length || 0) + (p.content?.length || 0) + (p.imageUrl?.length || 0);
   }, 0) * 2; // approximation for UTF-16 characters in bytes
 
@@ -68,7 +72,9 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
           <span className="text-2xl font-black text-emerald-400 mt-1 block tracking-tight">
             {totalVenomsCount}
           </span>
-          <span className="text-[9px] text-zinc-500 mt-1.5 block">Active database documents</span>
+          <span className="text-[9px] text-zinc-500 mt-1.5 block">
+            {deletedPostsCount > 0 ? `Active (${deletedPostsCount} soft-deleted in trash)` : 'Active database documents'}
+          </span>
         </div>
 
         <div className="bg-zinc-900/30 border border-zinc-900 rounded-lg p-4 backdrop-blur-sm relative overflow-hidden">

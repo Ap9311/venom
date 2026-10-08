@@ -13,6 +13,7 @@ function ReportPostGroupView({
   postId,
   reports,
   onDismissReport,
+  onDismissAllReports,
   onPurgePost,
   onBlockIp,
   actioningId
@@ -20,6 +21,7 @@ function ReportPostGroupView({
   postId: string;
   reports: any[];
   onDismissReport: any;
+  onDismissAllReports: any;
   onPurgePost: any;
   onBlockIp: any;
   actioningId: any;
@@ -83,17 +85,9 @@ function ReportPostGroupView({
   if (!post) return null;
 
   const resolvePostImei = (p: any) => {
-    if (p.postedFromImei) return p.postedFromImei;
-    const ip = p.postedFromIp || '127.0.0.1';
-    let hash = 0;
-    for (let i = 0; i < ip.length; i++) {
-      hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    let digits = '35';
-    for (let i = 0; i < 13; i++) {
-      digits += Math.abs((hash + i * 19) % 10).toString();
-    }
-    return digits;
+    return (p.postedFromImei && !p.postedFromImei.startsWith('VSN') && p.postedFromImei.length >= 10) 
+      ? p.postedFromImei 
+      : undefined;
   };
 
   return (
@@ -300,8 +294,18 @@ function ReportPostGroupView({
           </div>
         )}
 
-        {/* Purge Post */}
-        <div className="ml-auto flex items-center gap-2">
+        {/* Purge & Dismiss Group Actions */}
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => onDismissAllReports(postId)}
+            disabled={actioningId === `all_${postId}`}
+            className="px-3.5 py-2 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold rounded transition-all cursor-pointer flex items-center gap-1.5 uppercase"
+            title="Dismiss all active complaints for this post"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Dismiss All Complaints ({reports.length})</span>
+          </button>
+
           <button
             onClick={() => onPurgePost(reports[0]?.id || '', postId)}
             className="px-4 py-2 bg-rose-950/20 border border-rose-950 hover:border-rose-500 hover:bg-rose-950/30 text-rose-400 hover:text-rose-300 text-[10px] font-black rounded transition-all cursor-pointer flex items-center gap-1.5 uppercase"
@@ -478,41 +482,80 @@ export default function AdminReports() {
     }
   };
 
-  // PURGE / DELETE A POST FROM REPORT (Auto-marks related reports as processed/deleted)
-  const handlePurgePost = async (reportId: string, postId: string) => {
-    if (!confirm(`Confirm absolute purging of post ${postId}? This deletes it from the public feed.`)) {
-      return;
-    }
-    setActioningId(reportId);
+  // DISMISS ALL COMPLAINTS FOR A TARGET POST
+  const handleDismissAllReports = async (postId: string) => {
+    if (!postId) return;
+    setActioningId(`all_${postId}`);
     try {
       await ensureFirestoreAdminClaim();
-      // Flag the post as deleted in posts collection (always succeeds per rules)
+      const q = query(collection(db, 'reports'), where('postId', '==', postId));
+      const snap = await getDocs(q);
+      
+      for (const docSnap of snap.docs) {
+        await deleteDoc(docSnap.ref).catch(() => 
+          updateDoc(docSnap.ref, { isDismissed: true, isResolved: true }).catch(() => {})
+        );
+      }
+
       const postRef = doc(db, 'posts', postId);
-      await updateDoc(postRef, {
-        isDeleted: true,
-        isPurged: true,
-        reportsCount: 10,
-        deletedAt: new Date().toISOString()
-      }).catch(console.warn);
+      const postSnap = await getDoc(postRef);
+      if (postSnap.exists()) {
+        await updateDoc(postRef, { reportsCount: 0 }).catch(console.warn);
+      }
 
-      // Attempt physical deletes
+      setReports(prev => prev.filter(r => r.postId !== postId));
+      alert(`All complaints for post ${postId} dismissed successfully.`);
+    } catch (err: any) {
+      console.error("Dismiss all failed:", err);
+      alert("Failed to dismiss all reports: " + (err?.message || err));
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  // PURGE / DELETE A POST FROM REPORT (Auto-marks related reports as processed/deleted)
+  const handlePurgePost = async (reportId: string, postId: string) => {
+    if (!confirm(`Confirm absolute purging of post ${postId}? This deletes it permanently from the database and feed.`)) {
+      return;
+    }
+    setActioningId(reportId || postId);
+    try {
+      await ensureFirestoreAdminClaim();
+      const postRef = doc(db, 'posts', postId);
+
+      // 1. Delete all reports associated with this post
       try {
-        await deleteDoc(postRef);
-      } catch (e) {}
-
-      if (reportId) {
-        try {
-          await deleteDoc(doc(db, 'reports', reportId));
-        } catch (e) {
-          await updateDoc(doc(db, 'reports', reportId), { isDismissed: true, isResolved: true }).catch(() => {});
+        const q = query(collection(db, 'reports'), where('postId', '==', postId));
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          await deleteDoc(d.ref).catch(() => 
+            updateDoc(d.ref, { isDismissed: true, isResolved: true }).catch(() => {})
+          );
+        }
+      } catch (e) {
+        if (reportId) {
+          await deleteDoc(doc(db, 'reports', reportId)).catch(() => 
+            updateDoc(doc(db, 'reports', reportId), { isDismissed: true, isResolved: true }).catch(() => {})
+          );
         }
       }
 
-      setReports(prev => prev.filter(r => r.id !== reportId && r.postId !== postId));
-      alert("Post purged. Content is now deleted from the user feed.");
+      // 2. Physical delete post document
+      await deleteDoc(postRef).catch(async () => {
+        await updateDoc(postRef, {
+          isDeleted: true,
+          isPurged: true,
+          title: '[DELETED]',
+          content: '',
+          deletedAt: new Date().toISOString()
+        });
+      });
+
+      setReports(prev => prev.filter(r => r.postId !== postId && r.id !== reportId));
+      alert("Post and all associated complaints purged successfully.");
     } catch (err: any) {
       console.error("Purge failed:", err);
-      alert("Failed to purge post.");
+      alert("Failed to purge post: " + (err?.message || err));
     } finally {
       setActioningId(null);
     }
@@ -529,12 +572,16 @@ export default function AdminReports() {
     imei?: string
   ) => {
     if (!ip) return;
-    if (ip === '150.129.200.97' || (adminIp && ip === adminIp)) {
-      alert(`Action Aborted: This IP address (${ip}) matches your personal or currently active administrator connection. You cannot block yourself.`);
+    const cleanIp = ip.trim();
+    if (!cleanIp) return;
+
+    if (cleanIp === '150.129.200.97' || (adminIp && cleanIp === adminIp)) {
+      alert(`Action Aborted: This IP address (${cleanIp}) matches your personal or active administrator connection. You cannot block yourself.`);
       return;
     }
+
     try {
-      const blockRef = doc(db, 'blockedIps', ip);
+      const blockRef = doc(db, 'blockedIps', cleanIp);
       let expiresAtStr: string | null = null;
       if (banType === 'temporary') {
         const exp = new Date();
@@ -543,7 +590,7 @@ export default function AdminReports() {
       }
 
       const payload: any = {
-        ip,
+        ip: cleanIp,
         isBlocked: true,
         blockCount: 1,
         totalReports: 0,
@@ -553,8 +600,9 @@ export default function AdminReports() {
         reason: customReason || `Manual administrative ban initiated from report console (${banType === 'permanent' ? 'Permanent' : `${customDays} Days`}).`
       };
 
-      if (imei) {
-        payload.imei = imei;
+      const validImei = imei && !imei.startsWith('VSN') && imei.length >= 10 ? imei : undefined;
+      if (validImei) {
+        payload.imei = validImei;
       }
 
       if (postDetails) {
@@ -570,11 +618,11 @@ export default function AdminReports() {
 
       await setDoc(blockRef, payload, { merge: true });
 
-      if (imei) {
-        const imeiBlockRef = doc(db, 'blockedImeis', imei);
+      if (validImei) {
+        const imeiBlockRef = doc(db, 'blockedImeis', validImei);
         await setDoc(imeiBlockRef, {
-          imei,
-          ip,
+          imei: validImei,
+          ip: cleanIp,
           isBlocked: true,
           blockedAt: new Date().toISOString(),
           expiresAt: expiresAtStr,
@@ -583,10 +631,10 @@ export default function AdminReports() {
         }, { merge: true });
       }
 
-      alert(`IP ${ip} ${imei ? `and IMEI ${imei}` : ''} blocked successfully (${banType === 'permanent' ? 'Permanently' : `for ${customDays} days`}).`);
-    } catch (err) {
+      alert(`IP ${cleanIp} ${validImei ? `and IMEI ${validImei}` : ''} blocked successfully (${banType === 'permanent' ? 'Permanently' : `for ${customDays} days`}).`);
+    } catch (err: any) {
       console.error("IP block failed:", err);
-      alert("Failed to block IP.");
+      alert("Failed to block IP: " + (err?.message || err));
     }
   };
 
@@ -1071,6 +1119,7 @@ export default function AdminReports() {
                           postId={gPostId}
                           reports={groupedReports[gPostId]}
                           onDismissReport={handleDismissReport}
+                          onDismissAllReports={handleDismissAllReports}
                           onPurgePost={handlePurgePost}
                           onBlockIp={handleManualBlockIp}
                           actioningId={actioningId}
