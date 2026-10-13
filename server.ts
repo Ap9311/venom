@@ -26,13 +26,13 @@ async function getPostByHash(hash: string) {
 }
 
 function generateOgMetaTags(post: any, host: string, hashId: string) {
-  const title = `Venom — "${post.title}"`;
+  const title = `Nonum — "${post.title}"`;
   const description = post.content 
     ? post.content.substring(0, 160) + (post.content.length > 160 ? '...' : '')
-    : 'Access declassified anonymous dispatch via Venom decentralized network.';
+    : 'Access declassified anonymous dispatch via Nonum decentralized network.';
   
   // Directly point to the actual post image if it is an external URL to avoid redirects which some social crawlers block,
-  // or fall back directly to the green Venom favicon when no post image exists.
+  // or fall back directly to the Nonum favicon when no post image exists.
   let imageUrl = 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
   if (post.imageUrl) {
     if (post.imageUrl.startsWith('data:')) {

@@ -24,7 +24,7 @@ export function generatePostHash(): string {
  * This is never linked to an actual account and serves solely as a visual asset.
  */
 export function getOperativeID(): string {
-  const localKey = 'venom_anon_op_id';
+  const localKey = 'nonum_anon_op_id';
   let existing = sessionStorage.getItem(localKey);
   if (!existing) {
     const prefixes = ['NEXUS', 'GHOST', 'PHANTOM', 'SPECTRE', 'COBALT', 'SHADOW', 'NEON', 'CIPHER', 'VECTOR', 'VOID'];

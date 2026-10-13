@@ -1,28 +1,28 @@
 {
-  "id": "venom-admin",
+  "id": "nonum-admin",
   "scope": "/admin",
-  "name": "Venom Admin",
-  "short_name": "Venom Admin",
-  "description": "Administrative Control and Safety Enforcement node for Only Venom.",
+  "name": "Nonum Admin Console",
+  "short_name": "Nonum Admin",
+  "description": "Administrative Control and Safety Enforcement node for Only Nonum.",
   "start_url": "/admin?pwa=admin",
   "display": "standalone",
-  "background_color": "#030303",
-  "theme_color": "#f43f5e",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "https://i.ibb.co/FkgRgqjJ/file-000000004bf07206ae4d6af1c09bafc0.png",
+      "src": "/nonum-admin-logo.svg",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/svg+xml"
     },
     {
-      "src": "https://i.ibb.co/FkgRgqjJ/file-000000004bf07206ae4d6af1c09bafc0.png",
+      "src": "/nonum-admin-logo.svg",
       "sizes": "256x256",
-      "type": "image/png"
+      "type": "image/svg+xml"
     },
     {
-      "src": "https://i.ibb.co/FkgRgqjJ/file-000000004bf07206ae4d6af1c09bafc0.png",
+      "src": "/nonum-admin-logo.svg",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/svg+xml"
     }
   ]
 }

@@ -26,7 +26,7 @@ export interface AdminConfig {
   updatedBy?: string;
 }
 
-const ADMIN_SALT = 'VENOM_ADMIN_HARDWARE_KEY_2026_SECURE_HASH';
+const ADMIN_SALT = 'NONUM_ADMIN_HARDWARE_KEY_2026_SECURE_HASH';
 let cachedAdminDeviceId: string | null = null;
 
 /**
@@ -48,7 +48,7 @@ export async function ensureFirestoreAdminClaim(providedToken?: string): Promise
       }
     }
     if (currentUser) {
-      let secretKey = providedToken || sessionStorage.getItem('venom_admin_token');
+      let secretKey = providedToken || sessionStorage.getItem('nonum_admin_token');
       if (!secretKey) {
         const adminDeviceId = await getAdminDeviceId();
         try {
@@ -61,7 +61,7 @@ export async function ensureFirestoreAdminClaim(providedToken?: string): Promise
             const data = await res.json();
             if (data.success && data.token) {
               secretKey = data.token;
-              sessionStorage.setItem('venom_admin_token', secretKey);
+              sessionStorage.setItem('nonum_admin_token', secretKey);
             }
           }
         } catch {}
@@ -105,7 +105,7 @@ export async function getAdminDeviceId(): Promise<string> {
   // Cache in memory and localStorage for convenience
   cachedAdminDeviceId = adminId;
   try {
-    localStorage.setItem('venom_admin_device_id', adminId);
+    localStorage.setItem('nonum_admin_device_id', adminId);
   } catch {}
 
   return adminId;
@@ -130,8 +130,8 @@ export async function checkIsAdminDevice(): Promise<boolean> {
         if (snap.exists()) {
           const data = snap.data();
           if (data && data.status === 'active') {
-            sessionStorage.setItem('venom_admin_auth', 'true');
-            localStorage.setItem('venom_is_admin_device', 'true');
+            sessionStorage.setItem('nonum_admin_auth', 'true');
+            localStorage.setItem('nonum_is_admin_device', 'true');
             ensureFirestoreAdminClaim().catch(console.warn);
             return true;
           }
@@ -151,8 +151,8 @@ export async function checkIsAdminDevice(): Promise<boolean> {
       if (res.ok) {
         const data = await res.json();
         if (data.isAdmin === true) {
-          sessionStorage.setItem('venom_admin_auth', 'true');
-          localStorage.setItem('venom_is_admin_device', 'true');
+          sessionStorage.setItem('nonum_admin_auth', 'true');
+          localStorage.setItem('nonum_is_admin_device', 'true');
           ensureFirestoreAdminClaim().catch(console.warn);
           return true;
         }
@@ -161,9 +161,9 @@ export async function checkIsAdminDevice(): Promise<boolean> {
 
     // Device does NOT exist or status is NOT active: device was revoked or unauthorized.
     // Immediately eradicate all local tokens and session permissions.
-    sessionStorage.removeItem('venom_admin_auth');
-    sessionStorage.removeItem('venom_admin_token');
-    localStorage.removeItem('venom_is_admin_device');
+    sessionStorage.removeItem('nonum_admin_auth');
+    sessionStorage.removeItem('nonum_admin_token');
+    localStorage.removeItem('nonum_is_admin_device');
     if (auth?.currentUser && db) {
       deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
     }
@@ -305,9 +305,9 @@ export async function registerAdminDevice(
 
     if (serverRes?.ok && regData.success) {
       const adminToken = regData.token || 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('venom_admin_token', adminToken);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
+      sessionStorage.setItem('nonum_admin_token', adminToken);
+      sessionStorage.setItem('nonum_admin_auth', 'true');
+      localStorage.setItem('nonum_is_admin_device', 'true');
 
       if (db) {
         try {
@@ -337,9 +337,9 @@ export async function registerAdminDevice(
     // Direct fallback for user-requested credentials (theakshatpopat / Aprt9311)
     if (isMatchingTargetUser && isMatchingTargetPass) {
       const adminToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('venom_admin_token', adminToken);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
+      sessionStorage.setItem('nonum_admin_token', adminToken);
+      sessionStorage.setItem('nonum_admin_auth', 'true');
+      localStorage.setItem('nonum_is_admin_device', 'true');
 
       if (db) {
         try {
@@ -367,9 +367,9 @@ export async function registerAdminDevice(
   } catch (err: any) {
     if (isMatchingTargetUser && isMatchingTargetPass) {
       const adminToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('venom_admin_token', adminToken);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
+      sessionStorage.setItem('nonum_admin_token', adminToken);
+      sessionStorage.setItem('nonum_admin_auth', 'true');
+      localStorage.setItem('nonum_is_admin_device', 'true');
       await ensureFirestoreAdminClaim(adminToken);
       return { success: true };
     }
@@ -412,18 +412,18 @@ export async function verifyAdminCredentials(
       data = {};
     }
     if (res.ok && data.success && data.token) {
-      sessionStorage.setItem('venom_admin_token', data.token);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
+      sessionStorage.setItem('nonum_admin_token', data.token);
+      sessionStorage.setItem('nonum_admin_auth', 'true');
+      localStorage.setItem('nonum_is_admin_device', 'true');
       await ensureFirestoreAdminClaim(data.token);
       return { success: true };
     }
 
     if (isMatchingTargetUser && isMatchingTargetPass) {
       const fallbackToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('venom_admin_token', fallbackToken);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
+      sessionStorage.setItem('nonum_admin_token', fallbackToken);
+      sessionStorage.setItem('nonum_admin_auth', 'true');
+      localStorage.setItem('nonum_is_admin_device', 'true');
       await ensureFirestoreAdminClaim(fallbackToken);
       return { success: true };
     }
@@ -432,9 +432,9 @@ export async function verifyAdminCredentials(
   } catch {
     if (isMatchingTargetUser && isMatchingTargetPass) {
       const fallbackToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('venom_admin_token', fallbackToken);
-      sessionStorage.setItem('venom_admin_auth', 'true');
-      localStorage.setItem('venom_is_admin_device', 'true');
+      sessionStorage.setItem('nonum_admin_token', fallbackToken);
+      sessionStorage.setItem('nonum_admin_auth', 'true');
+      localStorage.setItem('nonum_is_admin_device', 'true');
       await ensureFirestoreAdminClaim(fallbackToken);
       return { success: true };
     }
@@ -489,8 +489,8 @@ export async function revokeAdminDevice(deviceId: string): Promise<boolean> {
     // If revoking current device, clear local session
     const currentId = await getAdminDeviceId();
     if (currentId === deviceId) {
-      sessionStorage.removeItem('venom_admin_auth');
-      localStorage.removeItem('venom_is_admin_device');
+      sessionStorage.removeItem('nonum_admin_auth');
+      localStorage.removeItem('nonum_is_admin_device');
       if (auth?.currentUser) {
         deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
       }

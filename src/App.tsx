@@ -20,8 +20,8 @@ import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { Post } from './types';
 import { getClientIp, getDeviceImei, getLegacyDeviceImei } from './utils/ip';
 import Header from './components/Header';
-import VenomCard from './components/VenomCard';
-import NewVenomModal from './components/NewVenomModal';
+import NonumCard from './components/NonumCard';
+import NewNonumModal from './components/NewNonumModal';
 import AdminPanel from './components/AdminPanel';
 import InfoModals from './components/InfoModals';
 import GuidelinesPage from './components/GuidelinesPage';
@@ -102,14 +102,14 @@ export default function App() {
           if (!isMounted) return;
           if (snap.exists() && snap.data()?.status === 'active') {
             setIsAdminDevice(true);
-            sessionStorage.setItem('venom_admin_auth', 'true');
-            localStorage.setItem('venom_is_admin_device', 'true');
+            sessionStorage.setItem('nonum_admin_auth', 'true');
+            localStorage.setItem('nonum_is_admin_device', 'true');
           } else {
             // Revoked or does not exist in active registry!
             setIsAdminDevice(false);
-            sessionStorage.removeItem('venom_admin_auth');
-            sessionStorage.removeItem('venom_admin_token');
-            localStorage.removeItem('venom_is_admin_device');
+            sessionStorage.removeItem('nonum_admin_auth');
+            sessionStorage.removeItem('nonum_admin_token');
+            localStorage.removeItem('nonum_is_admin_device');
             if (auth?.currentUser && db) {
               deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
             }
@@ -184,7 +184,7 @@ export default function App() {
   };
 
   // Parse path for single post sharing
-  const postMatch = currentPath.match(/^\/post\/([a-zA-Z0-9_-]+)/) || currentPath.match(/^\/venom\/([a-zA-Z0-9_-]+)/);
+  const postMatch = currentPath.match(/^\/post\/([a-zA-Z0-9_-]+)/) || currentPath.match(/^\/nonum\/([a-zA-Z0-9_-]+)/);
   const sharedPostId = postMatch ? postMatch[1] : null;
 
   const sharedHashId = (currentPath.startsWith('/report') || currentPath.startsWith('/admin'))
@@ -275,45 +275,45 @@ export default function App() {
     const pwaParam = params.get('pwa'); // 'admin' or 'main'
     const idParam = params.get('id');
 
-    let activeApp = localStorage.getItem('venom_pwa_active_app');
+    let activeApp = localStorage.getItem('nonum_pwa_active_app');
 
     if (pwaParam === 'admin') {
       activeApp = 'admin';
-      localStorage.setItem('venom_pwa_active_app', 'admin');
+      localStorage.setItem('nonum_pwa_active_app', 'admin');
     } else if (pwaParam === 'main') {
       activeApp = 'main';
-      localStorage.setItem('venom_pwa_active_app', 'main');
+      localStorage.setItem('nonum_pwa_active_app', 'main');
     } else if (idParam) {
       // Shared post link must ALWAYS route to the main user app
       activeApp = 'main';
-      localStorage.setItem('venom_pwa_active_app', 'main');
+      localStorage.setItem('nonum_pwa_active_app', 'main');
     } else {
       // Determine based on current path if no active PWA type is stored
       if (window.location.pathname.startsWith('/admin')) {
         activeApp = 'admin';
-        localStorage.setItem('venom_pwa_active_app', 'admin');
+        localStorage.setItem('nonum_pwa_active_app', 'admin');
       } else if (!activeApp) {
         activeApp = 'main';
-        localStorage.setItem('venom_pwa_active_app', 'main');
+        localStorage.setItem('nonum_pwa_active_app', 'main');
       }
     }
 
     if (isStandalone) {
       const search = window.location.search || '';
       if (activeApp === 'admin') {
-        const sessionStarted = sessionStorage.getItem('venom_admin_session_active');
+        const sessionStarted = sessionStorage.getItem('nonum_admin_session_active');
         if (!sessionStarted) {
-          sessionStorage.setItem('venom_admin_session_active', 'true');
-          sessionStorage.removeItem('venom_main_session_active'); // Keep separate
+          sessionStorage.setItem('nonum_admin_session_active', 'true');
+          sessionStorage.removeItem('nonum_main_session_active'); // Keep separate
           // For a fresh session of Admin PWA, force the route to /admin and preserve query parameters
           window.history.replaceState({}, '', `/admin${search}`);
           setCurrentPath(`/admin${search}`);
         }
       } else {
-        const sessionStarted = sessionStorage.getItem('venom_main_session_active');
+        const sessionStarted = sessionStorage.getItem('nonum_main_session_active');
         if (!sessionStarted) {
-          sessionStorage.setItem('venom_main_session_active', 'true');
-          sessionStorage.removeItem('venom_admin_session_active'); // Keep separate
+          sessionStorage.setItem('nonum_main_session_active', 'true');
+          sessionStorage.removeItem('nonum_admin_session_active'); // Keep separate
           // For a fresh session of Main PWA, preserve the actual pathname and query parameters
           const actualPathname = window.location.pathname;
           window.history.replaceState({}, '', `${actualPathname}${search}`);
@@ -378,24 +378,24 @@ export default function App() {
     const isPoliciesRoute = currentPath.startsWith('/policies');
     const isGuidelinesRoute = currentPath.startsWith('/guidelines');
     
-    let pageTitle = "Venom | Decentralized Anonymous Grid";
+    let pageTitle = "Nonum | Decentralized Anonymous Grid";
     if (isAdminReportRoute) {
-      pageTitle = "Venom Admin Reports";
+      pageTitle = "Nonum Admin Reports";
     } else if (isAdminRoute) {
-      pageTitle = "Venom Admin Console";
+      pageTitle = "Nonum Admin Console";
     } else if (isReportRoute) {
-      pageTitle = "Venom Security Report";
+      pageTitle = "Nonum Security Report";
     } else if (isPoliciesRoute) {
-      pageTitle = "Venom Policies";
+      pageTitle = "Nonum Policies";
     } else if (isGuidelinesRoute) {
-      pageTitle = "Venom Guidelines";
+      pageTitle = "Nonum Guidelines";
     }
 
     document.title = pageTitle;
 
     const iconUrl = (isAdminRoute || isAdminReportRoute) 
-      ? "https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-      : "https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png";
+      ? "/nonum-admin-logo.svg" 
+      : "/nonum-logo.svg";
 
     const manifestUrl = (isAdminRoute || isAdminReportRoute)
       ? "/admin-manifest.json"
@@ -572,7 +572,7 @@ export default function App() {
 
         snapshots.forEach(snap => snap.forEach(processDoc));
         
-        const existing = localStorage.getItem('venom_user_interactions');
+        const existing = localStorage.getItem('nonum_user_interactions');
         let parsed: any = { likedComments: [], likedReplies: [] };
         if (existing) {
           try {
@@ -583,7 +583,7 @@ export default function App() {
         const mergedComments = Array.from(new Set([...likedComments, ...(parsed.likedComments || [])]));
         const mergedReplies = Array.from(new Set([...likedReplies, ...(parsed.likedReplies || [])]));
         
-        localStorage.setItem('venom_user_interactions', JSON.stringify({
+        localStorage.setItem('nonum_user_interactions', JSON.stringify({
           likedPosts,
           votedPosts,
           votedPolls,
@@ -786,7 +786,7 @@ export default function App() {
   }
 
   // Communities page route check
-  if (currentPath.startsWith('/communities') || currentPath.startsWith('/venom/communities')) {
+  if (currentPath.startsWith('/communities') || currentPath.startsWith('/nonum/communities')) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 15 }}
@@ -905,7 +905,7 @@ export default function App() {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse border border-emerald-500/30" />
               <div>
                 <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block leading-none">
-                  Viewing Shared Venom
+                  Viewing Shared Nonum
                 </span>
                 <span className="text-[8px] text-zinc-500 uppercase tracking-tight font-mono mt-1 block">
                   Secure cryptographic transmission decrypted
@@ -1053,7 +1053,7 @@ export default function App() {
               className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider font-mono text-emerald-400 hover:text-emerald-300 transition-colors border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 px-4 py-1.5 rounded-md shadow-lg shadow-emerald-950/20 cursor-pointer"
             >
               <RefreshCw className="w-3 h-3 animate-pulse text-emerald-400" />
-              <span>Go to Homescreen (Latest Venoms)</span>
+              <span>Go to Homescreen (Latest Nonums)</span>
             </button>
           </div>
         )}
@@ -1066,7 +1066,7 @@ export default function App() {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse border border-emerald-500/30" />
               <div>
                 <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block leading-none">
-                  Decrypted Shared Venom
+                  Decrypted Shared Nonum
                 </span>
                 <span className="text-[8px] text-zinc-500 uppercase tracking-tight font-mono mt-1 block">
                   Encrypted human-readable hash match active
@@ -1135,7 +1135,7 @@ export default function App() {
               <ShieldAlert className="w-8 h-8 text-zinc-700" />
               <div className="max-w-sm space-y-1">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">
-                  {(sharedPostId || sharedHashId) ? 'Shared Venom Not Found' : 'No Posts Detected'}
+                  {(sharedPostId || sharedHashId) ? 'Shared Nonum Not Found' : 'No Posts Detected'}
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed">
                   {(sharedPostId || sharedHashId)
@@ -1180,7 +1180,7 @@ export default function App() {
                     exit={{ opacity: 0, scale: 0.98, y: -8 }}
                     transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    <VenomCard
+                    <NonumCard
                       post={post}
                       highlighted={highlightedPostId === post.id}
                       onPostUpdate={(fields) => handlePostUpdate(post.id, fields)}
@@ -1198,7 +1198,7 @@ export default function App() {
 
       {/* Dynamic Modal Interfaces */}
       {showNewPostModal && (
-        <NewVenomModal 
+        <NewNonumModal 
           onClose={() => setShowNewPostModal(false)} 
           onPostCreated={handleRefresh}
         />

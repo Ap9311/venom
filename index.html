@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#09090b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Venom | Decentralized Anonymous Grid</title>
+    <title>Nonum | Decentralized Anonymous Grid</title>
     <script>
       (function() {
         // Capture PWA install prompt as early as possible
@@ -19,26 +19,26 @@
         var path = window.location.pathname;
         var hasAdminSession = false;
         try {
-          hasAdminSession = sessionStorage.getItem('venom_admin_auth') === 'true' && localStorage.getItem('venom_is_admin_device') === 'true';
+          hasAdminSession = sessionStorage.getItem('nonum_admin_auth') === 'true' && localStorage.getItem('nonum_is_admin_device') === 'true';
         } catch(e) {}
 
         var isAdmin = hasAdminSession && (path.startsWith('/admin') || path.includes('admin'));
         var manifestUrl = isAdmin ? '/admin-manifest.json' : '/manifest.json';
-        var faviconUrl = isAdmin ? 'https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png' : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
-        var titleText = "Venom | Decentralized Anonymous Grid";
+        var faviconUrl = isAdmin ? '/nonum-admin-logo.svg' : '/nonum-logo.svg';
+        var titleText = "Nonum | Decentralized Anonymous Grid";
         if (isAdmin) {
           if (path.includes('report')) {
-            titleText = "Venom Admin Reports";
+            titleText = "Nonum Admin Reports";
           } else {
-            titleText = "Venom Admin Console";
+            titleText = "Nonum Admin Console";
           }
         } else {
           if (path.startsWith('/report') || path.includes('report')) {
-            titleText = "Venom Security Report";
+            titleText = "Nonum Security Report";
           } else if (path.startsWith('/policies') || path.includes('policies')) {
-            titleText = "Venom Policies";
+            titleText = "Nonum Policies";
           } else if (path.startsWith('/guidelines') || path.includes('guidelines')) {
-            titleText = "Venom Guidelines";
+            titleText = "Nonum Guidelines";
           }
         }
         

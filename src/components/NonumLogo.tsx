@@ -1,0 +1,26 @@
+import React from 'react';
+
+interface NonumLogoProps {
+  className?: string;
+  style?: React.CSSProperties;
+  onClick?: () => void;
+}
+
+export default function NonumLogo({ className = "w-11 h-11", style, onClick }: NonumLogoProps) {
+  return (
+    <svg 
+      className={`nonum-logo ${className}`}
+      viewBox="340 330 550 620" 
+      xmlns="http://www.w3.org/2000/svg" 
+      aria-label="Nonum logo" 
+      role="img"
+      style={style}
+      onClick={onClick}
+    >
+      <g fill="#FFFFFF">
+        <path d="M362 357 L466 462 L562 565 L867 919 L868 352 L714 472 L715 512 L813 434 L813 752 L615 516 L476 356 Z" />
+        <path d="M392 437 L392 879 L446 828 L447 553 L750 890 L797 890 L699 775 L587 648 L438 485 Z" />
+      </g>
+    </svg>
+  );
+}

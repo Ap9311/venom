@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import NonumLogo from './NonumLogo';
 import { 
   X, 
   Download, 
@@ -88,16 +89,12 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
   };
 
   const isAdmin = appType === 'admin';
-  const appName = isAdmin ? 'Venom Admin Console' : 'Venom Feed';
+  const appName = isAdmin ? 'Nonum Admin Console' : 'Nonum Feed';
   const appSubtitle = isAdmin ? 'MODERATOR COMMAND CENTER' : 'OFFICIAL SOCIAL HUB';
   const appDescription = isAdmin 
     ? 'Access threat response, user reporting logs, device quarantine controls, and real-time community usage statistics.' 
     : 'Read anonymous feeds, react, comment, cast polls, and stay connected with full desktop and mobile standby notifications.';
   
-  const appIcon = isAdmin 
-    ? 'https://img.icons8.com/nolan/96/shield.png'
-    : 'https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png';
-
   const manifestUrl = isAdmin ? '/admin-manifest.json' : '/manifest.json';
 
   return (
@@ -130,12 +127,15 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
             <div className="p-5 border-b border-zinc-900 flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-xl bg-zinc-900 border ${isAdmin ? 'border-rose-500/20' : 'border-emerald-500/20'} flex items-center justify-center shrink-0 p-1 relative overflow-hidden`}>
-                  <img 
-                    src={appIcon} 
-                    alt={appName} 
-                    className="w-full h-full object-contain select-none"
-                    referrerPolicy="no-referrer"
-                  />
+                  {isAdmin ? (
+                    <img 
+                      src="/nonum-admin-logo.svg" 
+                      alt={appName} 
+                      className="w-full h-full object-contain select-none"
+                    />
+                  ) : (
+                    <NonumLogo className="w-full h-full object-contain" />
+                  )}
                   <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-tl bg-zinc-950 border-t border-l ${isAdmin ? 'border-rose-500' : 'border-emerald-500'} flex items-center justify-center`}>
                     <Zap className={`w-2 h-2 ${isAdmin ? 'text-rose-400' : 'text-emerald-400'}`} />
                   </div>
@@ -329,7 +329,7 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
                         </li>
                         <li className="flex gap-2.5 items-start">
                           <span className={`w-4 h-4 rounded-full text-[9px] font-mono font-bold shrink-0 flex items-center justify-center border ${isAdmin ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'}`}>2</span>
-                          <span>Alternatively, click the browser menu (⋮ or ☰) and choose <strong className="text-zinc-200">"Save and share" &rarr; "Install Venom"</strong> or similar.</span>
+                          <span>Alternatively, click the browser menu (⋮ or ☰) and choose <strong className="text-zinc-200">"Save and share" &rarr; "Install Nonum"</strong> or similar.</span>
                         </li>
                         <li className="flex gap-2.5 items-start">
                           <span className={`w-4 h-4 rounded-full text-[9px] font-mono font-bold shrink-0 flex items-center justify-center border ${isAdmin ? 'bg-rose-950/20 border-rose-500/20 text-rose-400' : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'}`}>3</span>

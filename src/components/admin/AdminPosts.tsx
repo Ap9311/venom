@@ -111,7 +111,7 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
         <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-xs font-bold text-zinc-100 uppercase tracking-widest flex items-center gap-2">
             <Database className="w-4 h-4 text-emerald-500/70" />
-            <span>Venom Core Database Explorer</span>
+            <span>Nonum Core Database Explorer</span>
           </h3>
 
           {/* View Tab Switcher */}
@@ -358,7 +358,7 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
             </div>
             
             <p className="text-[11px] text-zinc-400 font-mono leading-relaxed mb-6">
-              Are you sure you want to permanently purge post ID: <span className="text-zinc-200 font-bold break-all">{postIdToConfirmDelete}</span>? This action is irreversible and deletes the venom permanently from Firestore.
+              Are you sure you want to permanently purge post ID: <span className="text-zinc-200 font-bold break-all">{postIdToConfirmDelete}</span>? This action is irreversible and deletes the nonum permanently from Firestore.
             </p>
             
             <div className="flex justify-end gap-3 font-mono">

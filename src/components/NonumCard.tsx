@@ -49,7 +49,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { formatTimeAgo, formatShortCount } from '../utils/time';
 import CommentsPane from './CommentsPane';
 
-interface VenomCardProps {
+interface NonumCardProps {
   key?: string | number;
   post: Post;
   highlighted?: boolean;
@@ -91,14 +91,14 @@ const getDeterministicColors = (str: string) => {
   return gradients[Math.abs(hash) % gradients.length];
 };
 
-export default function VenomCard({ 
+export default function NonumCard({ 
   post, 
   highlighted = false, 
   onPostUpdate,
   isBlocked = false,
   onBlockedActionTriggered,
   compact = false
-}: VenomCardProps) {
+}: NonumCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [isCopingHash, setIsCopingHash] = useState(false);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount);
@@ -545,7 +545,7 @@ export default function VenomCard({
     : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
 
   // Format a simple, humble and elegant dispatch message matching the user request
-  const dispatchText = `Venom
+  const dispatchText = `Nonum
 
 Review Post:
 "${post.title}"
@@ -553,16 +553,16 @@ Review Post:
 
 Link: ${shareUrl}
 
-Post Venom Now: https://myvenom.vercel.app`;
+Post Nonum Now: https://mynonum.vercel.app`;
 
-  const twitterDispatchText = `Venom
+  const twitterDispatchText = `Nonum
 
 Review Post:
 "${post.title}"
 
 Link: ${shareUrl}
 
-Post Venom Now: https://myvenom.vercel.app`;
+Post Nonum Now: https://mynonum.vercel.app`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -574,7 +574,7 @@ Post Venom Now: https://myvenom.vercel.app`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Venom — ${shareTitle}`,
+          title: `Nonum — ${shareTitle}`,
           text: dispatchText,
           url: shareUrl,
         });
@@ -615,7 +615,7 @@ Post Venom Now: https://myvenom.vercel.app`;
       name: 'Reddit',
       icon: ExternalLink,
       color: 'hover:text-orange-400 hover:border-orange-500/30 text-emerald-500/70 hover:bg-orange-950/15',
-      url: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`[VENOM SECURE INTEL] ${shareTitle}`)}`
+      url: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`[NONUM SECURE INTEL] ${shareTitle}`)}`
     },
     {
       name: 'Facebook',
@@ -642,7 +642,7 @@ Post Venom Now: https://myvenom.vercel.app`;
     }, 2500);
   };
 
-  const VENOM_GRADIENT_THEMES = [
+  const NONUM_GRADIENT_THEMES = [
     {
       id: 'white',
       stop1: '#ffffff',
@@ -690,13 +690,13 @@ Post Venom Now: https://myvenom.vercel.app`;
     // Weighted probability selection:
     // Pure White: 1 in 100 (rare 1% easter egg)
     // Cyber Emerald: ~2 in 5 (40%)
-    // Venom Magenta: ~3 in 5 (59%)
+    // Nonum Magenta: ~3 in 5 (59%)
     const roll = Math.random();
-    let randomTheme = VENOM_GRADIENT_THEMES[2]; // Venom Magenta
+    let randomTheme = NONUM_GRADIENT_THEMES[2]; // Nonum Magenta
     if (roll < 0.01) {
-      randomTheme = VENOM_GRADIENT_THEMES[0]; // Pure White
+      randomTheme = NONUM_GRADIENT_THEMES[0]; // Pure White
     } else if (roll < 0.406) {
-      randomTheme = VENOM_GRADIENT_THEMES[1]; // Cyber Emerald
+      randomTheme = NONUM_GRADIENT_THEMES[1]; // Cyber Emerald
     }
     const heartId = Date.now();
 
@@ -882,7 +882,7 @@ Post Venom Now: https://myvenom.vercel.app`;
       }`}
     >
       
-      {/* Venom UI Clean Single Gradient Heart Double Tap Animation */}
+      {/* Nonum UI Clean Single Gradient Heart Double Tap Animation */}
       <AnimatePresence mode="wait">
         {activeHeart && (
           <motion.div
@@ -901,14 +901,14 @@ Post Venom Now: https://myvenom.vercel.app`;
               xmlns="http://www.w3.org/2000/svg"
             >
               <defs>
-                <linearGradient id={`venom-heart-grad-${activeHeart.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                <linearGradient id={`nonum-heart-grad-${activeHeart.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor={activeHeart.theme.stop1} />
                   <stop offset="100%" stopColor={activeHeart.theme.stop2} />
                 </linearGradient>
               </defs>
               <path 
                 d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
-                fill={`url(#venom-heart-grad-${activeHeart.id})`}
+                fill={`url(#nonum-heart-grad-${activeHeart.id})`}
               />
             </svg>
           </motion.div>
@@ -950,7 +950,7 @@ Post Venom Now: https://myvenom.vercel.app`;
               });
             }}
             className={`flex items-center gap-1 text-rose-500 hover:text-rose-400 font-bold bg-rose-950/10 hover:bg-rose-950/25 border border-rose-500/20 hover:border-rose-500/40 px-2.5 py-0.5 rounded uppercase text-[8px] tracking-wider transition-all cursor-pointer shrink-0 ${compact ? 'px-1.5 py-0 text-[7.5px]' : ''}`}
-            title="Copy ID & Report this Venom"
+            title="Copy ID & Report this Nonum"
           >
             <Flag className="w-2.5 h-2.5 text-rose-500" />
             <span>Report</span>
@@ -975,7 +975,7 @@ Post Venom Now: https://myvenom.vercel.app`;
           <button
             onClick={handleShare}
             className="p-1 hover:bg-zinc-900/60 text-zinc-500 hover:text-emerald-400 rounded transition-all cursor-pointer relative shrink-0"
-            title="Share Venom"
+            title="Share Nonum"
           >
             <Share2 className="w-3.5 h-3.5" />
           </button>
@@ -1332,7 +1332,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                 <div className="flex items-center gap-2">
                   <Share2 className="w-4 h-4 text-emerald-400" />
                   <span className="font-mono font-bold text-xs tracking-wider uppercase text-zinc-200">
-                    Share Venom
+                    Share Nonum
                   </span>
                 </div>
                 <button
@@ -1348,7 +1348,7 @@ Post Venom Now: https://myvenom.vercel.app`;
                 {/* Title Preview */}
                 <div className="bg-zinc-900/40 border border-zinc-900 rounded-lg p-3 text-left">
                   <div className="text-[10px] text-zinc-600 font-mono font-bold tracking-wider uppercase mb-1">
-                    Venom Post Preview
+                    Nonum Post Preview
                   </div>
                   <h4 className="text-xs font-semibold text-zinc-300 font-sans line-clamp-1">
                     {post.title}

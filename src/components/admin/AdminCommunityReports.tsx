@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import NonumLogo from '../NonumLogo';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
@@ -35,8 +36,8 @@ export default function AdminCommunityReports() {
         ensureFirestoreAdminClaim().catch(console.warn);
       } else {
         setIsAuthenticated(false);
-        sessionStorage.removeItem('venom_admin_auth');
-        localStorage.removeItem('venom_is_admin_device');
+        sessionStorage.removeItem('nonum_admin_auth');
+        localStorage.removeItem('nonum_is_admin_device');
       }
     };
     verify();
@@ -92,7 +93,7 @@ export default function AdminCommunityReports() {
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('venom_admin_auth', 'true');
+      sessionStorage.setItem('nonum_admin_auth', 'true');
       setUsername('');
       setPassword('');
     } else {
@@ -102,7 +103,7 @@ export default function AdminCommunityReports() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('venom_admin_auth');
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   // DISMISS ALL COMPLAINTS against a community
@@ -269,17 +270,9 @@ export default function AdminCommunityReports() {
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
             onClick={() => navigateTo('/')}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] hover:scale-110 transition-transform cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight">
-                VENOM
-              </h1>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
+              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 COMMUNITY SHIELD LOGS
               </p>
             </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Lock, FileText, ChevronLeft, ShieldCheck, AlertTriangle, EyeOff, Scale, Download } from 'lucide-react';
 import { MobileBottomBar } from './MobileBottomBar';
+import NonumLogo from './NonumLogo';
 
 interface PoliciesPageProps {
   onBackToHome: () => void;
@@ -27,17 +28,9 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
               }
             }}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight">
-                VENOM
-              </h1>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
+              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 By Obsidian
               </p>
             </div>
@@ -89,7 +82,7 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
               <span>1. System Purpose & Privacy</span>
             </h3>
             <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
-              Venom was established to facilitate absolute cryptographic confidence in speech. We believe healthy, robust debates emerge when participants are freed from central registration profiles:
+              Nonum was established to facilitate absolute cryptographic confidence in speech. We believe healthy, robust debates emerge when participants are freed from central registration profiles:
             </p>
             <div className="space-y-3 font-mono text-[10px] text-zinc-400">
               <div className="bg-zinc-900/40 p-2.5 rounded border border-zinc-900">
@@ -113,7 +106,7 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
               <div className="bg-zinc-900/40 p-2.5 rounded border border-zinc-900">
                 <span className="text-zinc-200 font-bold block mb-1">D. UNILATERAL ACCESS CONTROL</span>
                 <p className="font-sans text-[10.5px]">
-                  Venom reserves the absolute, unilateral right to suspend, terminate, restrict, or deactivate device access, IP ranges, or cryptographic keys at any time, with or without prior notice, for network preservation, spam prevention, policy enforcement, or at its sole discretion.
+                  Nonum reserves the absolute, unilateral right to suspend, terminate, restrict, or deactivate device access, IP ranges, or cryptographic keys at any time, with or without prior notice, for network preservation, spam prevention, policy enforcement, or at its sole discretion.
                 </p>
               </div>
             </div>
@@ -127,7 +120,7 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
                 <span>2. Automated Enforcement Codes</span>
               </h3>
               <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
-                Venom operates a zero-tolerance automatic enforcement grid against dangerous payloads. Here are the exact codes and actions deployed against specific content categories:
+                Nonum operates a zero-tolerance automatic enforcement grid against dangerous payloads. Here are the exact codes and actions deployed against specific content categories:
               </p>
               
               <div className="space-y-3.5 pt-1 text-[10px] font-mono text-zinc-400">
@@ -162,13 +155,13 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
           </h3>
           <div className="space-y-3 text-[11px] text-zinc-400 leading-relaxed font-sans">
             <p>
-              <strong>Platform Intermediary Status:</strong> Venom operates strictly as an intermediary platform and technical host under applicable digital services laws. As a decentralized, real-time communication medium without mandatory account creation, the platform does not pre-screen, censor, or actively monitor user-authored transmissions prior to their release.
+              <strong>Platform Intermediary Status:</strong> Nonum operates strictly as an intermediary platform and technical host under applicable digital services laws. As a decentralized, real-time communication medium without mandatory account creation, the platform does not pre-screen, censor, or actively monitor user-authored transmissions prior to their release.
             </p>
             <p>
-              <strong>Absolute Absence of Guarantee:</strong> While Venom employs automated threat intelligence grids, community-driven reporting queues, and administrative firewalls to identify and purge illicit content, we <strong>do not and cannot guarantee</strong> a 100% safe or fully vetted network environment. Users acknowledge that decentralized networks are vulnerable to sporadic, unauthorized transmissions by independent third parties. Just as globally recognized secure messaging protocols (such as Telegram, WhatsApp, or Discord) encounter challenges in regulating decentralized communications, Venom manages these limitations with maximum professional effort but disclaims absolute compliance guarantees.
+              <strong>Absolute Absence of Guarantee:</strong> While Nonum employs automated threat intelligence grids, community-driven reporting queues, and administrative firewalls to identify and purge illicit content, we <strong>do not and cannot guarantee</strong> a 100% safe or fully vetted network environment. Users acknowledge that decentralized networks are vulnerable to sporadic, unauthorized transmissions by independent third parties. Just as globally recognized secure messaging protocols (such as Telegram, WhatsApp, or Discord) encounter challenges in regulating decentralized communications, Nonum manages these limitations with maximum professional effort but disclaims absolute compliance guarantees.
             </p>
             <p>
-              <strong>Indemnification & Safe Use:</strong> By accessing Venom, you agree that all activities, opinions, and files shared are the sole and exclusive responsibility of the originating user signature. Venom, its developers, operators, and affiliates shall be held <strong>completely harmless and indemnified</strong> against any damages, legal actions, or losses arising from illegal or non-compliant actions initiated by third-party actors on this network. Users are strongly urged to exercise sound judgment, act in accordance with local statutes, and actively utilize our built-in Threat Report console to maintain community safety.
+              <strong>Indemnification & Safe Use:</strong> By accessing Nonum, you agree that all activities, opinions, and files shared are the sole and exclusive responsibility of the originating user signature. Nonum, its developers, operators, and affiliates shall be held <strong>completely harmless and indemnified</strong> against any damages, legal actions, or losses arising from illegal or non-compliant actions initiated by third-party actors on this network. Users are strongly urged to exercise sound judgment, act in accordance with local statutes, and actively utilize our built-in Threat Report console to maintain community safety.
             </p>
           </div>
         </div>
@@ -239,7 +232,7 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
 
       {/* FOOTER */}
       <footer className="border-t border-zinc-900 bg-black/40 py-6 px-4 pb-24 text-center text-[9px] text-zinc-600 font-mono">
-        <p className="uppercase tracking-widest">VENOM NETWORKS © 2026 • PRIVACY PROTOCOL INTENSITY DEPLOYMENT</p>
+        <p className="uppercase tracking-widest">NONUM NETWORKS © 2026 • PRIVACY PROTOCOL INTENSITY DEPLOYMENT</p>
       </footer>
 
       <MobileBottomBar currentPath="/policies" />

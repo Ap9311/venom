@@ -25,12 +25,12 @@ import { getDoc } from 'firebase/firestore';
 import { checkIpBlockStatus } from '../utils/blockChecker';
 import { motion } from 'motion/react';
 
-interface NewVenomModalProps {
+interface NewNonumModalProps {
   onClose: () => void;
   onPostCreated: () => void;
 }
 
-export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalProps) {
+export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalProps) {
   const [type, setType] = useState<'text' | 'image' | 'poll' | 'qa'>('text');
 
   // Disable body scroll when modal is active to prevent background scrolling
@@ -201,7 +201,7 @@ export default function NewVenomModal({ onClose, onPostCreated }: NewVenomModalP
       // Check if user is blocked by IP address or IMEI before writing to firestore
       const block = await checkIpBlockStatus(userIp, userImei);
       if (block.isBlocked) {
-        setErrorMsg(`YOUR DEVICE IP HAS BEEN SUSPENDED FROM POSTING VENOMS. Status: ${block.timeLeftLabel}. Reason: ${block.reason || 'Guidelines violation'}`);
+        setErrorMsg(`YOUR DEVICE IP HAS BEEN SUSPENDED FROM POSTING NONUMS. Status: ${block.timeLeftLabel}. Reason: ${block.reason || 'Guidelines violation'}`);
         setIsSubmitting(false);
         return;
       }

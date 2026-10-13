@@ -14,9 +14,9 @@ export const NxDomainError: React.FC = () => {
   useEffect(() => {
     // Immediately eradicate all admin tokens to prevent session spoofing or bypass attempts
     try {
-      sessionStorage.removeItem('venom_admin_auth');
-      sessionStorage.removeItem('venom_admin_token');
-      localStorage.removeItem('venom_is_admin_device');
+      sessionStorage.removeItem('nonum_admin_auth');
+      sessionStorage.removeItem('nonum_admin_token');
+      localStorage.removeItem('nonum_is_admin_device');
     } catch {}
 
     if (typeof window !== 'undefined') {

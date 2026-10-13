@@ -6,7 +6,8 @@ import { submitPostReport } from '../utils/reports';
 import { checkIpBlockStatus, BlockStatus } from '../utils/blockChecker';
 import { ShieldAlert, ChevronLeft, Search, Eye, AlertCircle, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Download, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import VenomCard from './VenomCard';
+import NonumCard from './NonumCard';
+import NonumLogo from './NonumLogo';
 import { MobileBottomBar } from './MobileBottomBar';
 
 interface ReportPageProps {
@@ -161,17 +162,9 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
               }
             }}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight">
-                VENOM
-              </h1>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
+              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 By Obsidian
               </p>
             </div>
@@ -361,7 +354,7 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
                         <span>POST SECURELY VERIFIED</span>
                       </div>
                     </div>
-                    <VenomCard post={verifiedPost} highlighted={true} />
+                    <NonumCard post={verifiedPost} highlighted={true} />
                   </div>
                 )}
               </div>
@@ -454,7 +447,7 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
 
       {/* FOOTER */}
       <footer className="border-t border-zinc-900 bg-black/40 py-6 px-4 pb-24 text-center text-[9px] text-zinc-600 font-mono">
-        <p className="uppercase tracking-widest">VENOM NETWORKS © 2026 • THREAT ASSESSMENT GRID MODULE</p>
+        <p className="uppercase tracking-widest">NONUM NETWORKS © 2026 • THREAT ASSESSMENT GRID MODULE</p>
       </footer>
 
       <MobileBottomBar currentPath="/report" />

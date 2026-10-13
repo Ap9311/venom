@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import NonumLogo from '../NonumLogo';
 import { db } from '../../firebase';
 import { 
   collection, 
@@ -110,8 +111,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
         ensureFirestoreAdminClaim().catch(console.warn);
       } else {
         setIsAuthenticated(false);
-        sessionStorage.removeItem('venom_admin_auth');
-        localStorage.removeItem('venom_is_admin_device');
+        sessionStorage.removeItem('nonum_admin_auth');
+        localStorage.removeItem('nonum_is_admin_device');
       }
     };
     verify();
@@ -233,7 +234,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('venom_admin_auth', 'true');
+      sessionStorage.setItem('nonum_admin_auth', 'true');
       setUsername('');
       setPassword('');
     } else {
@@ -243,7 +244,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('venom_admin_auth');
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   // Permanently delete a community and all of its chats/subcollections
@@ -483,16 +484,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
             className="flex items-center gap-3 cursor-pointer select-none"
             onClick={onNavigateHome}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-sm font-black tracking-widest text-emerald-400 leading-tight">
-                VENOM SECURITY TERMINAL
-              </h1>
               <p className="text-[9px] text-zinc-500 font-mono tracking-wider uppercase leading-none mt-0.5">
                 COMMUNITIES SECTOR [admin/communities]
               </p>

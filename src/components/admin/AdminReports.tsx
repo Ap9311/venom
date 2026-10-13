@@ -6,7 +6,8 @@ import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials }
 import { ShieldAlert, Lock, Key, ChevronLeft, RefreshCw, Trash2, Check, Unlock, Clock, Plus, Minus, Server, HelpCircle, ExternalLink, Search, Eye, AlertCircle, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { submitPostReport } from '../../utils/reports';
-import VenomCard from '../VenomCard';
+import NonumCard from '../NonumCard';
+import NonumLogo from '../NonumLogo';
 import { Post } from '../../types';
 
 function ReportPostGroupView({
@@ -77,7 +78,7 @@ function ReportPostGroupView({
     return (
       <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-mono italic p-4 border border-zinc-900 rounded-lg bg-zinc-950/20">
         <RefreshCw className="w-4 h-4 animate-spin text-zinc-600" />
-        <span>Loading Threat Venom #{postId} and compiling active complaints...</span>
+        <span>Loading Threat Nonum #{postId} and compiling active complaints...</span>
       </div>
     );
   }
@@ -96,7 +97,7 @@ function ReportPostGroupView({
       <div className="flex flex-wrap items-center justify-between border-b border-zinc-900/60 pb-2.5 gap-2 text-[10px] text-zinc-500">
         <div className="flex items-center gap-2">
           <span className="text-emerald-400 font-black bg-emerald-950/25 px-2 py-0.5 border border-emerald-900/30 rounded text-[9px] tracking-wider uppercase">
-            TARGET VENOM: {post.id}
+            TARGET NONUM: {post.id}
           </span>
           <span className="text-zinc-700">•</span>
           <span className="font-bold text-rose-400 uppercase tracking-widest text-[9px] bg-rose-950/15 border border-rose-500/10 px-1.5 py-0.5 rounded">
@@ -157,7 +158,7 @@ function ReportPostGroupView({
         <span className="text-[8px] text-zinc-500 font-bold tracking-wider uppercase block">
           SECURE MATCHING POST PREVIEW
         </span>
-        <VenomCard post={post} highlighted={true} isBlocked={true} compact={true} />
+        <NonumCard post={post} highlighted={true} isBlocked={true} compact={true} />
       </div>
 
       {/* List of Reports under this post */}
@@ -312,7 +313,7 @@ function ReportPostGroupView({
             title="Purge this post from entire feed and database"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Purge Venom Node</span>
+            <span>Purge Nonum Node</span>
           </button>
         </div>
       </div>
@@ -368,8 +369,8 @@ export default function AdminReports() {
         ensureFirestoreAdminClaim().catch(console.warn);
       } else {
         setIsAuthenticated(false);
-        sessionStorage.removeItem('venom_admin_auth');
-        localStorage.removeItem('venom_is_admin_device');
+        sessionStorage.removeItem('nonum_admin_auth');
+        localStorage.removeItem('nonum_is_admin_device');
       }
     };
     verify();
@@ -435,7 +436,7 @@ export default function AdminReports() {
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('venom_admin_auth', 'true');
+      sessionStorage.setItem('nonum_admin_auth', 'true');
       setUsername('');
       setPassword('');
     } else {
@@ -445,7 +446,7 @@ export default function AdminReports() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('venom_admin_auth');
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   // DISMISS / DELETE A SINGLE REPORT (Keep the post)
@@ -867,17 +868,9 @@ export default function AdminReports() {
               window.dispatchEvent(new PopStateEvent('popstate'));
             }}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight">
-                VENOM
-              </h1>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
+              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 By Obsidian
               </p>
             </div>
@@ -1042,10 +1035,10 @@ export default function AdminReports() {
                 <div className="space-y-5">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <span className="text-[10px] text-zinc-500 font-mono uppercase font-bold tracking-widest">
-                      VENOM THREAT REPORT FEEDBACK ({reports.length} SYSTEM ENTRIES)
+                      NONUM THREAT REPORT FEEDBACK ({reports.length} SYSTEM ENTRIES)
                     </span>
                     <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-950/10 border border-emerald-500/20 px-2 py-1 rounded">
-                      GROUPED BY TARGET VENOM POST
+                      GROUPED BY TARGET NONUM POST
                     </span>
                   </div>
 
@@ -1288,7 +1281,7 @@ export default function AdminReports() {
                     ADMIN-INITIATED COMPLAINT REGISTRATION
                   </h2>
                   <p className="text-[9px] text-zinc-500 uppercase tracking-wider font-mono">
-                    Register a community policy violation against a specific Venom post
+                    Register a community policy violation against a specific Nonum post
                   </p>
                 </div>
 
@@ -1405,7 +1398,7 @@ export default function AdminReports() {
                             <span>POST SECURELY VERIFIED</span>
                           </div>
                           
-                          <VenomCard post={verifiedPost} highlighted={true} />
+                          <NonumCard post={verifiedPost} highlighted={true} />
                         </motion.div>
                       )}
                     </AnimatePresence>

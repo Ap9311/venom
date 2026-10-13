@@ -437,7 +437,7 @@ export const AdminSecurity: React.FC = () => {
         <strong className="text-zinc-400 block font-mono mb-0.5 uppercase text-[8px] tracking-wide">
           Automatic Enforcement:
         </strong>
-        Blocked devices will be blocked in the middleware layer. They will not be able to create new posts or interact with any active venom feeds.
+        Blocked devices will be blocked in the middleware layer. They will not be able to create new posts or interact with any active nonum feeds.
       </div>
     </div>
   );

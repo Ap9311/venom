@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import NonumLogo from '../NonumLogo';
 import { db, auth } from '../../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Post } from '../../types';
@@ -49,12 +50,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
       if (!isMounted) return;
       if (isAdminDevice) {
         setIsAuthenticated(true);
-        sessionStorage.setItem('venom_admin_auth', 'true');
+        sessionStorage.setItem('nonum_admin_auth', 'true');
         ensureFirestoreAdminClaim().catch(console.warn);
       } else {
         setIsAuthenticated(false);
-        sessionStorage.removeItem('venom_admin_auth');
-        localStorage.removeItem('venom_is_admin_device');
+        sessionStorage.removeItem('nonum_admin_auth');
+        localStorage.removeItem('nonum_is_admin_device');
       }
     };
     checkAuth();
@@ -71,7 +72,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('venom_admin_auth', 'true');
+      sessionStorage.setItem('nonum_admin_auth', 'true');
       setUsername('');
       setPassword('');
     } else {
@@ -81,7 +82,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('venom_admin_auth');
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   const handleSavedEdit = () => {
@@ -136,17 +137,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
             onClick={onNavigateHome}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight">
-                VENOM
-              </h1>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
+              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 By Obsidian
               </p>
             </div>

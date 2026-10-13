@@ -50,11 +50,11 @@ export default function InfoModals({ type, onClose }: InfoModalsProps) {
           <div className="space-y-4">
             <div className="flex items-center gap-2.5 text-emerald-400 border-b border-zinc-900 pb-3">
               <ShieldAlert className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-sm font-bold uppercase tracking-widest font-mono">VENOM COMMUNITY GUIDELINES</h2>
+              <h2 className="text-sm font-bold uppercase tracking-widest font-mono">NONUM COMMUNITY GUIDELINES</h2>
             </div>
             <div className="space-y-3.5 text-xs text-zinc-400 leading-relaxed font-sans">
               <p>
-                Venom operates as a professional, clean social environment where transparency is matched with absolute cryptographic confidence. Adhering to guidelines ensures the flow remains constructive:
+                Nonum operates as a professional, clean social environment where transparency is matched with absolute cryptographic confidence. Adhering to guidelines ensures the flow remains constructive:
               </p>
               <div className="space-y-3 font-mono text-[11px] text-zinc-300 bg-zinc-900/40 p-3 rounded border border-zinc-900">
                 <div className="flex gap-2">
@@ -103,7 +103,7 @@ export default function InfoModals({ type, onClose }: InfoModalsProps) {
                 </div>
               </div>
               <p className="text-[10px] text-zinc-500 italic">
-                By using Venom, your public IP address may be verified securely by local firewalls to protect database integrity against bot abuse.
+                By using Nonum, your public IP address may be verified securely by local firewalls to protect database integrity against bot abuse.
               </p>
             </div>
           </div>
@@ -118,7 +118,7 @@ export default function InfoModals({ type, onClose }: InfoModalsProps) {
             </div>
             <div className="space-y-3.5 text-xs text-zinc-400 leading-relaxed font-sans">
               <p>
-                Master the Venom feed like an expert operative. Here are our top handpicked power-tips:
+                Master the Nonum feed like an expert operative. Here are our top handpicked power-tips:
               </p>
               <div className="space-y-3 font-mono text-[11px] text-zinc-300 bg-zinc-900/40 p-3 rounded border border-zinc-900">
                 <div className="flex gap-2">

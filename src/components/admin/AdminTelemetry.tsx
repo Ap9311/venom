@@ -22,15 +22,15 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
   const liveObservers = Math.max(1, uniqueIps.length);
 
   // Compute analytics
-  const totalVenomsCount = activePosts.length;
+  const totalNonumsCount = activePosts.length;
   const totalLikes = activePosts.reduce((acc, p) => acc + (p.likesCount || 0), 0);
   const totalUpvotes = activePosts.reduce((acc, p) => acc + (p.upvotesCount || 0), 0);
   const totalDownvotes = activePosts.reduce((acc, p) => acc + (p.downvotesCount || 0), 0);
   const totalComments = activePosts.reduce((acc, p) => acc + (p.commentsCount || 0), 0);
   const totalInteractions = totalLikes + totalUpvotes + totalDownvotes + totalComments;
 
-  const averageEngagement = totalVenomsCount > 0 
-    ? (totalInteractions / totalVenomsCount).toFixed(1) 
+  const averageEngagement = totalNonumsCount > 0 
+    ? (totalInteractions / totalNonumsCount).toFixed(1) 
     : '0.0';
 
   const rawBytes = activePosts.reduce((acc, p) => {
@@ -68,9 +68,9 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
           <div className="absolute top-2 right-2 text-emerald-500/10">
             <Activity className="w-12 h-12" />
           </div>
-          <span className="text-[9px] uppercase text-zinc-500 block font-bold">TOTAL FIRESTORE VENOMS</span>
+          <span className="text-[9px] uppercase text-zinc-500 block font-bold">TOTAL FIRESTORE NONUMS</span>
           <span className="text-2xl font-black text-emerald-400 mt-1 block tracking-tight">
-            {totalVenomsCount}
+            {totalNonumsCount}
           </span>
           <span className="text-[9px] text-zinc-500 mt-1.5 block">
             {deletedPostsCount > 0 ? `Active (${deletedPostsCount} soft-deleted in trash)` : 'Active database documents'}
@@ -97,7 +97,7 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
           <span className="text-2xl font-black text-zinc-200 mt-1 block tracking-tight">
             {averageEngagement}
           </span>
-          <span className="text-[9px] text-zinc-500 mt-1.5 block">Interactions per Venom</span>
+          <span className="text-[9px] text-zinc-500 mt-1.5 block">Interactions per Nonum</span>
         </div>
 
         <div className="bg-zinc-900/30 border border-zinc-900 rounded-lg p-4 backdrop-blur-sm relative overflow-hidden">
@@ -124,7 +124,7 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
               <span>Decentralized Core Graph</span>
             </h3>
             <p className="text-[10px] text-zinc-500 leading-relaxed mt-1">
-              Interactive 3-Tier clustering topography mapping real-time connections between database categories and node venoms.
+              Interactive 3-Tier clustering topography mapping real-time connections between database categories and node nonums.
             </p>
           </div>
 
@@ -204,7 +204,7 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
                           fill="#52525b"
                           className="hover:fill-emerald-400 cursor-pointer transition-colors duration-150"
                           onMouseEnter={() => setHoveredNode({
-                            label: postItem.title || 'Anonymous Venom',
+                            label: postItem.title || 'Anonymous Nonum',
                             category: cat.label,
                             description: postItem.content?.substring(0, 80) + '...'
                           })}

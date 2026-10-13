@@ -5,7 +5,7 @@
 
 import { UserInteractionState } from '../types';
 
-const STORAGE_KEY = 'venom_user_interactions';
+const STORAGE_KEY = 'nonum_user_interactions';
 
 const defaultState: UserInteractionState = {
   likedPosts: [],

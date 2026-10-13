@@ -24,14 +24,14 @@ export async function getClientIp(): Promise<string> {
   }
   
   // Persistent deterministic simulated IP
-  let cachedIp = localStorage.getItem('venom_simulated_client_ip');
+  let cachedIp = localStorage.getItem('nonum_simulated_client_ip');
   if (!cachedIp) {
     const octet1 = Math.floor(Math.random() * 100) + 80; // realistic IPs
     const octet2 = Math.floor(Math.random() * 150) + 10;
     const octet3 = Math.floor(Math.random() * 200) + 1;
     const octet4 = Math.floor(Math.random() * 250) + 1;
     cachedIp = `${octet1}.${octet2}.${octet3}.${octet4}`;
-    localStorage.setItem('venom_simulated_client_ip', cachedIp);
+    localStorage.setItem('nonum_simulated_client_ip', cachedIp);
   }
   return cachedIp;
 }
@@ -257,12 +257,12 @@ export async function getDeviceImei(): Promise<string> {
   }
 
   // Preserve any legacy browser-polluted IMEI if one was generated before this update
-  const existingImei = localStorage.getItem('venom_device_imei');
+  const existingImei = localStorage.getItem('nonum_device_imei');
   if (existingImei && existingImei !== digits) {
-    localStorage.setItem('venom_legacy_device_imei', existingImei);
+    localStorage.setItem('nonum_legacy_device_imei', existingImei);
   }
 
-  localStorage.setItem('venom_device_imei', digits);
+  localStorage.setItem('nonum_device_imei', digits);
   return digits;
 }
 
@@ -270,8 +270,8 @@ export async function getDeviceImei(): Promise<string> {
  * Retrieves any legacy browser-specific IMEI stored previously, if different from current pure device IMEI.
  */
 export function getLegacyDeviceImei(): string | null {
-  const legacy = localStorage.getItem('venom_legacy_device_imei');
-  const current = localStorage.getItem('venom_device_imei');
+  const legacy = localStorage.getItem('nonum_legacy_device_imei');
+  const current = localStorage.getItem('nonum_device_imei');
   if (legacy && legacy !== current) {
     return legacy;
   }
@@ -289,12 +289,12 @@ export async function getDeviceSerial(): Promise<string> {
   const part2 = fp.substring(5, 14).toUpperCase();
   const serial = `${part1}/${part2}`;
   
-  const existingSerial = localStorage.getItem('venom_device_serial');
+  const existingSerial = localStorage.getItem('nonum_device_serial');
   if (existingSerial && existingSerial !== serial) {
-    localStorage.setItem('venom_legacy_device_serial', existingSerial);
+    localStorage.setItem('nonum_legacy_device_serial', existingSerial);
   }
 
-  localStorage.setItem('venom_device_serial', serial);
+  localStorage.setItem('nonum_device_serial', serial);
   return serial;
 }
 

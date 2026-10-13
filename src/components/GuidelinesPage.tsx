@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldAlert, BookOpen, ChevronLeft, HelpCircle, CheckCircle, Info, Radio, Download } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MobileBottomBar } from './MobileBottomBar';
+import NonumLogo from './NonumLogo';
 
 interface GuidelinesPageProps {
   onBackToHome: () => void;
@@ -28,17 +29,9 @@ export default function GuidelinesPage({ onBackToHome }: GuidelinesPageProps) {
               }
             }}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight">
-                VENOM
-              </h1>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
+              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 By Obsidian
               </p>
             </div>
@@ -70,13 +63,13 @@ export default function GuidelinesPage({ onBackToHome }: GuidelinesPageProps) {
         <div className="space-y-2 border-b border-zinc-900 pb-6">
           <div className="flex items-center gap-2 text-emerald-400">
             <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
-            <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">OFFICIAL VENOM PROTOCOL</span>
+            <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">OFFICIAL NONUM PROTOCOL</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase leading-none">
             COMMUNITY GUIDELINES & USING RIGHTS
           </h1>
           <p className="text-xs text-zinc-500 font-sans leading-relaxed max-w-2xl">
-            Venom is a zero-friction, cryptographic decentralized social space for sharing unfiltered polls, Q&A sessions, and texts. 
+            Nonum is a zero-friction, cryptographic decentralized social space for sharing unfiltered polls, Q&A sessions, and texts. 
             Anonymity is a powerful tool—and with great power comes the responsibility of preserving a healthy community.
           </p>
         </div>
@@ -123,7 +116,7 @@ export default function GuidelinesPage({ onBackToHome }: GuidelinesPageProps) {
                 <span>2. Using Rights & Rules</span>
               </h3>
               <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
-                As a user of the Venom network, you hold complete autonomy over your cryptographic presence:
+                As a user of the Nonum network, you hold complete autonomy over your cryptographic presence:
               </p>
               <div className="space-y-3 font-mono text-[10px] text-zinc-400">
                 <div className="flex items-start gap-2 bg-zinc-900/10 p-2 border border-zinc-900 rounded">
@@ -163,7 +156,7 @@ export default function GuidelinesPage({ onBackToHome }: GuidelinesPageProps) {
             <div className="space-y-1.5">
               <span className="font-bold text-zinc-100 uppercase tracking-tight block">Q: Can administrators see my private identity?</span>
               <p className="text-zinc-400 font-sans">
-                No. Venom utilizes client-side hashing signatures. The network logs client metadata (IP address and user-agent string) solely for firewall and DDoS/bot containment rules.
+                No. Nonum utilizes client-side hashing signatures. The network logs client metadata (IP address and user-agent string) solely for firewall and DDoS/bot containment rules.
               </p>
             </div>
             
@@ -218,7 +211,7 @@ export default function GuidelinesPage({ onBackToHome }: GuidelinesPageProps) {
 
       {/* FOOTER */}
       <footer className="border-t border-zinc-900 bg-black/40 py-6 px-4 pb-24 text-center text-[9px] text-zinc-600 font-mono">
-        <p className="uppercase tracking-widest">VENOM NETWORKS © 2026 • ANONYMOUS DECENTRALIZED DISCOURSE CORE</p>
+        <p className="uppercase tracking-widest">NONUM NETWORKS © 2026 • ANONYMOUS DECENTRALIZED DISCOURSE CORE</p>
       </footer>
 
       <MobileBottomBar currentPath="/guidelines" />

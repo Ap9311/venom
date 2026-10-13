@@ -174,7 +174,7 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({ post, onClose, o
           <div>
             <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-widest font-mono flex items-center gap-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block animate-ping" />
-              <span>Modify Venom Metadata</span>
+              <span>Modify Nonum Metadata</span>
             </h3>
             <span className="text-[9px] text-zinc-500 font-mono block mt-0.5">POST REFERENCE: {post.id}</span>
           </div>
@@ -198,7 +198,7 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({ post, onClose, o
 
           {/* Post Type Selector */}
           <div className="space-y-1">
-            <label className="text-[9px] uppercase text-zinc-500 block font-bold">VENOM CLASSIFICATION (TYPE)</label>
+            <label className="text-[9px] uppercase text-zinc-500 block font-bold">NONUM CLASSIFICATION (TYPE)</label>
             <select
               value={postType}
               onChange={(e) => handleTypeChange(e.target.value as PostType)}

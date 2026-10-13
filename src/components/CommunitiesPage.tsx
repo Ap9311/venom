@@ -93,8 +93,8 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     const legacyImei = getLegacyDeviceImei();
     const targetImei = item.createdByImei;
     const targetSerial = item.createdBySerial;
-    const currentImei = deviceImei || (typeof window !== 'undefined' ? localStorage.getItem('venom_device_imei') : '');
-    const currentSerial = deviceSerial || (typeof window !== 'undefined' ? localStorage.getItem('venom_device_serial') : '');
+    const currentImei = deviceImei || (typeof window !== 'undefined' ? localStorage.getItem('nonum_device_imei') : '');
+    const currentSerial = deviceSerial || (typeof window !== 'undefined' ? localStorage.getItem('nonum_device_serial') : '');
 
     return Boolean(
       (targetImei && (targetImei === currentImei || targetImei === deviceSig?.value || targetImei === legacyImei)) ||
@@ -256,11 +256,11 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
              p.postedFromImei === imei || 
              p.postedFromImei === sig.value || 
              (legacyImei && p.postedFromImei === legacyImei)
-      ) || localStorage.getItem('venom_has_posted_at_least_once') === 'true';
+      ) || localStorage.getItem('nonum_has_posted_at_least_once') === 'true';
 
       if (hasPosted && isMounted) {
         setHasPostedAtLeastOnce(true);
-        localStorage.setItem('venom_has_posted_at_least_once', 'true');
+        localStorage.setItem('nonum_has_posted_at_least_once', 'true');
       }
 
       // Query Firestore interactions collection to restore all user actions even when cookies are wiped
@@ -303,22 +303,22 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
           if (isMounted) {
             if (restoredLikes.length > 0) {
               setLikedChats(prev => Array.from(new Set([...prev, ...restoredLikes])));
-              localStorage.setItem('venom_liked_chats', JSON.stringify(restoredLikes));
+              localStorage.setItem('nonum_liked_chats', JSON.stringify(restoredLikes));
             }
             if (Object.keys(restoredReactions).length > 0) {
               setUserChatReactions(prev => ({ ...prev, ...restoredReactions }));
-              localStorage.setItem('venom_chat_reactions', JSON.stringify(restoredReactions));
+              localStorage.setItem('nonum_chat_reactions', JSON.stringify(restoredReactions));
             }
             if (Object.keys(restoredPolls).length > 0) {
               setVotedChatsPolls(prev => ({ ...prev, ...restoredPolls }));
-              localStorage.setItem('venom_voted_chats_polls', JSON.stringify(restoredPolls));
+              localStorage.setItem('nonum_voted_chats_polls', JSON.stringify(restoredPolls));
             }
             if (restoredUnlocks.length > 0) {
               setUnlockedCommIds(prev => Array.from(new Set([...prev, ...restoredUnlocks])));
             }
             if (restoredPins && (restoredPins as string[]).length > 0) {
               setPinnedIds(restoredPins);
-              localStorage.setItem('venom_pinned_communities', JSON.stringify(restoredPins));
+              localStorage.setItem('nonum_pinned_communities', JSON.stringify(restoredPins));
             }
           }
         } catch (err) {
@@ -330,7 +330,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     initDevice();
 
     // Load pinned list from local storage fallback
-    const savedPins = localStorage.getItem('venom_pinned_communities');
+    const savedPins = localStorage.getItem('nonum_pinned_communities');
     if (savedPins) {
       try {
         setPinnedIds(JSON.parse(savedPins));
@@ -340,19 +340,19 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     }
 
     // Load liked chats list from local storage fallback
-    const savedLiked = localStorage.getItem('venom_liked_chats');
+    const savedLiked = localStorage.getItem('nonum_liked_chats');
     if (savedLiked) {
       try { setLikedChats(JSON.parse(savedLiked)); } catch(e){}
     }
 
     // Load voted chats polls from local storage fallback
-    const savedVotedPolls = localStorage.getItem('venom_voted_chats_polls');
+    const savedVotedPolls = localStorage.getItem('nonum_voted_chats_polls');
     if (savedVotedPolls) {
       try { setVotedChatsPolls(JSON.parse(savedVotedPolls)); } catch(e){}
     }
 
     // Load chat reactions from local storage fallback
-    const savedReactions = localStorage.getItem('venom_chat_reactions');
+    const savedReactions = localStorage.getItem('nonum_chat_reactions');
     if (savedReactions) {
       try { setUserChatReactions(JSON.parse(savedReactions)); } catch(e){}
     }
@@ -577,7 +577,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       updatedPins.push(commId);
     }
     setPinnedIds(updatedPins);
-    localStorage.setItem('venom_pinned_communities', JSON.stringify(updatedPins));
+    localStorage.setItem('nonum_pinned_communities', JSON.stringify(updatedPins));
 
     if (deviceImei && db) {
       setDoc(doc(db, 'interactions', `pinned_comms_${deviceImei}`), {
@@ -593,7 +593,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   const handleCreateCommunitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasPostedAtLeastOnce) {
-      setCError('CLEARANCE SUSPENDED: You must make at least 1 main grid Venom post from this device first.');
+      setCError('CLEARANCE SUSPENDED: You must make at least 1 main grid Nonum post from this device first.');
       return;
     }
     if (!cName.trim() || !cDesc.trim()) {
@@ -639,13 +639,13 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       await setDoc(customCommRef, payload);
       
       // Persist the clearance as well so user doesn't need to post again
-      localStorage.setItem('venom_has_posted_at_least_once', 'true');
+      localStorage.setItem('nonum_has_posted_at_least_once', 'true');
       setHasPostedAtLeastOnce(true);
 
       // Auto pin the created community
       const updatedPins = [...pinnedIds, commId].slice(0, 5);
       setPinnedIds(updatedPins);
-      localStorage.setItem('venom_pinned_communities', JSON.stringify(updatedPins));
+      localStorage.setItem('nonum_pinned_communities', JSON.stringify(updatedPins));
 
       // Reset form
       setCName('');
@@ -886,7 +886,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       }
 
       setLikedChats(updatedLikes);
-      localStorage.setItem('venom_liked_chats', JSON.stringify(updatedLikes));
+      localStorage.setItem('nonum_liked_chats', JSON.stringify(updatedLikes));
 
       if (deviceImei && db) {
         const intRef = doc(db, 'interactions', `chat_like_${chatId}_${deviceImei}`);
@@ -939,7 +939,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       await updateDoc(chatDocRef, reactionUpdate);
       setUserChatReactions(updatedReactions);
-      localStorage.setItem('venom_chat_reactions', JSON.stringify(updatedReactions));
+      localStorage.setItem('nonum_chat_reactions', JSON.stringify(updatedReactions));
       setReactionMenuChatId(null);
 
       if (deviceImei && db) {
@@ -1150,7 +1150,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     const rawType = chatObj?.type || 'text';
     const typeLabel = rawType === 'qa' ? 'Q&A' : rawType.charAt(0).toUpperCase() + rawType.slice(1);
 
-    const formattedMessage = `Venom
+    const formattedMessage = `Nonum
 
 ${activeCommunity.name}
 ${activeCommunity.description}
@@ -1160,7 +1160,7 @@ Review this chat (${typeLabel})
 
 Link: ${shareLink}
 
-Post Venom Now: https://myvenom.vercel.app`;
+Post Nonum Now: https://mynonum.vercel.app`;
 
     setShareModalTitle('Share Chat Message');
     setShareModalUrl(shareLink);
@@ -1176,7 +1176,7 @@ Post Venom Now: https://myvenom.vercel.app`;
     if (!targetComm) return;
     const shareLink = `${window.location.origin}/communities?communityId=${targetComm.id}`;
     
-    const formattedMessage = `Venom
+    const formattedMessage = `Nonum
 
 ${targetComm.name}
 ${targetComm.description}
@@ -1185,11 +1185,11 @@ Total Review: ${targetComm.viewsCount || 0}
 
 Link: ${shareLink}
 
-Post Venom Now: https://myvenom.vercel.app`;
+Post Nonum Now: https://mynonum.vercel.app`;
 
     setShareModalTitle(`Share Community: ${targetComm.name}`);
     setShareModalUrl(shareLink);
-    setShareModalPreview(targetComm.description || 'Secure Cognitive Cohort on Venom Grid');
+    setShareModalPreview(targetComm.description || 'Secure Cognitive Cohort on Nonum Grid');
     setShareModalFormattedMessage(formattedMessage);
     setIsCopiedLink(false);
     setShowShareModal(true);
@@ -1224,7 +1224,7 @@ Post Venom Now: https://myvenom.vercel.app`;
       name: 'Reddit',
       icon: ExternalLink,
       color: 'hover:text-orange-400 hover:border-orange-500/30 text-emerald-500/70 hover:bg-orange-950/15',
-      url: `https://www.reddit.com/submit?url=${encodeURIComponent(shareModalUrl)}&title=${encodeURIComponent(`[VENOM COHORT INTEL] ${shareModalTitle}`)}`
+      url: `https://www.reddit.com/submit?url=${encodeURIComponent(shareModalUrl)}&title=${encodeURIComponent(`[NONUM COHORT INTEL] ${shareModalTitle}`)}`
     },
     {
       name: 'Facebook',
@@ -1245,7 +1245,7 @@ Post Venom Now: https://myvenom.vercel.app`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Venom Community — ${shareModalTitle}`,
+          title: `Nonum Community — ${shareModalTitle}`,
           text: shareModalFormattedMessage,
           url: shareModalUrl,
         });
@@ -1270,7 +1270,7 @@ Post Venom Now: https://myvenom.vercel.app`;
 
       const updatedVoted = { ...votedChatsPolls, [chatId]: optionIdx };
       setVotedChatsPolls(updatedVoted);
-      localStorage.setItem('venom_voted_chats_polls', JSON.stringify(updatedVoted));
+      localStorage.setItem('nonum_voted_chats_polls', JSON.stringify(updatedVoted));
 
       if (deviceImei && db) {
         setDoc(doc(db, 'interactions', `chat_poll_${chatId}_${deviceImei}`), {
@@ -1354,7 +1354,7 @@ Post Venom Now: https://myvenom.vercel.app`;
   return (
     <div className="min-h-screen bg-[#030303] text-zinc-300 font-sans flex flex-col md:flex-row pb-20 md:pb-0" id="communities-page-viewport">
       
-      {/* LEFT PANEL: COMMUNITIES FEED (Similar to Venom Main Feed) */}
+      {/* LEFT PANEL: COMMUNITIES FEED (Similar to Nonum Main Feed) */}
       <div className={`w-full md:w-1/3 border-r border-zinc-900/60 bg-zinc-950 flex flex-col h-[calc(100vh-4rem)] md:h-screen ${activeCommunity ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Header & Launcher */}
@@ -1405,7 +1405,7 @@ Post Venom Now: https://myvenom.vercel.app`;
           <button
             onClick={() => {
               if (!hasPostedAtLeastOnce) {
-                alert('CLEARANCE DENIED: You must make at least 1 public Venom Post first to demonstrate active device utility before launching a private community.');
+                alert('CLEARANCE DENIED: You must make at least 1 public Nonum Post first to demonstrate active device utility before launching a private community.');
               } else {
                 setShowCreateModal(true);
               }
@@ -2114,7 +2114,7 @@ Post Venom Now: https://myvenom.vercel.app`;
             <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-850 flex items-center justify-center mx-auto text-emerald-400">
               <Users className="w-6 h-6" />
             </div>
-            <h3 className="text-xs font-black tracking-widest text-zinc-300 uppercase">VENOM NETWORKS CHANNELS</h3>
+            <h3 className="text-xs font-black tracking-widest text-zinc-300 uppercase">NONUM NETWORKS CHANNELS</h3>
             <p className="text-[10px] text-zinc-500 uppercase max-w-xs mx-auto leading-relaxed">
               Connect anonymously with group cohorts across isolated regions. Select an active private community to link encryption.
             </p>

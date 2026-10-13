@@ -2,7 +2,7 @@
   "entities": {
     "Post": {
       "title": "Post",
-      "description": "A venom post containing text, image, poll, or Q&A content.",
+      "description": "A nonum post containing text, image, poll, or Q&A content.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },

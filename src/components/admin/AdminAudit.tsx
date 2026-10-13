@@ -10,6 +10,7 @@ import { AdminDeviceManager } from './AdminDeviceManager';
 import { checkIsAdminDevice, ensureFirestoreAdminClaim, verifyAdminCredentials } from '../../utils/adminAuth';
 import { ShieldCheck, Lock, Key, ArrowLeft, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import NonumLogo from '../NonumLogo';
 
 interface AdminAuditProps {
   onNavigateHome: () => void;
@@ -29,12 +30,12 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
       if (!isMounted) return;
       if (isAdminDevice) {
         setIsAuthenticated(true);
-        sessionStorage.setItem('venom_admin_auth', 'true');
+        sessionStorage.setItem('nonum_admin_auth', 'true');
         ensureFirestoreAdminClaim().catch(console.warn);
       } else {
         setIsAuthenticated(false);
-        sessionStorage.removeItem('venom_admin_auth');
-        localStorage.removeItem('venom_is_admin_device');
+        sessionStorage.removeItem('nonum_admin_auth');
+        localStorage.removeItem('nonum_is_admin_device');
       }
     };
     checkAuth();
@@ -50,7 +51,7 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
-      sessionStorage.setItem('venom_admin_auth', 'true');
+      sessionStorage.setItem('nonum_admin_auth', 'true');
       setUsername('');
       setPassword('');
     } else {
@@ -60,7 +61,7 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('venom_admin_auth');
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   const handleNavigateAdmin = () => {
@@ -86,16 +87,8 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
             onClick={handleNavigateAdmin}
           >
-            <img 
-              src="https://i.ibb.co/RpqhT7QZ/14893-removebg-preview.png" 
-              alt="Venom Logo" 
-              className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer"
-              referrerPolicy="no-referrer"
-            />
+            <NonumLogo className="w-11 h-11" />
             <div>
-              <h1 className="text-lg font-black tracking-widest text-emerald-400 select-none leading-tight flex items-center gap-2">
-                VENOM <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">AUDIT</span>
-              </h1>
               <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none mt-0.5">
                 Admin Identity & Gate Security Terminal
               </p>
