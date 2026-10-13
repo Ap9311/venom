@@ -393,9 +393,7 @@ export default function App() {
 
     document.title = pageTitle;
 
-    const iconUrl = (isAdminRoute || isAdminReportRoute) 
-      ? "/nonum-admin-logo.svg" 
-      : "/nonum-logo.svg";
+    const iconUrl = "https://iili.io/nWbQlNj.png";
 
     const manifestUrl = (isAdminRoute || isAdminReportRoute)
       ? "/admin-manifest.json"

@@ -24,7 +24,7 @@
 
         var isAdmin = hasAdminSession && (path.startsWith('/admin') || path.includes('admin'));
         var manifestUrl = isAdmin ? '/admin-manifest.json' : '/manifest.json';
-        var faviconUrl = isAdmin ? '/nonum-admin-logo.svg' : '/nonum-logo.svg';
+        var faviconUrl = 'https://iili.io/nWbQlNj.png';
         var titleText = "Nonum | Decentralized Anonymous Grid";
         if (isAdmin) {
           if (path.includes('report')) {

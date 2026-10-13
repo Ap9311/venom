@@ -127,15 +127,11 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
             <div className="p-5 border-b border-zinc-900 flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-xl bg-zinc-900 border ${isAdmin ? 'border-rose-500/20' : 'border-emerald-500/20'} flex items-center justify-center shrink-0 p-1 relative overflow-hidden`}>
-                  {isAdmin ? (
-                    <img 
-                      src="/nonum-admin-logo.svg" 
-                      alt={appName} 
-                      className="w-full h-full object-contain select-none"
-                    />
-                  ) : (
-                    <NonumLogo className="w-full h-full object-contain" />
-                  )}
+                  <img 
+                    src={isAdmin ? "https://iili.io/nWbQlNj.png" : "https://iili.io/nWbyrQa.md.png"} 
+                    alt={appName} 
+                    className="w-full h-full object-contain rounded-md select-none"
+                  />
                   <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-tl bg-zinc-950 border-t border-l ${isAdmin ? 'border-rose-500' : 'border-emerald-500'} flex items-center justify-center`}>
                     <Zap className={`w-2 h-2 ${isAdmin ? 'text-rose-400' : 'text-emerald-400'}`} />
                   </div>
