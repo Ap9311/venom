@@ -57,7 +57,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceImei, getLegacyDeviceImei } from '../utils/ip';
-import { generatePostHash } from '../utils/crypto';
+import { generatePostHash, hashSha256 } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
 import { checkIpBlockStatus } from '../utils/blockChecker';
 import { formatTimeAgo, formatShortCount } from '../utils/time';
@@ -617,6 +617,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         return;
       }
 
+      const rawPass = cPassword.trim();
+      const passwordHash = rawPass ? await hashSha256(rawPass) : '';
+
       const payload = {
         id: commId,
         name: cName.trim(),
@@ -624,7 +627,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         religion: '',
         userLimit: cUserLimit ? parseInt(cUserLimit) : null,
         allowUserPost: cAllowUserPost,
-        password: cPassword.trim() || '',
+        passwordHash,
         createdByIp: deviceIp,
         createdByImei: deviceSig.value,
         createdBySerial: await getDeviceSerial(),
@@ -691,13 +694,16 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
     try {
       const commDocRef = doc(db, 'communities', activeCommunity.id);
+      const rawEditPass = editPassword.trim();
+      const passwordHash = rawEditPass ? await hashSha256(rawEditPass) : (activeCommunity.passwordHash || '');
+
       const updatedFields = {
         name: editName.trim(),
         description: editDesc.trim(),
         religion: '',
         userLimit: editUserLimit ? parseInt(editUserLimit) : null,
         allowUserPost: editAllowUserPost,
-        password: editPassword.trim() || '',
+        passwordHash,
         imageUrl: editImageUrl || activeCommunity.imageUrl
       };
 
@@ -741,19 +747,26 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   };
 
   // Password gate trigger
-  const handlePasswordGateSubmit = (e: React.FormEvent) => {
+  const handlePasswordGateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGateError('');
-    if (gatePasswordInput === showPasswordGate.password) {
-      const targetComm = showPasswordGate;
+    if (!showPasswordGate) return;
+
+    const targetComm = showPasswordGate;
+    const inputHash = await hashSha256(gatePasswordInput.trim());
+    const expectedHash = targetComm.passwordHash || (targetComm.password ? await hashSha256(targetComm.password) : '');
+
+    const isMatch = Boolean(expectedHash) && (inputHash === expectedHash || gatePasswordInput.trim() === targetComm.password);
+
+    if (isMatch) {
       if (rememberPassword) {
         localStorage.setItem(`unlocked_comm_${targetComm.id}`, 'true');
-        localStorage.setItem(`unlocked_comm_pwd_${targetComm.id}`, targetComm.password);
+        localStorage.setItem(`unlocked_comm_hash_${targetComm.id}`, expectedHash);
         if (deviceImei && db) {
           setDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`), {
             type: 'unlocked_community',
             communityId: targetComm.id,
-            password: targetComm.password,
+            passwordHash: expectedHash,
             imei: deviceImei,
             unlockedAt: new Date().toISOString()
           }, { merge: true }).catch(console.error);
@@ -761,7 +774,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         setUnlockedCommIds(prev => Array.from(new Set([...prev, targetComm.id])));
       } else {
         localStorage.removeItem(`unlocked_comm_${targetComm.id}`);
-        localStorage.removeItem(`unlocked_comm_pwd_${targetComm.id}`);
+        localStorage.removeItem(`unlocked_comm_hash_${targetComm.id}`);
         if (deviceImei && db) {
           deleteDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`)).catch(console.error);
         }
@@ -1436,11 +1449,11 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   key={comm.id}
                   onClick={() => {
                     const isUnlocked = unlockedCommIds.includes(comm.id) || localStorage.getItem(`unlocked_comm_${comm.id}`) === 'true';
-                    const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${comm.id}`) || '';
                     const isCreator = checkIsCreator(comm);
+                    const isPassProtected = Boolean(comm.passwordHash || comm.password);
 
-                    if (comm.password && !isCreator) {
-                      if (!isUnlocked || (storedPwd && storedPwd !== comm.password)) {
+                    if (isPassProtected && !isCreator) {
+                      if (!isUnlocked) {
                         setShowPasswordGate(comm);
                       } else {
                         handleEnterCommunityDirect(comm);
@@ -1469,7 +1482,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                           {comm.name}
                         </h3>
                         <div className="flex items-center gap-1 shrink-0">
-                          {comm.password && <Lock className="w-3 h-3 text-emerald-400 shrink-0" />}
+                          {Boolean(comm.passwordHash || comm.password) && <Lock className="w-3 h-3 text-emerald-400 shrink-0" />}
                           {isPinned && <Pin className="w-3 h-3 text-emerald-400 fill-emerald-400 shrink-0" />}
                         </div>
                       </div>

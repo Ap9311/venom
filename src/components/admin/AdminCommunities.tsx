@@ -1,4 +1,5 @@
 import { navigateToDomainRoute } from '../../utils/subdomainRouting';
+import { hashSha256 } from '../../utils/crypto';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -350,12 +351,14 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     if (!selectedComm) return;
     try {
       const commRef = doc(db, 'communities', selectedComm.id);
+      const rawEditPass = editPassword.trim();
+      const passwordHash = rawEditPass ? await hashSha256(rawEditPass) : (selectedComm.passwordHash || '');
       
       const updateData: any = {
         name: editName.trim(),
         description: editDesc.trim(),
         imageUrl: editImageUrl.trim(),
-        password: editPassword.trim(),
+        passwordHash,
         religion: editArea.trim(),
         allowUserPost: editAllowUserPost,
         viewsCount: Number(editTotalReviews),
@@ -657,7 +660,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                               {c.name}
                             </h3>
                             <p className="text-[9px] text-zinc-600 truncate mt-0.5 uppercase">
-                              Region: {c.religion} | password: {c.password ? `"${c.password}"` : 'none'}
+                              Region: {c.religion || 'Global'} | Access: {c.passwordHash || c.password ? 'PIN Protected (Encrypted)' : 'Public'}
                             </p>
                             
                             <div className="flex gap-2 items-center mt-2 flex-wrap">
@@ -1031,7 +1034,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                         </div>
                         <div>
                           <span className="text-[8px] text-zinc-600 block uppercase">GATE LOCK</span>
-                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.password ? `"${selectedComm.password}"` : 'NONE'}</span>
+                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.passwordHash || selectedComm.password ? 'LOCKED (SHA-256 ENCRYPTED)' : 'NONE'}</span>
                         </div>
                         <div>
                           <span className="text-[8px] text-zinc-600 block uppercase">PERMISSIONS</span>

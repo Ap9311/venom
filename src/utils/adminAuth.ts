@@ -265,9 +265,6 @@ export async function registerAdminDevice(
     return { success: false, error: 'Username and password are required.' };
   }
 
-  const isMatchingTargetUser = ['theakshatpopat', 'admin', 'obsidian'].includes(cleanUser.toLowerCase());
-  const isMatchingTargetPass = ['Aprt9311', 'aprt9311'].includes(cleanPass) || cleanPass === 'V3n0m!@#2026AdminSecureKey!!';
-
   try {
     const adminDeviceId = await getAdminDeviceId();
     const userImei = await getDeviceImei();
@@ -285,36 +282,29 @@ export async function registerAdminDevice(
       };
     }
 
-    let serverRes: Response | null = null;
-    try {
-      serverRes = await fetch('/api/admin-register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: cleanUser,
-          password: cleanPass,
-          adminDeviceId,
-          userImei,
-          os,
-          ip
-        })
-      });
-    } catch {
-      serverRes = null;
-    }
+    const serverRes = await fetch('/api/admin-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: cleanUser,
+        password: cleanPass,
+        adminDeviceId,
+        userImei,
+        os,
+        ip
+      })
+    });
 
     let regData: any = {};
-    if (serverRes) {
-      try {
-        const rawText = await serverRes.text();
-        regData = rawText ? JSON.parse(rawText) : {};
-      } catch {
-        regData = {};
-      }
+    try {
+      const rawText = await serverRes.text();
+      regData = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      regData = {};
     }
 
-    if (serverRes?.ok && regData.success) {
-      const adminToken = regData.token || 'V3n0m!@#2026AdminSecureKey!!';
+    if (serverRes.ok && regData.success && regData.token) {
+      const adminToken = regData.token;
       sessionStorage.setItem('nonum_admin_token', adminToken);
       sessionStorage.setItem('nonum_admin_auth', 'true');
       localStorage.setItem('nonum_is_admin_device', 'true');
@@ -322,7 +312,7 @@ export async function registerAdminDevice(
       if (db) {
         try {
           const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-          const config = await getAdminConfig();
+          const currentConfig = await getAdminConfig();
 
           const newAdminDevice = {
             type: 'admin_device',
@@ -332,39 +322,10 @@ export async function registerAdminDevice(
             deviceDetails,
             ip,
             registeredAt: new Date().toISOString(),
-            label: `Admin Device #${config.registeredCount + 1}`,
+            label: `Admin Device #${currentConfig.registeredCount + 1}`,
             status: 'active'
           };
 
-          await setDoc(deviceDocRef, newAdminDevice, { merge: true });
-        } catch {}
-      }
-
-      await ensureFirestoreAdminClaim(adminToken);
-      return { success: true, adminDeviceId };
-    }
-
-    // Direct fallback for user-requested credentials (theakshatpopat / Aprt9311)
-    if (isMatchingTargetUser && isMatchingTargetPass) {
-      const adminToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('nonum_admin_token', adminToken);
-      sessionStorage.setItem('nonum_admin_auth', 'true');
-      localStorage.setItem('nonum_is_admin_device', 'true');
-
-      if (db) {
-        try {
-          const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-          const newAdminDevice = {
-            type: 'admin_device',
-            adminDeviceId,
-            userImei,
-            os,
-            deviceDetails,
-            ip,
-            registeredAt: new Date().toISOString(),
-            label: `Admin Device #1`,
-            status: 'active'
-          };
           await setDoc(deviceDocRef, newAdminDevice, { merge: true });
         } catch {}
       }
@@ -375,14 +336,6 @@ export async function registerAdminDevice(
 
     return { success: false, error: regData.error || 'Access Denied: Invalid credentials.' };
   } catch (err: any) {
-    if (isMatchingTargetUser && isMatchingTargetPass) {
-      const adminToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('nonum_admin_token', adminToken);
-      sessionStorage.setItem('nonum_admin_auth', 'true');
-      localStorage.setItem('nonum_is_admin_device', 'true');
-      await ensureFirestoreAdminClaim(adminToken);
-      return { success: true };
-    }
     return { success: false, error: err?.message || 'Security system error during registration.' };
   }
 }
@@ -401,9 +354,6 @@ export async function verifyAdminCredentials(
   if (!u || !p) {
     return { success: false, error: 'Username and password are required.' };
   }
-
-  const isMatchingTargetUser = ['theakshatpopat', 'admin', 'obsidian'].includes(u.toLowerCase());
-  const isMatchingTargetPass = ['Aprt9311', 'aprt9311'].includes(p) || p === 'V3n0m!@#2026AdminSecureKey!!';
 
   try {
     const res = await fetch('/api/admin-auth', {
@@ -429,25 +379,8 @@ export async function verifyAdminCredentials(
       return { success: true };
     }
 
-    if (isMatchingTargetUser && isMatchingTargetPass) {
-      const fallbackToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('nonum_admin_token', fallbackToken);
-      sessionStorage.setItem('nonum_admin_auth', 'true');
-      localStorage.setItem('nonum_is_admin_device', 'true');
-      await ensureFirestoreAdminClaim(fallbackToken);
-      return { success: true };
-    }
-
     return { success: false, error: data.error || 'Invalid administrator credentials.' };
   } catch {
-    if (isMatchingTargetUser && isMatchingTargetPass) {
-      const fallbackToken = 'V3n0m!@#2026AdminSecureKey!!';
-      sessionStorage.setItem('nonum_admin_token', fallbackToken);
-      sessionStorage.setItem('nonum_admin_auth', 'true');
-      localStorage.setItem('nonum_is_admin_device', 'true');
-      await ensureFirestoreAdminClaim(fallbackToken);
-      return { success: true };
-    }
     return { success: false, error: 'Authentication server unreachable.' };
   }
 }

@@ -1,9 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /admin/
-Disallow: /login
-Disallow: /login/
-Disallow: /admin-manifest.json
 
 Sitemap: https://nonum.online/sitemap.xml
