@@ -3,7 +3,7 @@ import { setCorsHeaders, parseJsonBody } from './_helpers.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
-    setCorsHeaders(res, req);
+    setCorsHeaders(res);
 
     if (req.method === 'OPTIONS') {
       res.statusCode = 200;
