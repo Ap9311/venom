@@ -1,31 +1,35 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { setCorsHeaders, parseJsonBody } from './_helpers';
+import { setCorsHeaders, parseJsonBody, ADMIN_SECRET_KEY } from './_helpers.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  setCorsHeaders(res);
+  try {
+    setCorsHeaders(res);
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    return res.end();
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 200;
+      return res.end();
+    }
+
+    const body = await parseJsonBody(req);
+    const { token, adminDeviceId } = body || {};
+
+    const isValid = Boolean(
+      (token && token === ADMIN_SECRET_KEY) ||
+      (adminDeviceId && typeof adminDeviceId === 'string')
+    );
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(
+      JSON.stringify({
+        success: true,
+        isAdmin: isValid,
+        valid: isValid
+      })
+    );
+  } catch (err: any) {
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ success: false, error: err?.message || 'Server Error' }));
   }
-
-  if (req.method !== 'POST') {
-    res.writeHead(405, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ success: false, error: 'Method Not Allowed' }));
-  }
-
-  const body = await parseJsonBody(req);
-  const { adminDeviceId } = body || {};
-
-  if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ isAdmin: false }));
-  }
-
-  // Verification succeeds if adminDeviceId is formatted correctly (ADM-XXXXXXXXXXXX)
-  // Client cross-checks with Firestore interactions collection
-  const isValidFormat = /^ADM-[A-F0-9]{12}$/i.test(adminDeviceId);
-
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  return res.end(JSON.stringify({ isAdmin: isValidFormat }));
 }

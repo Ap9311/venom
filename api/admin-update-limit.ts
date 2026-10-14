@@ -1,27 +1,30 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { setCorsHeaders, parseJsonBody } from './_helpers';
+import { setCorsHeaders, parseJsonBody } from './_helpers.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  setCorsHeaders(res);
+  try {
+    setCorsHeaders(res);
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    return res.end();
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 200;
+      return res.end();
+    }
+
+    const body = await parseJsonBody(req);
+    const { maxAdmins } = body || {};
+
+    if (typeof maxAdmins === 'number' && maxAdmins > 0) {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ success: true, maxAdmins }));
+    }
+
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ success: false }));
+  } catch (err: any) {
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ success: false, error: err?.message || 'Server Error' }));
   }
-
-  if (req.method !== 'POST') {
-    res.writeHead(405, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ success: false, error: 'Method Not Allowed' }));
-  }
-
-  const body = await parseJsonBody(req);
-  const { maxAdmins } = body || {};
-
-  if (typeof maxAdmins === 'number' && maxAdmins > 0) {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ success: true, maxAdmins }));
-  }
-
-  res.writeHead(400, { 'Content-Type': 'application/json' });
-  return res.end(JSON.stringify({ success: false }));
 }

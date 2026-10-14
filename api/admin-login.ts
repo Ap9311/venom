@@ -1,2 +1,2 @@
-import handler from './admin-auth';
+import handler from './admin-auth.js';
 export default handler;
