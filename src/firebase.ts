@@ -3,22 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { initializeApp } from 'firebase/app';
-import { initializeFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeFirestore, getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getSecureConfig } from './utils/vault';
 
 const firebaseConfig = getSecureConfig();
 
-let app;
+let app: any;
 let db: any;
 let auth: any;
 
 try {
-  app = initializeApp(firebaseConfig);
-  db = initializeFirestore(app, {
-    ignoreUndefinedProperties: true
-  }, firebaseConfig.firestoreDatabaseId);
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  try {
+    db = initializeFirestore(app, {
+      ignoreUndefinedProperties: true
+    }, firebaseConfig.firestoreDatabaseId || '(default)');
+  } catch (e) {
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+  }
   setLogLevel('error');
   auth = getAuth(app);
   

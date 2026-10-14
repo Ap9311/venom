@@ -144,6 +144,7 @@ export default function NonumCard({
     let active = true;
     const syncInteractions = async () => {
       try {
+        if (!db || !post?.id) return;
         const deviceImei = await getDeviceImei();
         if (!deviceImei) return;
         const legacyImei = getLegacyDeviceImei();
@@ -299,6 +300,7 @@ export default function NonumCard({
   const totalReactions = (Object.values(post.reactions || {}) as number[]).reduce((a, b) => a + b, 0);
 
   const handleLikeToggle = async () => {
+    if (!db || !post?.id) return;
     if (isBlocked) {
       if (onBlockedActionTriggered) onBlockedActionTriggered();
       return;
@@ -369,6 +371,7 @@ export default function NonumCard({
   };
 
   const handleVote = async (direction: 'up' | 'down') => {
+    if (!db || !post?.id) return;
     if (isBlocked) {
       if (onBlockedActionTriggered) onBlockedActionTriggered();
       return;
@@ -474,6 +477,7 @@ export default function NonumCard({
   };
 
   const handlePollVote = async (optionIndex: number) => {
+    if (!db || !post?.id) return;
     if (isBlocked) {
       if (onBlockedActionTriggered) onBlockedActionTriggered();
       return;
@@ -752,6 +756,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
 
   const handleReact = async (reactionKey: string) => {
     setShowMobileReactions(false);
+    if (!db || !post?.id) return;
     if (isBlocked) {
       if (onBlockedActionTriggered) onBlockedActionTriggered();
       return;

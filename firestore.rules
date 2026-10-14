@@ -10,10 +10,43 @@ service cloud.firestore {
 
     // Function to check if the current user is an admin
     function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == true;
     }
 
-    // Posts and Threads
+    // Administrator Device Registry & Configuration Collections
+    match /admin_devices/{deviceId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_config/{configId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Interactions Collection (protects admin configuration & admin device documents)
+    match /interactions/{interactionId} {
+      allow read, write: if isAdmin() || (!interactionId.matches('^admin_.*'));
+    }
+
+    // User Reports (public creation, admin-only read and management)
+    match /reports/{reportId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Blocking System (public read to enforce client checks, admin-only management)
+    match /blockedIps/{ip} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /blockedImeis/{imei} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Public Posts and Threads
     match /posts/{postId} {
       allow read, create, update, delete: if true;
 
@@ -26,40 +59,7 @@ service cloud.firestore {
       }
     }
 
-    // Blocking System
-    match /blockedIps/{ip} {
-      allow read, write: if true;
-    }
-
-    match /blockedImeis/{imei} {
-      allow read, write: if true;
-    }
-
-    // Administrator Device Registry & Configuration
-    match /admin_devices/{deviceId} {
-      allow read, write: if true;
-    }
-
-    match /admin_config/{configId} {
-      allow read, write: if true;
-    }
-
-    // Connection testing
-    match /test/connection {
-      allow read: if true;
-    }
-
-    // User reports
-    match /reports/{reportId} {
-      allow read, write: if true;
-    }
-
-    // Interactions
-    match /interactions/{interactionId} {
-      allow read, write: if true;
-    }
-
-    // Communities
+    // Public Communities
     match /communities/{communityId} {
       allow read, create, update, delete: if true;
 
@@ -74,6 +74,11 @@ service cloud.firestore {
       match /visits/{ip} {
         allow read, write: if true;
       }
+    }
+
+    // System Connection testing
+    match /test/connection {
+      allow read: if true;
     }
   }
 }
