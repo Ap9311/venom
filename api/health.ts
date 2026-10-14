@@ -1,6 +1,14 @@
 import { IncomingMessage, ServerResponse } from 'http';
+import { setCorsHeaders } from './_helpers.js';
 
 export default function handler(req: IncomingMessage, res: ServerResponse) {
-  res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+  setCorsHeaders(res, req);
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 200;
+    return res.end();
+  }
+
+  res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
 }

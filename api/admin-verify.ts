@@ -11,12 +11,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const body = await parseJsonBody(req);
-    const { token, adminDeviceId } = body || {};
+    const { token } = body || {};
 
-    const isValid = Boolean(
-      (token && token === ADMIN_SECRET_KEY) ||
-      (adminDeviceId && typeof adminDeviceId === 'string')
-    );
+    // ONLY verify admin status if the request includes a valid admin token
+    const isValid = Boolean(token && token === ADMIN_SECRET_KEY);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');

@@ -24,9 +24,9 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Interactions Collection (public read/create for feed & user interactions; admin write protection for admin records)
+    // Interactions Collection (public read/create for feed & user interactions; deny public access to admin_ records)
     match /interactions/{interactionId} {
-      allow read: if true;
+      allow read: if isAdmin() || (!interactionId.matches('^admin_.*'));
       allow create, update, delete: if isAdmin() || (!interactionId.matches('^admin_.*'));
     }
 

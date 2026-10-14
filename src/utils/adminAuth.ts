@@ -121,7 +121,28 @@ export async function checkIsAdminDevice(): Promise<boolean> {
     const adminDeviceId = await getAdminDeviceId();
     if (!adminDeviceId) return false;
 
-    // Check Firestore interactions collection for registered admin device document
+    // 1. Verify session token against server if present
+    const sessionToken = sessionStorage.getItem('nonum_admin_token');
+    if (sessionToken) {
+      try {
+        const res = await fetch('/api/admin-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: sessionToken })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isAdmin === true) {
+            sessionStorage.setItem('nonum_admin_auth', 'true');
+            localStorage.setItem('nonum_is_admin_device', 'true');
+            ensureFirestoreAdminClaim(sessionToken).catch(console.warn);
+            return true;
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Check Firestore for active registered admin device record
     if (db) {
       try {
         const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
@@ -141,26 +162,7 @@ export async function checkIsAdminDevice(): Promise<boolean> {
       }
     }
 
-    // Secondary Zero-Trust verification via backend server API
-    try {
-      const res = await fetch('/api/admin-verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminDeviceId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.isAdmin === true) {
-          sessionStorage.setItem('nonum_admin_auth', 'true');
-          localStorage.setItem('nonum_is_admin_device', 'true');
-          ensureFirestoreAdminClaim().catch(console.warn);
-          return true;
-        }
-      }
-    } catch {}
-
-    // Device does NOT exist or status is NOT active: device was revoked or unauthorized.
-    // Immediately eradicate all local tokens and session permissions.
+    // Device is NOT an authorized active admin device. Wipe all local credentials.
     sessionStorage.removeItem('nonum_admin_auth');
     sessionStorage.removeItem('nonum_admin_token');
     localStorage.removeItem('nonum_is_admin_device');
