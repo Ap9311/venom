@@ -398,7 +398,7 @@ export default function App() {
     const iconUrl = "https://iili.io/nWbQlNj.png";
 
     const manifestUrl = (isAdminRoute || isAdminReportRoute)
-      ? "/admin-manifest.json"
+      ? "/api/admin-manifest"
       : "/manifest.json";
 
     if (favicon32) favicon32.href = iconUrl;

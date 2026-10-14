@@ -3,7 +3,7 @@ import { setCorsHeaders, parseJsonBody, verifyAdminCredentials, ADMIN_SECRET_KEY
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
-    setCorsHeaders(res);
+    setCorsHeaders(res, req);
 
     if (req.method === 'OPTIONS') {
       res.statusCode = 200;

@@ -1,7 +1,22 @@
 import { IncomingMessage, ServerResponse } from 'http';
 
-export function setCorsHeaders(res: ServerResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+export function setCorsHeaders(res: ServerResponse, req?: IncomingMessage) {
+  const origin = req?.headers?.origin;
+  let allowedOrigin = 'https://nonum.online';
+
+  if (typeof origin === 'string' && origin) {
+    const cleanOrigin = origin.toLowerCase().trim();
+    if (
+      cleanOrigin === 'https://nonum.online' ||
+      cleanOrigin.endsWith('.nonum.online') ||
+      cleanOrigin.includes('vercel.app') ||
+      cleanOrigin.includes('localhost')
+    ) {
+      allowedOrigin = origin;
+    }
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 }

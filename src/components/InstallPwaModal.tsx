@@ -95,7 +95,7 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
     ? 'Access threat response, user reporting logs, device quarantine controls, and real-time community usage statistics.' 
     : 'Read anonymous feeds, react, comment, cast polls, and stay connected with full desktop and mobile standby notifications.';
   
-  const manifestUrl = isAdmin ? '/admin-manifest.json' : '/manifest.json';
+  const manifestUrl = isAdmin ? '/api/admin-manifest' : '/manifest.json';
 
   return (
     <AnimatePresence>
