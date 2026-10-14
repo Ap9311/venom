@@ -1,3 +1,4 @@
+import { navigateToDomainRoute } from '../../utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -65,13 +66,11 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
   };
 
   const handleNavigateAdmin = () => {
-    window.history.pushState({}, '', '/admin');
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    navigateToDomainRoute('/admin');
   };
 
   const handleNavigateCommunities = () => {
-    window.history.pushState({}, '', '/admin/communities');
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    navigateToDomainRoute('/admin/communities');
   };
 
   return (

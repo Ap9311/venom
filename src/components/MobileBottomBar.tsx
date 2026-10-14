@@ -1,3 +1,4 @@
+import { navigateToDomainRoute } from '../utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -46,9 +47,7 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
   }, [propPath]);
 
   const handleNavigate = (path: string) => {
-    if (window.location.pathname === path) return;
-    window.history.pushState({}, '', path);
-    window.dispatchEvent(new Event('popstate'));
+    navigateToDomainRoute(path);
   };
 
   const handleCreateClick = () => {

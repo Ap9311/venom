@@ -1,3 +1,4 @@
+import { navigateToDomainRoute } from '../../utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -154,10 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             </button>
             {isAuthenticated && (
               <button
-                onClick={() => {
-                  window.history.pushState({}, '', '/admin/audit');
-                  window.dispatchEvent(new PopStateEvent('popstate'));
-                }}
+                onClick={() => navigateToDomainRoute('/admin/audit')}
                 className="px-3 py-1 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
               >
                 Admin Audit
@@ -165,10 +163,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             )}
             {isAuthenticated && (
               <button
-                onClick={() => {
-                  window.history.pushState({}, '', '/admin/communities');
-                  window.dispatchEvent(new PopStateEvent('popstate'));
-                }}
+                onClick={() => navigateToDomainRoute('/admin/communities')}
                 className="px-3 py-1 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
               >
                 Admin Communities
@@ -282,10 +277,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => {
-                    window.history.pushState({}, '', '/admin/report');
-                    window.dispatchEvent(new PopStateEvent('popstate'));
-                  }}
+                  onClick={() => navigateToDomainRoute('/admin/report')}
                   className="w-full px-4 py-2 bg-rose-950/20 border border-rose-500/30 hover:border-rose-500 text-rose-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Launch Reports Terminal</span>
@@ -311,10 +303,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => {
-                    window.history.pushState({}, '', '/admin/report-communities');
-                    window.dispatchEvent(new PopStateEvent('popstate'));
-                  }}
+                  onClick={() => navigateToDomainRoute('/admin/community-reports')}
                   className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Community Reports Terminal</span>
@@ -340,10 +329,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => {
-                    window.history.pushState({}, '', '/admin/communities');
-                    window.dispatchEvent(new PopStateEvent('popstate'));
-                  }}
+                  onClick={() => navigateToDomainRoute('/admin/communities')}
                   className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Admin Communities</span>
@@ -369,10 +355,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => {
-                    window.history.pushState({}, '', '/admin/audit');
-                    window.dispatchEvent(new PopStateEvent('popstate'));
-                  }}
+                  onClick={() => navigateToDomainRoute('/admin/audit')}
                   className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Launch Audit Terminal</span>

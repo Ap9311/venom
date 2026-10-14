@@ -1,3 +1,4 @@
+import { navigateToDomainRoute } from '../../utils/subdomainRouting';
 import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, orderBy, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -863,10 +864,7 @@ export default function AdminReports() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div 
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
-            onClick={() => {
-              window.history.pushState({}, '', '/');
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }}
+            onClick={() => navigateToDomainRoute('/')}
           >
             <NonumLogo className="w-11 h-11" />
             <div>
@@ -879,10 +877,7 @@ export default function AdminReports() {
           <div className="flex items-center gap-2 flex-wrap justify-center">
             {/* Redirect back to homepage */}
             <button
-              onClick={() => {
-                window.history.pushState({}, '', '/');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
+              onClick={() => navigateToDomainRoute('/')}
               className="px-3 py-1 bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 text-zinc-500 hover:text-zinc-300 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
             >
               Feed Home
@@ -890,10 +885,7 @@ export default function AdminReports() {
             
             {/* Redirect back to admin console inside the app */}
             <button
-              onClick={() => {
-                window.history.pushState({}, '', '/admin');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
+              onClick={() => navigateToDomainRoute('/admin')}
               className="px-3 py-1 bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold rounded transition-colors uppercase tracking-wider flex items-center gap-1 cursor-pointer"
             >
               <span>Admin Console</span>

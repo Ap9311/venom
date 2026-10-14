@@ -275,6 +275,16 @@ export async function registerAdminDevice(
     const deviceDetails = getDeviceDetails();
     const ip = await getClientIp();
 
+    const config = await getAdminConfig();
+    const isAlreadyRegistered = config.registeredDevices.some(d => d.adminDeviceId === adminDeviceId);
+
+    if (!isAlreadyRegistered && config.isFull) {
+      return {
+        success: false,
+        error: 'Access Denied: Maximum authorized administrative device limit reached. Revoke a device in Admin Audit before registering new hardware.'
+      };
+    }
+
     let serverRes: Response | null = null;
     try {
       serverRes = await fetch('/api/admin-register', {

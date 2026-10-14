@@ -1,3 +1,4 @@
+import { resolveEffectivePath, navigateToDomainRoute } from './utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -66,8 +67,12 @@ export default function App() {
   const [showNewPostModal, setShowNewPostModal] = useState(false);
   const [opId, setOpId] = useState('');
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
-  const [currentPath, setCurrentPath] = useState(
-    window.location.pathname + window.location.search
+  const [currentPath, setCurrentPath] = useState(() =>
+    resolveEffectivePath(
+      window.location.hostname,
+      window.location.pathname,
+      window.location.search
+    )
   );
   const [activeInfoModal, setActiveInfoModal] = useState<'guidelines' | 'policies' | 'tips' | null>(null);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -201,21 +206,15 @@ export default function App() {
 
   // Direct navigation functions that synchronously sync browser history and React state
   const handleNavigateAdmin = () => {
-    window.history.pushState({}, '', '/admin');
-    setCurrentPath(
-      window.location.pathname +
-      window.location.search
-    );
+    navigateToDomainRoute('/admin', setCurrentPath);
   };
 
   const handleBackToHome = () => {
-    window.history.pushState({}, '', '/');
-    setCurrentPath('/');
+    navigateToDomainRoute('/', setCurrentPath);
   };
 
   const handleNavigate = (path: string) => {
-    window.history.pushState({}, '', path);
-    setCurrentPath(path);
+    navigateToDomainRoute(path, setCurrentPath);
   };
 
   // Synchronize routing and auto-decryption parameters on direct URL load
@@ -260,8 +259,11 @@ export default function App() {
 
     const handleLocationChange = () => {
       setCurrentPath(
-        window.location.pathname +
-        window.location.search
+        resolveEffectivePath(
+          window.location.hostname,
+          window.location.pathname,
+          window.location.search
+        )
       );
     };
     window.addEventListener('popstate', handleLocationChange);

@@ -1,3 +1,4 @@
+import { navigateToDomainRoute } from '../../utils/subdomainRouting';
 import React, { useState, useEffect } from 'react';
 import NonumLogo from '../NonumLogo';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
@@ -255,8 +256,7 @@ export default function AdminCommunityReports() {
 
   // Helper to trigger navigation
   const navigateTo = (path: string) => {
-    window.history.pushState({}, '', path);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    navigateToDomainRoute(path);
   };
 
   return (

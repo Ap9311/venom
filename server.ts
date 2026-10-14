@@ -235,10 +235,10 @@ async function startServer() {
 
     if (verifyAdminCredentials(username, password)) {
       clearFailedAttempts(clientIp);
-      registeredAdminDevices.add(adminDeviceId);
-      if (registeredAdminDevices.size > serverMaxAdmins) {
-        serverMaxAdmins = registeredAdminDevices.size;
+      if (!registeredAdminDevices.has(adminDeviceId) && registeredAdminDevices.size >= serverMaxAdmins) {
+        return res.status(403).json({ success: false, error: 'Maximum authorized administrative device limit reached.' });
       }
+      registeredAdminDevices.add(adminDeviceId);
       return res.json({ 
         success: true, 
         token: ADMIN_SECRET_KEY, 
