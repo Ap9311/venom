@@ -405,6 +405,32 @@ export default function App() {
     if (favicon16) favicon16.href = iconUrl;
     if (appleIconLink) appleIconLink.href = iconUrl;
     if (manifestLink) manifestLink.href = manifestUrl;
+
+    // Update SEO Canonical URL & Robots Meta Tags
+    let canonicalLink = document.getElementById('canonical-link') as HTMLLinkElement | null;
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.id = 'canonical-link';
+      canonicalLink.rel = 'canonical';
+      document.head.appendChild(canonicalLink);
+    }
+
+    let robotsMeta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (!robotsMeta) {
+      robotsMeta = document.createElement('meta');
+      robotsMeta.name = 'robots';
+      document.head.appendChild(robotsMeta);
+    }
+
+    if (isAdminRoute || currentPath.startsWith('/login')) {
+      robotsMeta.content = 'noindex, nofollow';
+      canonicalLink.href = 'https://nonum.online/';
+    } else {
+      robotsMeta.content = 'index, follow';
+      const cleanPath = currentPath.split('?')[0];
+      const normalizedPath = cleanPath === '' ? '/' : cleanPath;
+      canonicalLink.href = `https://nonum.online${normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath}`;
+    }
   }, [currentPath]);
 
   const [blockedIpAddresses, setBlockedIpAddresses] = useState<string[]>([]);

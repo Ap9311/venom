@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { navigateToDomainRoute } from '../../utils/subdomainRouting';
 import { 
   getAdminConfig, 
   updateAdminLimit, 
@@ -103,7 +104,7 @@ export const AdminDeviceManager: React.FC = () => {
         setActionSuccess(`Device ${deviceToRevoke.adminDeviceId} revoked. Slot has been freed.`);
         setDeviceToRevoke(null);
         if (isSelf) {
-          window.location.href = '/';
+          navigateToDomainRoute('/');
           return;
         }
         await fetchConfig();
