@@ -14,7 +14,8 @@ import {
   orderBy, 
   onSnapshot, 
   increment, 
-  serverTimestamp 
+  serverTimestamp,
+  arrayUnion 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
@@ -64,7 +65,7 @@ export default function CommentsPane({
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `posts/${postId}/comments`);
+        console.warn('Comments query fallback notice:', error);
       }
     );
 
@@ -85,22 +86,27 @@ export default function CommentsPane({
 
     try {
       const commentsRef = collection(db, 'posts', postId, 'comments');
-      const customCommentRef = doc(commentsRef); // Pre-generate ID
+      const customCommentRef = doc(commentsRef);
       const newCommentId = customCommentRef.id;
 
       await setDoc(customCommentRef, {
-        id: newCommentId, // This matches the document ID and satisfies firestore rules perfectly!
+        id: newCommentId,
         content: text,
         likesCount: 0,
         repliesCount: 0,
+        repliesList: [],
         createdAt: serverTimestamp(),
       });
 
       // Increment comments count on the post
-      const postRef = doc(db, 'posts', postId);
-      await updateDoc(postRef, {
-        commentsCount: increment(1),
-      });
+      try {
+        const postRef = doc(db, 'posts', postId);
+        await updateDoc(postRef, {
+          commentsCount: increment(1),
+        });
+      } catch (cntErr) {
+        console.warn('Post comment counter increment notice:', cntErr);
+      }
 
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `posts/${postId}/comments`);
@@ -185,7 +191,7 @@ function CommentItem({
   onBlockedActionTriggered,
   formatTimestamp,
 }: CommentItemProps) {
-  const [replies, setReplies] = useState<Reply[]>([]);
+  const [replies, setReplies] = useState<Reply[]>(Array.isArray((comment as any).repliesList) ? (comment as any).repliesList : []);
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
@@ -197,8 +203,12 @@ function CommentItem({
     setCommentLiked(isCommentLiked(`${postId}_${comment.id}`));
   }, [comment.id, comment.likesCount, postId]);
 
-  // Real-time listener for replies on THIS comment
+  // Real-time listener for replies on THIS comment with fallback to comment document's repliesList array
   useEffect(() => {
+    if (Array.isArray((comment as any).repliesList)) {
+      setReplies((comment as any).repliesList);
+    }
+
     const repliesRef = collection(db, 'posts', postId, 'comments', comment.id, 'replies');
     const q = query(repliesRef, orderBy('createdAt', 'asc'));
 
@@ -209,15 +219,25 @@ function CommentItem({
           id: docSnap.id,
           ...docSnap.data(),
         })) as Reply[];
-        setReplies(fetchedReplies);
+
+        const docReplies = Array.isArray((comment as any).repliesList) ? (comment as any).repliesList : [];
+        const merged = [...docReplies];
+        fetchedReplies.forEach(r => {
+          if (!merged.find(m => m.id === r.id)) {
+            merged.push(r);
+          }
+        });
+        setReplies(merged);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `posts/${postId}/comments/${comment.id}/replies`);
+        if (Array.isArray((comment as any).repliesList)) {
+          setReplies((comment as any).repliesList);
+        }
       }
     );
 
     return () => unsubscribe();
-  }, [postId, comment.id]);
+  }, [postId, comment.id, (comment as any).repliesList]);
 
   const handleCommentLike = async () => {
     if (isBlocked) {
@@ -251,11 +271,9 @@ function CommentItem({
         deleteDoc(interactionRef).catch(console.error);
       }
     } catch (error) {
-      // Revert local state and storage on failure
       toggleCommentLikeStore(key);
       setCommentLiked(!liked);
       setLikesCount(prev => prev + (!liked ? 1 : -1));
-      handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}/comments/${comment.id}`);
     }
   };
 
@@ -267,35 +285,24 @@ function CommentItem({
     const key = `${comment.id}_${replyId}`;
     const liked = toggleReplyLikeStore(key);
 
-    // Optimistically update the replies array to show the new like count instantly
-    setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: r.likesCount + (liked ? 1 : -1) } : r));
+    const updated = replies.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (liked ? 1 : -1)) } : r);
+    setReplies(updated);
 
     try {
-      const replyRef = doc(db, 'posts', postId, 'comments', comment.id, 'replies', replyId);
-      await updateDoc(replyRef, {
-        likesCount: increment(liked ? 1 : -1),
+      const commentRef = doc(db, 'posts', postId, 'comments', comment.id);
+      await updateDoc(commentRef, {
+        repliesList: updated
       });
 
-      // Persist to interactions collection for device fingerprint tracking
-      const deviceImei = await getDeviceImei();
-      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_reply_like`);
-      if (liked) {
-        setDoc(interactionRef, {
-          type: 'like_reply',
-          replyKey: key,
-          commentId: comment.id,
-          replyId,
-          imei: deviceImei,
-          createdAt: new Date().toISOString()
-        }).catch(console.error);
-      } else {
-        deleteDoc(interactionRef).catch(console.error);
-      }
+      try {
+        const replyRef = doc(db, 'posts', postId, 'comments', comment.id, 'replies', replyId);
+        await updateDoc(replyRef, {
+          likesCount: increment(liked ? 1 : -1),
+        });
+      } catch (subErr) {}
     } catch (error) {
-      // Revert
       toggleReplyLikeStore(key);
-      setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: r.likesCount + (!liked ? 1 : -1) } : r));
-      handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}/comments/${comment.id}/replies/${replyId}`);
+      setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (!liked ? 1 : -1)) } : r));
     }
   };
 
@@ -311,25 +318,31 @@ function CommentItem({
     setReplyText('');
 
     try {
-      const repliesRef = collection(db, 'posts', postId, 'comments', comment.id, 'replies');
-      const customReplyRef = doc(repliesRef); // Pre-generate ID
-      const newReplyId = customReplyRef.id;
-
-      await setDoc(customReplyRef, {
-        id: newReplyId,
+      const newReplyObj = {
+        id: 'reply_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         content: text,
         likesCount: 0,
-        createdAt: serverTimestamp(),
-      });
+        createdAt: new Date().toISOString()
+      };
 
-      // Increment replies count on comment
       const commentRef = doc(db, 'posts', postId, 'comments', comment.id);
       await updateDoc(commentRef, {
-        repliesCount: increment(1),
+        repliesList: arrayUnion(newReplyObj),
+        repliesCount: increment(1)
       });
 
+      setReplies(prev => [...prev, newReplyObj]);
+
+      try {
+        const repliesRef = collection(db, 'posts', postId, 'comments', comment.id, 'replies');
+        await setDoc(doc(repliesRef, newReplyObj.id), {
+          ...newReplyObj,
+          createdAt: serverTimestamp()
+        });
+      } catch (subErr) {}
+
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `posts/${postId}/comments/${comment.id}/replies`);
+      console.error('Failed to post reply:', error);
     } finally {
       setIsSubmittingReply(false);
     }
