@@ -304,7 +304,7 @@ export default function AdminCommunityReports() {
       </header>
 
       {/* BODY GATE / VIEWPORT */}
-      <div className="flex-1 max-w-5xl w-full mx-auto p-4 space-y-6">
+      <div className="flex-1 max-w-5xl w-full mx-auto p-4 space-y-6 pb-24">
         {!isAuthenticated ? (
           /* LOGIN PANEL GATEWAY */
           <div className="flex items-center justify-center py-20">

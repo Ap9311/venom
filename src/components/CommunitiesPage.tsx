@@ -229,7 +229,11 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Deep linking sharing state
   const [initialDeepLinkProcessed, setInitialDeepLinkProcessed] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const DEFAULT_COMMUNITY_LOGO = 'https://iili.io/nWbQlNj.png';
+
+  const createFileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatListRef = useRef<HTMLDivElement>(null);
 
@@ -619,13 +623,14 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       const rawPass = cPassword.trim();
       const passwordHash = rawPass ? await hashSha256(rawPass) : '';
+      const parsedUserLimit = cUserLimit && !isNaN(parseInt(cUserLimit)) ? parseInt(cUserLimit) : null;
 
       const payload = {
         id: commId,
         name: cName.trim(),
         description: cDesc.trim(),
         religion: '',
-        userLimit: cUserLimit ? parseInt(cUserLimit) : null,
+        userLimit: parsedUserLimit,
         allowUserPost: cAllowUserPost,
         passwordHash,
         createdByIp: deviceIp,
@@ -636,7 +641,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         reportsCount: 0,
         isBlocked: false,
         viewsCount: 0,
-        imageUrl: cImageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&h=150&q=80'
+        imageUrl: cImageUrl || DEFAULT_COMMUNITY_LOGO
       };
 
       await setDoc(customCommRef, payload);
@@ -650,7 +655,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       setPinnedIds(updatedPins);
       localStorage.setItem('nonum_pinned_communities', JSON.stringify(updatedPins));
 
-      // Reset form
+      // Reset form & CLOSE MODAL IMMEDIATELY
       setCName('');
       setCDesc('');
       setCReligion('');
@@ -661,17 +666,16 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       setCImagePreview('');
       setShowCreateModal(false);
 
-      // Automatically join the newly created community
-      handleEnterCommunityDirect(payload);
+      // Automatically join the newly created community in background
+      try {
+        await handleEnterCommunityDirect(payload);
+      } catch (visitErr) {
+        console.warn('Community visit recording notice:', visitErr);
+      }
     } catch (err: any) {
       console.error('Community creation error details:', err);
       const detailedMessage = err?.message || 'Failed to create community. Try again.';
       setCError(`Failed to create community: ${detailedMessage}`);
-      try {
-        handleFirestoreError(err, OperationType.WRITE, 'communities');
-      } catch (fErr) {
-        console.error('Firestore log handler error:', fErr);
-      }
     } finally {
       setCSubmitting(false);
     }
@@ -684,7 +688,13 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       setEditError('SECURITY ALERT: Authorization mismatch.');
       return;
     }
-    if (!editName.trim() || !editDesc.trim()) {
+
+    const safeName = (editName || '').trim();
+    const safeDesc = (editDesc || '').trim();
+    const safePass = (editPassword || '').trim();
+    const safeImageUrl = (editImageUrl || '').trim();
+
+    if (!safeName || !safeDesc) {
       setEditError('Highlighted fields are mandatory.');
       return;
     }
@@ -694,17 +704,17 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
     try {
       const commDocRef = doc(db, 'communities', activeCommunity.id);
-      const rawEditPass = editPassword.trim();
-      const passwordHash = rawEditPass ? await hashSha256(rawEditPass) : (activeCommunity.passwordHash || '');
+      const passwordHash = safePass ? await hashSha256(safePass) : (activeCommunity.passwordHash || '');
+      const parsedUserLimit = editUserLimit && !isNaN(parseInt(editUserLimit)) ? parseInt(editUserLimit) : null;
 
-      const updatedFields = {
-        name: editName.trim(),
-        description: editDesc.trim(),
+      const updatedFields: any = {
+        name: safeName,
+        description: safeDesc,
         religion: '',
-        userLimit: editUserLimit ? parseInt(editUserLimit) : null,
+        userLimit: parsedUserLimit,
         allowUserPost: editAllowUserPost,
         passwordHash,
-        imageUrl: editImageUrl || activeCommunity.imageUrl
+        imageUrl: safeImageUrl || activeCommunity.imageUrl || DEFAULT_COMMUNITY_LOGO
       };
 
       await updateDoc(commDocRef, updatedFields);
@@ -717,8 +727,8 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       setShowSettingsModal(false);
     } catch (err: any) {
-      setEditError('Update rejected.');
-      handleFirestoreError(err, OperationType.UPDATE, `communities/${activeCommunity.id}`);
+      console.error('Update community failed:', err);
+      setEditError('Update failed: ' + (err?.message || 'Please check field inputs.'));
     } finally {
       setEditSubmitting(false);
     }
@@ -1012,10 +1022,10 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   };
 
   // Trigger report community modal
-  const handleReportCommunity = (commId?: string, commName?: string) => {
-    const targetId = commId || activeCommunity?.id;
-    const targetName = commName || activeCommunity?.name;
-    if (!targetId || !targetName) return;
+  const handleReportCommunity = (commId?: any, commName?: any) => {
+    const targetId = (typeof commId === 'string' && commId) ? commId : activeCommunity?.id;
+    const targetName = (typeof commName === 'string' && commName) ? commName : activeCommunity?.name;
+    if (!targetId || typeof targetId !== 'string' || !targetName || typeof targetName !== 'string') return;
 
     setReportTargetId(targetId);
     setReportTargetType('community');
@@ -1353,14 +1363,14 @@ Post Nonum Now: https://mynonum.vercel.app`;
 
   const handleOpenSettings = () => {
     if (!activeCommunity) return;
-    setEditName(activeCommunity.name);
-    setEditDesc(activeCommunity.description);
+    setEditName(activeCommunity.name || '');
+    setEditDesc(activeCommunity.description || '');
     setEditReligion('');
     setEditUserLimit(activeCommunity.userLimit ? activeCommunity.userLimit.toString() : '');
-    setEditAllowUserPost(activeCommunity.allowUserPost);
-    setEditPassword(activeCommunity.password);
-    setEditImageUrl(activeCommunity.imageUrl);
-    setEditImagePreview(activeCommunity.imageUrl);
+    setEditAllowUserPost(activeCommunity.allowUserPost !== false);
+    setEditPassword(activeCommunity.password || '');
+    setEditImageUrl(activeCommunity.imageUrl || '');
+    setEditImagePreview(activeCommunity.imageUrl || '');
     setShowSettingsModal(true);
   };
 
@@ -1431,7 +1441,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
         </div>
 
         {/* Communities feed scroll list */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 select-none">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-32 md:pb-12 select-none">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-zinc-500 font-mono text-[10px]">
               <span className="animate-spin text-emerald-400 mb-2">●</span>
@@ -1469,8 +1479,9 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   <div className="flex items-start gap-3.5 w-full">
                     {/* Community Profile Image */}
                     <img
-                      src={comm.imageUrl}
+                      src={comm.imageUrl || DEFAULT_COMMUNITY_LOGO}
                       alt={comm.name}
+                      onError={(e) => { e.currentTarget.src = DEFAULT_COMMUNITY_LOGO; }}
                       className="w-12 h-12 rounded-xl object-cover bg-zinc-900 border border-zinc-800 shrink-0 shadow-inner group-hover:scale-105 transition-transform"
                       referrerPolicy="no-referrer"
                     />
@@ -1578,8 +1589,9 @@ Post Nonum Now: https://mynonum.vercel.app`;
                 </button>
 
                 <img
-                  src={activeCommunity.imageUrl}
+                  src={activeCommunity.imageUrl || DEFAULT_COMMUNITY_LOGO}
                   alt={activeCommunity.name}
+                  onError={(e) => { e.currentTarget.src = DEFAULT_COMMUNITY_LOGO; }}
                   className="w-10 h-10 rounded-lg object-cover bg-zinc-900 border border-zinc-800 shrink-0"
                   referrerPolicy="no-referrer"
                 />
@@ -1599,7 +1611,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
               {/* Header actions */}
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
-                  onClick={handleShareCommunity}
+                  onClick={() => handleShareCommunity()}
                   className="p-2 border border-zinc-850 hover:border-emerald-500/20 rounded bg-zinc-900 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer"
                   title="Share Community Link"
                 >
@@ -1617,7 +1629,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                 )}
 
                 <button
-                  onClick={handleReportCommunity}
+                  onClick={() => handleReportCommunity()}
                   className="p-2 border border-zinc-850 hover:border-rose-500/30 rounded bg-zinc-900 text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer"
                   title="Report Community Guideline Violation"
                 >
@@ -1930,7 +1942,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
 
             {/* Bottom active entry messaging panel (WhatsApp styled) */}
             {(!activeCommunity.allowUserPost && !checkIsCreator(activeCommunity)) ? null : (
-              <form onSubmit={handleSendChatSubmit} className="p-3 border-t border-zinc-900 bg-zinc-950 flex flex-col shrink-0 gap-2 relative">
+              <form onSubmit={handleSendChatSubmit} className="p-3 border-t border-zinc-900 bg-zinc-950 flex flex-col shrink-0 gap-2 relative mb-16 md:mb-0 z-40">
                 {chatError && (
                   <div className="absolute top-0 left-0 right-0 -translate-y-full bg-rose-950/25 border-t border-rose-500/20 text-rose-400 text-[10px] py-1.5 px-4 z-20 flex justify-between items-center leading-relaxed">
                     <span>[WARNING]: {chatError}</span>
@@ -1963,14 +1975,14 @@ Post Nonum Now: https://mynonum.vercel.app`;
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => chatFileInputRef.current?.click()}
                         className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-950 border border-zinc-850 rounded text-xs font-mono font-bold text-zinc-400 hover:text-emerald-400 transition-colors flex items-center gap-2 cursor-pointer"
                       >
                         <ImageIcon className="w-4 h-4 text-emerald-500" />
                         <span>ATTACH DEVICE GRAPHIC</span>
                       </button>
                       <input
-                        ref={fileInputRef}
+                        ref={chatFileInputRef}
                         type="file"
                         accept="image/*"
                         onChange={(e) => handleImageFileChange(e, 'chat')}
@@ -2169,13 +2181,13 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => createFileInputRef.current?.click()}
                       className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-950 border border-zinc-850 rounded-lg text-[10px] font-mono font-bold text-zinc-400 hover:text-emerald-400 transition-all cursor-pointer"
                     >
                       UPLOAD LOGO
                     </button>
                     <input
-                      ref={fileInputRef}
+                      ref={createFileInputRef}
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleImageFileChange(e, 'create')}
@@ -2303,13 +2315,13 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => editFileInputRef.current?.click()}
                       className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-950 border border-zinc-850 rounded-lg text-[10px] font-mono font-bold text-zinc-400 hover:text-emerald-400 transition-all cursor-pointer"
                     >
                       CHOOSE IMAGE
                     </button>
                     <input
-                      ref={fileInputRef}
+                      ref={editFileInputRef}
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleImageFileChange(e, 'edit')}

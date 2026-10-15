@@ -619,7 +619,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
               {/* LEFT COLUMN: LIST OF ALL COMMUNITIES (5/12) */}
-              <div className={`lg:col-span-5 bg-zinc-950 border border-zinc-900 rounded-xl flex flex-col h-[75vh] lg:max-h-[70vh] overflow-hidden ${
+              <div className={`lg:col-span-5 bg-zinc-950 border border-zinc-900 rounded-xl flex flex-col min-h-[500px] lg:max-h-[85vh] overflow-hidden ${
                 selectedComm ? 'hidden lg:flex' : 'flex'
               }`}>
                 <div className="p-4 border-b border-zinc-900 bg-zinc-950 shrink-0 flex justify-between items-center">
@@ -629,7 +629,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                <div className="flex-1 overflow-y-auto p-4 space-y-2.5 pb-12">
                   {loading ? (
                     <div className="text-center py-8 text-zinc-600 text-[10px]">SYNCING CORES...</div>
                   ) : filteredComms.length === 0 ? (
@@ -649,7 +649,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                           }`}
                         >
                           <img
-                            src={c.imageUrl}
+                            src={c.imageUrl || 'https://iili.io/nWbQlNj.png'}
+                            onError={(e) => { e.currentTarget.src = 'https://iili.io/nWbQlNj.png'; }}
                             alt={c.name}
                             className="w-10 h-10 rounded object-cover bg-zinc-900 border border-zinc-800 shrink-0"
                             referrerPolicy="no-referrer"
@@ -699,7 +700,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
               </div>
 
               {/* RIGHT COLUMN: DETAILED DISPATCH INSPECT PANEL (7/12) */}
-              <div className={`lg:col-span-7 bg-zinc-950 border border-zinc-900 rounded-xl flex flex-col h-[75vh] lg:max-h-[70vh] overflow-hidden ${
+              <div className={`lg:col-span-7 bg-zinc-950 border border-zinc-900 rounded-xl flex flex-col min-h-[500px] lg:max-h-[85vh] overflow-hidden ${
                 selectedComm ? 'flex' : 'hidden lg:flex'
               }`}>
                 {selectedComm ? (

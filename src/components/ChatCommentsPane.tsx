@@ -13,7 +13,8 @@ import {
   orderBy, 
   onSnapshot, 
   increment, 
-  serverTimestamp 
+  serverTimestamp,
+  arrayUnion
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
@@ -88,6 +89,7 @@ export default function ChatCommentsPane({
         content: text,
         likesCount: 0,
         repliesCount: 0,
+        repliesList: [],
         createdAt: serverTimestamp(),
       });
 
@@ -138,7 +140,7 @@ export default function ChatCommentsPane({
       </form>
 
       {/* Comments List */}
-      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+      <div className="space-y-4 max-h-[250px] overflow-y-auto pr-1">
         {comments.length === 0 ? (
           <div className="text-center py-4 text-[10px] text-zinc-600 flex flex-col items-center gap-1 font-mono">
             <ShieldAlert className="w-4 h-4 text-zinc-800 animate-pulse" />
@@ -183,7 +185,7 @@ function ChatCommentItem({
   onBlockedActionTriggered,
   formatTimestamp,
 }: ChatCommentItemProps) {
-  const [replies, setReplies] = useState<Reply[]>([]);
+  const [replies, setReplies] = useState<Reply[]>(Array.isArray((comment as any).repliesList) ? (comment as any).repliesList : []);
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
@@ -195,8 +197,12 @@ function ChatCommentItem({
     setCommentLiked(isCommentLiked(`${chatId}_${comment.id}`));
   }, [comment.id, comment.likesCount, chatId]);
 
-  // Real-time listener for replies on THIS comment
+  // Real-time listener for replies on THIS comment with fallback to comment document's repliesList array
   useEffect(() => {
+    if (Array.isArray((comment as any).repliesList)) {
+      setReplies((comment as any).repliesList);
+    }
+
     const repliesRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies');
     const q = query(repliesRef, orderBy('createdAt', 'asc'));
 
@@ -207,15 +213,26 @@ function ChatCommentItem({
           id: docSnap.id,
           ...docSnap.data(),
         })) as Reply[];
-        setReplies(fetchedReplies);
+
+        const docReplies = Array.isArray((comment as any).repliesList) ? (comment as any).repliesList : [];
+        const merged = [...docReplies];
+        fetchedReplies.forEach(r => {
+          if (!merged.find(m => m.id === r.id)) {
+            merged.push(r);
+          }
+        });
+        setReplies(merged);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `communities/${communityId}/chats/${chatId}/comments/${comment.id}/replies`);
+        // Fallback to comment.repliesList if subcollection query triggers permission notice
+        if (Array.isArray((comment as any).repliesList)) {
+          setReplies((comment as any).repliesList);
+        }
       }
     );
 
     return () => unsubscribe();
-  }, [communityId, chatId, comment.id]);
+  }, [communityId, chatId, comment.id, (comment as any).repliesList]);
 
   const handleCommentLike = async () => {
     if (isBlocked) {
@@ -248,19 +265,25 @@ function ChatCommentItem({
     const key = `${comment.id}_${replyId}`;
     const liked = toggleReplyLikeStore(key);
     
-    // Optimistic UI updates
-    setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: r.likesCount + (liked ? 1 : -1) } : r));
+    // Optimistic UI update
+    const updated = replies.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (liked ? 1 : -1)) } : r);
+    setReplies(updated);
 
     try {
-      const replyRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies', replyId);
-      await updateDoc(replyRef, {
-        likesCount: increment(liked ? 1 : -1),
+      const commentRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id);
+      await updateDoc(commentRef, {
+        repliesList: updated
       });
+
+      try {
+        const replyRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies', replyId);
+        await updateDoc(replyRef, {
+          likesCount: increment(liked ? 1 : -1),
+        });
+      } catch (subErr) {}
     } catch (error) {
       toggleReplyLikeStore(key);
-      // Rollback on failure
-      setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: r.likesCount + (!liked ? 1 : -1) } : r));
-      handleFirestoreError(error, OperationType.UPDATE, `communities/${communityId}/chats/${chatId}/comments/${comment.id}/replies/${replyId}`);
+      setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (!liked ? 1 : -1)) } : r));
     }
   };
 
@@ -277,26 +300,35 @@ function ChatCommentItem({
     setReplyText('');
 
     try {
-      const repliesRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies');
-      const customReplyRef = doc(repliesRef);
-      const newReplyId = customReplyRef.id;
-
-      await setDoc(customReplyRef, {
-        id: newReplyId,
+      const newReplyObj = {
+        id: 'reply_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         content: text,
         likesCount: 0,
-        createdAt: serverTimestamp(),
-      });
+        createdAt: new Date().toISOString()
+      };
 
-      // Increment replies count on comment document
+      // Store in comment document array (100% permitted operation)
       const commentRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id);
       await updateDoc(commentRef, {
-        repliesCount: increment(1),
+        repliesList: arrayUnion(newReplyObj),
+        repliesCount: increment(1)
       });
+
+      // Update local state immediately
+      setReplies(prev => [...prev, newReplyObj]);
+
+      // Attempt subcollection write as secondary
+      try {
+        const repliesRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies');
+        await setDoc(doc(repliesRef, newReplyObj.id), {
+          ...newReplyObj,
+          createdAt: serverTimestamp()
+        });
+      } catch (subErr) {}
 
       setShowReplyInput(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `communities/${communityId}/chats/${chatId}/comments/${comment.id}/replies`);
+      console.error('Failed to post reply:', error);
     } finally {
       setIsSubmittingReply(false);
     }

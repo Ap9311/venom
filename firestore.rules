@@ -69,6 +69,10 @@ service cloud.firestore {
 
         match /comments/{commentId} {
           allow read, create, update, delete: if true;
+
+          match /replies/{replyId} {
+            allow read, create, update, delete: if true;
+          }
         }
       }
 
