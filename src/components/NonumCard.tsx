@@ -923,29 +923,9 @@ Post Nonum Now: https://mynonum.vercel.app`;
       {/* Top Meta Info Header */}
       <div className={`px-4 py-3 flex items-center justify-between border-b border-zinc-900/40 text-[10px] text-zinc-500 font-mono gap-3 flex-wrap ${compact ? 'px-2.5 py-2 text-[9px]' : ''}`}>
         
-        {/* Left Side: Category, Type and Report Button */}
+        {/* Left Side: Report Button, Poll/QA Badge & Target badge */}
         <div className="flex items-center gap-2 min-w-0">
-          {/* 1. Post Type Badge (replacing the old category badge) */}
-          <span className={`text-emerald-400 font-bold bg-emerald-950/30 border border-emerald-500/20 px-2 py-0.5 rounded uppercase text-[9px] tracking-wider flex items-center gap-1 shrink-0 ${compact ? 'px-1.5 py-0 text-[8px]' : ''}`}>
-            {post.type === 'text' && <Hash className="w-2.5 h-2.5 text-emerald-400" />}
-            {post.type === 'image' && <Eye className="w-2.5 h-2.5 text-emerald-400" />}
-            {post.type === 'poll' && <BarChart2 className="w-2.5 h-2.5 text-emerald-400" />}
-            {post.type === 'qa' && <HelpCircle className="w-2.5 h-2.5 text-emerald-400" />}
-            <span>{post.type === 'qa' ? 'Q&A' : post.type.toUpperCase()}</span>
-          </span>
-
-          {highlighted && (
-            <>
-              <span className="text-zinc-800">•</span>
-              <span className="bg-emerald-500 text-zinc-950 px-1.5 py-0.5 rounded uppercase text-[8px] font-black tracking-wider animate-pulse flex items-center gap-1">
-                Target
-              </span>
-            </>
-          )}
-
-          <span className="text-zinc-800">•</span>
-
-          {/* 2. Report Button */}
+          {/* 1. Report Button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -960,23 +940,32 @@ Post Nonum Now: https://mynonum.vercel.app`;
             <Flag className="w-2.5 h-2.5 text-rose-500" />
             <span>Report</span>
           </button>
+
+          {/* Poll / Q&A Type Indicator Badge */}
+          {(post.type === 'poll' || post.type === 'qa') && (
+            <>
+              <span className="text-zinc-800">•</span>
+              <span className={`text-emerald-400 font-bold bg-emerald-950/30 border border-emerald-500/20 px-2 py-0.5 rounded uppercase text-[8px] tracking-wider flex items-center gap-1 shrink-0 ${compact ? 'px-1.5 py-0 text-[7.5px]' : ''}`}>
+                {post.type === 'poll' && <BarChart2 className="w-2.5 h-2.5 text-emerald-400" />}
+                {post.type === 'qa' && <HelpCircle className="w-2.5 h-2.5 text-emerald-400" />}
+                <span>{post.type === 'qa' ? 'Q&A' : 'POLL'}</span>
+              </span>
+            </>
+          )}
+
+          {highlighted && (
+            <>
+              <span className="text-zinc-800">•</span>
+              <span className="bg-emerald-500 text-zinc-950 px-1.5 py-0.5 rounded uppercase text-[8px] font-black tracking-wider animate-pulse flex items-center gap-1">
+                Target
+              </span>
+            </>
+          )}
         </div>
 
-        {/* Right Side: Post ID and Share Button */}
+        {/* Right Side: Share Button */}
         <div className="flex items-center gap-2 shrink-0 ml-auto md:ml-0">
-          {/* 3. Post ID cryptographic tag */}
-          <button 
-            onClick={handleCopyHash}
-            className="hover:text-emerald-400 cursor-pointer text-zinc-600 transition-colors flex items-center gap-1 group font-mono text-[9px] shrink-0"
-            title="Click to copy post verification tag"
-          >
-            <Shield className="w-3 h-3 text-emerald-500/15 group-hover:text-emerald-400/50" />
-            <span>{isCopingHash ? 'COPIED' : 'ID: ' + post.encryptedHash.substring(0, 8).toUpperCase()}</span>
-          </button>
-
-          <span className="text-zinc-800">•</span>
-
-          {/* 4. Share Button */}
+          {/* Share Button */}
           <button
             onClick={handleShare}
             className="p-1 hover:bg-zinc-900/60 text-zinc-500 hover:text-emerald-400 rounded transition-all cursor-pointer relative shrink-0"
@@ -1017,6 +1006,10 @@ Post Nonum Now: https://mynonum.vercel.app`;
         {/* --- Poll Post Renderer --- */}
         {post.type === 'poll' && post.pollOptions && (
           <div className="space-y-2 mb-4 pl-0.5">
+            <div className="text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <BarChart2 className="w-3 h-3 text-emerald-400" />
+              <span>COMMUNITY POLL</span>
+            </div>
             {post.pollOptions.map((option, idx) => {
               const optionVotes = pollVotes[idx] || 0;
               const percent = totalPollVotes > 0 ? Math.round((optionVotes / totalPollVotes) * 100) : 0;
@@ -1069,6 +1062,10 @@ Post Nonum Now: https://mynonum.vercel.app`;
         {/* --- Q&A Post Renderer --- */}
         {post.type === 'qa' && post.pollOptions && (
           <div className="space-y-2 mb-4 pl-0.5">
+            <div className="text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <HelpCircle className="w-3 h-3 text-emerald-400" />
+              <span>Q&A QUIZ</span>
+            </div>
             {post.pollOptions.map((option, idx) => {
               const optionVotes = pollVotes[idx] || 0;
               const percent = totalPollVotes > 0 ? Math.round((optionVotes / totalPollVotes) * 100) : 0;
