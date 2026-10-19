@@ -382,12 +382,12 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Return real server HTTP 404 error response directly for unauthorized requests to /admin routes
+  // Set real HTTP 404 status code for unauthorized requests to /admin routes
   app.use(async (req, res, next) => {
     if (req.path.startsWith('/admin')) {
       const isAuth = await isAuthorizedAdminReq(req);
       if (!isAuth) {
-        return res.status(404).send(`Cannot GET ${req.originalUrl}`);
+        res.status(404);
       }
     }
     next();
