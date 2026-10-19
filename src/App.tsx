@@ -725,13 +725,16 @@ export default function App() {
 
   // Cryptographic Administrative Access Gate (/admin and sub-routes)
   // ONLY devices with registered and active hardware admin fingerprint identity can access /admin.
-  // All other or revoked devices see the authentic browser "This site can't be reached" (DNS_PROBE_FINISHED_NXDOMAIN).
+  // All unauthorized devices receive the real web server 404 response directly.
   if (currentPath.startsWith('/admin')) {
     if (isAdminDevice !== true) {
       if (isAdminDevice === null) {
         return <div className="min-h-screen bg-[#202124]" />;
       }
-      return <NxDomainError />;
+      if (typeof window !== 'undefined') {
+        window.location.href = window.location.href;
+      }
+      return null;
     }
 
     // Admin audit & gate security terminal route check
