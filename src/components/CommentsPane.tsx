@@ -29,6 +29,19 @@ import {
 import { Heart, CornerDownRight, MessageSquare, Send, ShieldAlert, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+function deduplicateById<T extends { id?: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  items.forEach((item, index) => {
+    const id = item.id || `item_${index}`;
+    if (!seen.has(id)) {
+      seen.add(id);
+      result.push(item);
+    }
+  });
+  return result;
+}
+
 interface CommentsPaneProps {
   postId: string;
   onCommentsCountChange?: (newCount: number) => void;
@@ -61,7 +74,7 @@ export default function CommentsPane({
           ...docSnap.data(),
         })) as Comment[];
         
-        setComments(fetchedComments);
+        setComments(deduplicateById(fetchedComments));
         if (onCommentsCountChange) {
           onCommentsCountChange(fetchedComments.length);
         }
@@ -123,21 +136,23 @@ export default function CommentsPane({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString();
   };
 
+  const uniqueComments = deduplicateById<Comment>(comments);
+
   if (isDrawerMode) {
     return (
       <div className="flex flex-col h-full font-sans bg-zinc-950 overflow-hidden">
         {/* Comments List (Fills remaining height) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {comments.length === 0 ? (
+          {uniqueComments.length === 0 ? (
             <div className="text-center py-12 text-xs text-zinc-500 flex flex-col items-center justify-center gap-2 font-mono">
               <ShieldAlert className="w-6 h-6 text-zinc-600 animate-pulse" />
               <span className="text-zinc-300 font-sans font-medium text-sm">No comments yet</span>
               <span className="text-[11px] text-zinc-600">Be the first to share your thoughts!</span>
             </div>
           ) : (
-            comments.map((comment, index) => (
+            uniqueComments.map((comment, index) => (
               <CommentItem
-                key={comment.id}
+                key={comment.id ? `${comment.id}_${index}` : `comment_${index}`}
                 postId={postId}
                 comment={comment}
                 index={index}
@@ -178,7 +193,7 @@ export default function CommentsPane({
     <div className="border-t border-zinc-900 bg-zinc-950/40 p-4 sm:p-5 font-sans">
       <div className="flex items-center gap-2 mb-4 text-xs text-zinc-400 font-semibold uppercase tracking-wider font-mono">
         <MessageSquare className="w-4 h-4 text-emerald-500/80" />
-        <span>COMMENTS ({comments.length})</span>
+        <span>COMMENTS ({uniqueComments.length})</span>
       </div>
 
       {/* Input Form */}
@@ -189,7 +204,7 @@ export default function CommentsPane({
           onChange={(e) => setNewCommentText(e.target.value)}
           placeholder="Write a comment..."
           maxLength={1000}
-          className="flex-1 bg-zinc-900/60 border border-zinc-800/80 focus:border-emerald-500/40 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none transition-colors"
+          className="flex-1 bg-zinc-900/60 border border-zinc-850/80 focus:border-emerald-500/40 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none transition-colors"
         />
         <button
           type="submit"
@@ -203,15 +218,15 @@ export default function CommentsPane({
 
       {/* Comments List */}
       <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
-        {comments.length === 0 ? (
+        {uniqueComments.length === 0 ? (
           <div className="text-center py-6 text-xs text-zinc-600 flex flex-col items-center gap-2 font-mono">
             <ShieldAlert className="w-5 h-5 text-zinc-700 animate-pulse" />
             <span>No comments yet. Share your thoughts above!</span>
           </div>
         ) : (
-          comments.map((comment, index) => (
+          uniqueComments.map((comment, index) => (
             <CommentItem
-              key={comment.id}
+              key={comment.id ? `${comment.id}_${index}` : `comment_${index}`}
               postId={postId}
               comment={comment}
               index={index}
@@ -259,7 +274,7 @@ function CommentItem({
   // Real-time listener for replies on THIS comment with fallback to comment document's repliesList array
   useEffect(() => {
     if (Array.isArray((comment as any).repliesList)) {
-      setReplies((comment as any).repliesList);
+      setReplies(deduplicateById((comment as any).repliesList));
     }
 
     const repliesRef = collection(db, 'posts', postId, 'comments', comment.id, 'replies');
@@ -274,17 +289,12 @@ function CommentItem({
         })) as Reply[];
 
         const docReplies = Array.isArray((comment as any).repliesList) ? (comment as any).repliesList : [];
-        const merged = [...docReplies];
-        fetchedReplies.forEach(r => {
-          if (!merged.find(m => m.id === r.id)) {
-            merged.push(r);
-          }
-        });
+        const merged = deduplicateById([...docReplies, ...fetchedReplies]);
         setReplies(merged);
       },
       (error) => {
         if (Array.isArray((comment as any).repliesList)) {
-          setReplies((comment as any).repliesList);
+          setReplies(deduplicateById((comment as any).repliesList));
         }
       }
     );
@@ -339,7 +349,7 @@ function CommentItem({
     const liked = toggleReplyLikeStore(key);
 
     const updated = replies.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (liked ? 1 : -1)) } : r);
-    setReplies(updated);
+    setReplies(deduplicateById(updated));
 
     try {
       const commentRef = doc(db, 'posts', postId, 'comments', comment.id);
@@ -384,7 +394,7 @@ function CommentItem({
         repliesCount: increment(1)
       });
 
-      setReplies(prev => [...prev, newReplyObj]);
+      setReplies(prev => deduplicateById([...prev, newReplyObj]));
 
       try {
         const repliesRef = collection(db, 'posts', postId, 'comments', comment.id, 'replies');
@@ -402,6 +412,7 @@ function CommentItem({
   };
 
   const signature = `User#${comment.id.substring(0, 4).toUpperCase()}`;
+  const uniqueReplies = deduplicateById<Reply>(replies);
 
   return (
     <motion.div
@@ -445,7 +456,7 @@ function CommentItem({
           className="flex items-center gap-1 hover:text-emerald-400 transition-colors cursor-pointer"
         >
           <MessageSquare className="w-3.5 h-3.5" />
-          <span>{comment.repliesCount || replies.length} { (comment.repliesCount || replies.length) === 1 ? 'reply' : 'replies'}</span>
+          <span>{comment.repliesCount || uniqueReplies.length} { (comment.repliesCount || uniqueReplies.length) === 1 ? 'reply' : 'replies'}</span>
         </button>
       </div>
 
@@ -460,14 +471,15 @@ function CommentItem({
             className="mt-3 pl-4 border-l border-zinc-800/80 space-y-3"
           >
             {/* Replies List */}
-            {replies.length > 0 && (
+            {uniqueReplies.length > 0 && (
               <div className="space-y-3 pt-1">
-                {replies.map((reply) => {
+                {uniqueReplies.map((reply, replyIdx) => {
                   const replyLiked = isReplyLiked(`${comment.id}_${reply.id}`);
-                  const replySig = `User#${reply.id.substring(0, 4).toUpperCase()}`;
+                  const replySig = `User#${(reply.id || '').substring(0, 4).toUpperCase()}`;
+                  const replyKey = reply.id ? `${reply.id}_${replyIdx}` : `reply_${replyIdx}`;
 
                   return (
-                    <div key={reply.id} className="bg-zinc-950/20 p-2 rounded border border-zinc-900/60 font-sans">
+                    <div key={replyKey} className="bg-zinc-950/20 p-2 rounded border border-zinc-900/60 font-sans">
                       <div className="flex items-center justify-between mb-1 font-mono">
                         <div className="flex items-center gap-2">
                           <span className="text-[8px] text-zinc-400 font-bold bg-zinc-900 px-1 py-0.2 rounded border border-zinc-800/50 uppercase">

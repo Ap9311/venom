@@ -27,6 +27,19 @@ import {
 import { Heart, CornerDownRight, MessageSquare, Send, ShieldAlert, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+function deduplicateById<T extends { id?: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  items.forEach((item, index) => {
+    const id = item.id || `item_${index}`;
+    if (!seen.has(id)) {
+      seen.add(id);
+      result.push(item);
+    }
+  });
+  return result;
+}
+
 interface ChatCommentsPaneProps {
   communityId: string;
   chatId: string;
@@ -57,7 +70,7 @@ export default function ChatCommentsPane({
           ...docSnap.data(),
         })) as Comment[];
         
-        setComments(fetchedComments);
+        setComments(deduplicateById(fetchedComments));
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, `communities/${communityId}/chats/${chatId}/comments`);
@@ -112,11 +125,13 @@ export default function ChatCommentsPane({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString();
   };
 
+  const uniqueComments = deduplicateById<Comment>(comments);
+
   return (
     <div className="border-t border-zinc-900 bg-zinc-950/40 p-4 font-sans mt-3.5 rounded-b-2xl">
       <div className="flex items-center gap-2 mb-4 text-[10px] text-zinc-500 font-semibold uppercase tracking-wider font-mono">
         <MessageSquare className="w-3.5 h-3.5 text-emerald-500/85" />
-        <span>COMMENTS ({comments.length})</span>
+        <span>COMMENTS ({uniqueComments.length})</span>
       </div>
 
       {/* Input Form */}
@@ -141,15 +156,15 @@ export default function ChatCommentsPane({
 
       {/* Comments List */}
       <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
-        {comments.length === 0 ? (
+        {uniqueComments.length === 0 ? (
           <div className="text-center py-4 text-[10px] text-zinc-600 flex flex-col items-center gap-1 font-mono">
             <ShieldAlert className="w-4 h-4 text-zinc-800 animate-pulse" />
             <span>No arguments recorded yet. Be first!</span>
           </div>
         ) : (
-          comments.map((comment, index) => (
+          uniqueComments.map((comment, index) => (
             <ChatCommentItem
-              key={comment.id}
+              key={comment.id ? `${comment.id}_${index}` : `comment_${index}`}
               communityId={communityId}
               chatId={chatId}
               comment={comment}
@@ -200,7 +215,7 @@ function ChatCommentItem({
   // Real-time listener for replies on THIS comment with fallback to comment document's repliesList array
   useEffect(() => {
     if (Array.isArray((comment as any).repliesList)) {
-      setReplies((comment as any).repliesList);
+      setReplies(deduplicateById((comment as any).repliesList));
     }
 
     const repliesRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies');
@@ -215,18 +230,13 @@ function ChatCommentItem({
         })) as Reply[];
 
         const docReplies = Array.isArray((comment as any).repliesList) ? (comment as any).repliesList : [];
-        const merged = [...docReplies];
-        fetchedReplies.forEach(r => {
-          if (!merged.find(m => m.id === r.id)) {
-            merged.push(r);
-          }
-        });
+        const merged = deduplicateById([...docReplies, ...fetchedReplies]);
         setReplies(merged);
       },
       (error) => {
         // Fallback to comment.repliesList if subcollection query triggers permission notice
         if (Array.isArray((comment as any).repliesList)) {
-          setReplies((comment as any).repliesList);
+          setReplies(deduplicateById((comment as any).repliesList));
         }
       }
     );
@@ -315,7 +325,7 @@ function ChatCommentItem({
       });
 
       // Update local state immediately
-      setReplies(prev => [...prev, newReplyObj]);
+      setReplies(prev => deduplicateById([...prev, newReplyObj]));
 
       // Attempt subcollection write as secondary
       try {
@@ -404,38 +414,43 @@ function ChatCommentItem({
       </AnimatePresence>
 
       {/* Nested Replies List */}
-      {replies.length > 0 && (
-        <div className="pl-4 border-l border-zinc-900/60 mt-3 space-y-2.5">
-          {replies.map((reply) => {
-            const replyLiked = isReplyLiked(`${comment.id}_${reply.id}`);
-            return (
-              <div key={reply.id} className="text-xs bg-zinc-900/20 p-2.5 rounded-lg space-y-1.5 border border-zinc-900/40 relative">
-                <div className="flex justify-between items-center text-[8px] font-mono text-zinc-600">
-                  <span className="flex items-center gap-0.5">
-                    <CornerDownRight className="w-2.5 h-2.5 text-zinc-700" />
-                    COHORT RESPONSE
-                  </span>
-                  <span>{formatTimestamp(reply.createdAt)}</span>
+      {(() => {
+        const uniqueReplies = deduplicateById<Reply>(replies);
+        if (uniqueReplies.length === 0) return null;
+        return (
+          <div className="pl-4 border-l border-zinc-900/60 mt-3 space-y-2.5">
+            {uniqueReplies.map((reply, replyIdx) => {
+              const replyLiked = isReplyLiked(`${comment.id}_${reply.id}`);
+              const replyKey = reply.id ? `${reply.id}_${replyIdx}` : `reply_${replyIdx}`;
+              return (
+                <div key={replyKey} className="text-xs bg-zinc-900/20 p-2.5 rounded-lg space-y-1.5 border border-zinc-900/40 relative">
+                  <div className="flex justify-between items-center text-[8px] font-mono text-zinc-600">
+                    <span className="flex items-center gap-0.5">
+                      <CornerDownRight className="w-2.5 h-2.5 text-zinc-700" />
+                      COHORT RESPONSE
+                    </span>
+                    <span>{formatTimestamp(reply.createdAt)}</span>
+                  </div>
+                  <p className="text-zinc-300 break-words font-sans">{reply.content}</p>
+                  
+                  {/* Reply Footer */}
+                  <div className="flex items-center gap-3 text-[9px] text-zinc-500 font-mono">
+                    <button 
+                      onClick={() => handleReplyLike(reply.id)}
+                      className={`flex items-center gap-0.5 hover:text-emerald-400 transition-colors cursor-pointer font-bold ${
+                        replyLiked ? 'text-emerald-400' : ''
+                      }`}
+                    >
+                      <Heart className={`w-2.5 h-2.5 ${replyLiked ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+                      <span>{reply.likesCount || 0}</span>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-zinc-300 break-words font-sans">{reply.content}</p>
-                
-                {/* Reply Footer */}
-                <div className="flex items-center gap-3 text-[9px] text-zinc-500 font-mono">
-                  <button 
-                    onClick={() => handleReplyLike(reply.id)}
-                    className={`flex items-center gap-0.5 hover:text-emerald-400 transition-colors cursor-pointer font-bold ${
-                      replyLiked ? 'text-emerald-400' : ''
-                    }`}
-                  >
-                    <Heart className={`w-2.5 h-2.5 ${replyLiked ? 'fill-emerald-400 text-emerald-400' : ''}`} />
-                    <span>{reply.likesCount || 0}</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
     </motion.div>
   );
 }

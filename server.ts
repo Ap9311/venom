@@ -393,15 +393,33 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Return real web server 404 error response directly for unauthorized requests to /admin routes
-  app.use(async (req, res, next) => {
-    if (req.path.startsWith('/admin')) {
-      const isAuth = await isAuthorizedAdminReq(req);
-      if (!isAuth) {
-        return res.status(404).type('text/plain').send(`Cannot GET ${req.originalUrl}`);
-      }
-    }
-    next();
+  // Serve Admin PWA Manifest endpoint
+  app.get(['/admin-manifest.json', '/api/admin-manifest'], (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.json({
+      id: 'nonum-admin',
+      scope: '/admin',
+      name: 'Nonum Admin Console',
+      short_name: 'Nonum Admin',
+      description: 'Nonum Security & Moderator Command Center',
+      start_url: '/admin?pwa=admin',
+      display: 'standalone',
+      background_color: '#09090b',
+      theme_color: '#f43f5e',
+      icons: [
+        {
+          src: 'https://iili.io/nWbQlNj.png',
+          sizes: '192x192',
+          type: 'image/png'
+        },
+        {
+          src: 'https://iili.io/nWbQlNj.png',
+          sizes: '512x512',
+          type: 'image/png'
+        }
+      ]
+    });
   });
 
   // Get IP endpoint to resolve real device public IP behind proxies
