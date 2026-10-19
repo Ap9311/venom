@@ -124,6 +124,72 @@ async function startServer() {
   // Anti-Brute-Force & Rate-Limiting Engine against automated attacks (ffuf, hydra, curl)
   const failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
+  function parseCookiesFromReq(req: express.Request): Record<string, string> {
+    const list: Record<string, string> = {};
+    const rc = req.headers.cookie;
+    if (rc) {
+      rc.split(';').forEach((cookie) => {
+        const parts = cookie.split('=');
+        const key = parts.shift()?.trim();
+        if (key) {
+          list[key] = decodeURIComponent(parts.join('=').trim());
+        }
+      });
+    }
+    return list;
+  }
+
+  function setAdminCookiesInRes(res: express.Response, adminDeviceId?: string, token?: string) {
+    const cookies: string[] = [];
+    if (adminDeviceId) {
+      cookies.push(`nonum_admin_device_id=${encodeURIComponent(adminDeviceId)}; Path=/; Max-Age=31536000; SameSite=Lax`);
+    }
+    if (token) {
+      cookies.push(`nonum_admin_token=${encodeURIComponent(token)}; Path=/; Max-Age=31536000; SameSite=Lax`);
+    }
+    if (cookies.length > 0) {
+      res.setHeader('Set-Cookie', cookies);
+    }
+  }
+
+  function clearAdminCookiesInRes(res: express.Response) {
+    res.setHeader('Set-Cookie', [
+      'nonum_admin_device_id=; Path=/; Max-Age=0',
+      'nonum_admin_token=; Path=/; Max-Age=0'
+    ]);
+  }
+
+  async function isAuthorizedAdminReq(req: express.Request): Promise<boolean> {
+    const cookies = parseCookiesFromReq(req);
+    const tokenHeader = req.headers['x-admin-token'] || req.headers['authorization'];
+    const devIdHeader = req.headers['x-admin-device-id'];
+
+    const token = (typeof tokenHeader === 'string' ? tokenHeader.replace('Bearer ', '') : '') || cookies['nonum_admin_token'];
+    const devId = (typeof devIdHeader === 'string' ? devIdHeader : '') || cookies['nonum_admin_device_id'];
+
+    if (token && token === ADMIN_SECRET_KEY) {
+      return true;
+    }
+
+    if (devId && typeof devId === 'string') {
+      if (registeredAdminDevices.has(devId)) {
+        return true;
+      }
+      if (db) {
+        try {
+          const deviceDocRef = doc(db, 'interactions', `admin_device_${devId}`);
+          const snap = await getDoc(deviceDocRef);
+          if (snap.exists() && snap.data()?.status === 'active') {
+            registeredAdminDevices.add(devId);
+            return true;
+          }
+        } catch (err) {}
+      }
+    }
+
+    return false;
+  }
+
   function getClientIpFromReq(req: express.Request): string {
     const xForwardedFor = req.headers['x-forwarded-for'];
     if (typeof xForwardedFor === 'string') {
@@ -180,10 +246,14 @@ async function startServer() {
   // Administrator login authentication endpoint
   app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
     const clientIp = getClientIpFromReq(req);
-    const { username, password } = req.body || {};
+    const { username, password, adminDeviceId } = req.body || {};
 
     if (verifyAdminCredentials(username, password)) {
       clearFailedAttempts(clientIp);
+      if (adminDeviceId && typeof adminDeviceId === 'string') {
+        registeredAdminDevices.add(adminDeviceId);
+      }
+      setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
       return res.json({
         success: true,
         token: ADMIN_SECRET_KEY,
@@ -199,26 +269,34 @@ async function startServer() {
   });
 
   app.post('/api/admin-verify', async (req, res) => {
-    const { adminDeviceId } = req.body || {};
-    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-      return res.json({ isAdmin: false });
-    }
+    const cookies = parseCookiesFromReq(req);
+    const { adminDeviceId: bodyDevId, token: bodyToken } = req.body || {};
+    const adminDeviceId = bodyDevId || cookies['nonum_admin_device_id'];
+    const token = bodyToken || cookies['nonum_admin_token'];
 
-    if (registeredAdminDevices.has(adminDeviceId)) {
+    if (token === ADMIN_SECRET_KEY) {
+      if (adminDeviceId) setAdminCookiesInRes(res, adminDeviceId, token);
       return res.json({ isAdmin: true });
     }
 
-    // Secondary verification via Firestore interactions collection if in-memory sync missed it
-    if (db) {
-      try {
-        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-        const snap = await getDoc(deviceDocRef);
-        if (snap.exists() && snap.data()?.status === 'active') {
-          registeredAdminDevices.add(adminDeviceId);
-          return res.json({ isAdmin: true });
+    if (adminDeviceId && typeof adminDeviceId === 'string') {
+      if (registeredAdminDevices.has(adminDeviceId)) {
+        setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
+        return res.json({ isAdmin: true });
+      }
+
+      if (db) {
+        try {
+          const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
+          const snap = await getDoc(deviceDocRef);
+          if (snap.exists() && snap.data()?.status === 'active') {
+            registeredAdminDevices.add(adminDeviceId);
+            setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
+            return res.json({ isAdmin: true });
+          }
+        } catch (err) {
+          console.warn('Firestore fallback verify check notice:', err);
         }
-      } catch (err) {
-        console.warn('Firestore fallback verify check notice:', err);
       }
     }
 
@@ -239,6 +317,7 @@ async function startServer() {
         return res.status(403).json({ success: false, error: 'Maximum authorized administrative device limit reached.' });
       }
       registeredAdminDevices.add(adminDeviceId);
+      setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
       return res.json({ 
         success: true, 
         token: ADMIN_SECRET_KEY, 
@@ -252,12 +331,16 @@ async function startServer() {
 
   // Secure token retrieval endpoint exclusively for verified active admin devices
   app.post('/api/admin-token', async (req, res) => {
-    const { adminDeviceId } = req.body || {};
+    const cookies = parseCookiesFromReq(req);
+    const { adminDeviceId: bodyDevId } = req.body || {};
+    const adminDeviceId = bodyDevId || cookies['nonum_admin_device_id'];
+
     if (!adminDeviceId || typeof adminDeviceId !== 'string') {
       return res.status(401).json({ success: false, error: 'Access Denied.' });
     }
 
     if (registeredAdminDevices.has(adminDeviceId)) {
+      setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
       return res.json({ success: true, token: ADMIN_SECRET_KEY });
     }
 
@@ -267,6 +350,7 @@ async function startServer() {
         const snap = await getDoc(deviceDocRef);
         if (snap.exists() && snap.data()?.status === 'active') {
           registeredAdminDevices.add(adminDeviceId);
+          setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
           return res.json({ success: true, token: ADMIN_SECRET_KEY });
         }
       } catch (err) {}
@@ -288,6 +372,7 @@ async function startServer() {
     const { adminDeviceId } = req.body || {};
     if (adminDeviceId) {
       registeredAdminDevices.delete(adminDeviceId);
+      clearAdminCookiesInRes(res);
       return res.json({ success: true });
     }
     return res.status(400).json({ success: false });
@@ -295,6 +380,17 @@ async function startServer() {
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Set real HTTP 404 status code for unauthorized requests to /admin routes
+  app.use(async (req, res, next) => {
+    if (req.path.startsWith('/admin')) {
+      const isAuth = await isAuthorizedAdminReq(req);
+      if (!isAuth) {
+        res.status(404);
+      }
+    }
+    next();
   });
 
   // Get IP endpoint to resolve real device public IP behind proxies

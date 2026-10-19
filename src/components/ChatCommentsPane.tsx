@@ -140,7 +140,7 @@ export default function ChatCommentsPane({
       </form>
 
       {/* Comments List */}
-      <div className="space-y-4 max-h-[250px] overflow-y-auto pr-1">
+      <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
         {comments.length === 0 ? (
           <div className="text-center py-4 text-[10px] text-zinc-600 flex flex-col items-center gap-1 font-mono">
             <ShieldAlert className="w-4 h-4 text-zinc-800 animate-pulse" />

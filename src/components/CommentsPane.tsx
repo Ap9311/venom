@@ -149,7 +149,7 @@ export default function CommentsPane({
       </form>
 
       {/* Comments List */}
-      <div className="space-y-4 max-h-[260px] overflow-y-auto pr-1">
+      <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
         {comments.length === 0 ? (
           <div className="text-center py-6 text-xs text-zinc-600 flex flex-col items-center gap-2 font-mono">
             <ShieldAlert className="w-5 h-5 text-zinc-700 animate-pulse" />
