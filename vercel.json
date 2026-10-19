@@ -8,14 +8,7 @@
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
-    {
-      "source": "/admin",
-      "destination": "/api/admin-gate"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/api/admin-gate"
-    },
+
     {
       "source": "/(.*)",
       "has": [
