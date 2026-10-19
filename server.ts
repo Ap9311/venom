@@ -510,6 +510,20 @@ async function startServer() {
   // Handle static assets and SPA fallback
   if (process.env.NODE_ENV !== 'production') {
     app.use(vite.middlewares);
+
+    // Express SPA Fallback for Development Mode (e.g. /admin, /admin?pwa=admin, /report)
+    app.get('*', async (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.includes('.')) {
+        return next();
+      }
+      try {
+        const rawHtml = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf-8');
+        const viteHtml = await vite.transformIndexHtml(req.originalUrl || req.url, rawHtml);
+        return res.setHeader('Content-Type', 'text/html').send(viteHtml);
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     // Serve production static assets

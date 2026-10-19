@@ -9,6 +9,7 @@ import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
 import { Post } from '../../types';
 import { Database, Search, Edit3, Trash2, ShieldAlert, RefreshCw, CheckCircle, ExternalLink } from 'lucide-react';
+import { handleInputWithCursor } from '../../utils/inputFix';
 
 interface AdminPostsProps {
   posts: Post[];
@@ -154,7 +155,7 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
             <input
               type="text"
               value={adminSearchTerm}
-              onChange={(e) => setAdminSearchTerm(e.target.value)}
+              onChange={(e) => handleInputWithCursor(e, setAdminSearchTerm)}
               placeholder="Search IP, Post ID, keywords..."
               className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none placeholder-zinc-650 transition-colors"
             />

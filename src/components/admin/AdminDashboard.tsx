@@ -29,6 +29,7 @@ import {
   Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { handleInputWithCursor } from '../../utils/inputFix';
 
 interface AdminDashboardProps {
   posts: Post[];
@@ -217,7 +218,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                   <input
                     type="text"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => handleInputWithCursor(e, setUsername)}
                     required
                     placeholder="Enter security ID..."
                     className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"
@@ -229,7 +230,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                   <input
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handleInputWithCursor(e, setPassword)}
                     required
                     placeholder="Enter passphrase..."
                     className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"

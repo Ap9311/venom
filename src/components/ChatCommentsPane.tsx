@@ -26,6 +26,7 @@ import {
 } from '../utils/storage';
 import { Heart, CornerDownRight, MessageSquare, Send, ShieldAlert, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { handleInputWithCursor } from '../utils/inputFix';
 
 function deduplicateById<T extends { id?: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -139,7 +140,7 @@ export default function ChatCommentsPane({
         <input
           type="text"
           value={newCommentText}
-          onChange={(e) => setNewCommentText(e.target.value)}
+          onChange={(e) => handleInputWithCursor(e, setNewCommentText)}
           placeholder="Add your anonymous comment..."
           maxLength={1000}
           className="flex-1 bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500/40 rounded px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-colors"
@@ -397,7 +398,7 @@ function ChatCommentItem({
             <input
               type="text"
               value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
+              onChange={(e) => handleInputWithCursor(e, setReplyText)}
               placeholder="Write a nested reply..."
               required
               className="flex-1 bg-zinc-900/80 border border-zinc-850 focus:border-emerald-500/30 rounded px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none"

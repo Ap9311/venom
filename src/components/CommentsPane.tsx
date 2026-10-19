@@ -28,6 +28,7 @@ import {
 } from '../utils/storage';
 import { Heart, CornerDownRight, MessageSquare, Send, ShieldAlert, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { handleInputWithCursor } from '../utils/inputFix';
 
 function deduplicateById<T extends { id?: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -152,7 +153,7 @@ export default function CommentsPane({
           ) : (
             uniqueComments.map((comment, index) => (
               <CommentItem
-                key={comment.id ? `${comment.id}_${index}` : `comment_${index}`}
+                key={`comment_${comment.id || index}_${index}`}
                 postId={postId}
                 comment={comment}
                 index={index}
@@ -170,7 +171,7 @@ export default function CommentsPane({
             <input
               type="text"
               value={newCommentText}
-              onChange={(e) => setNewCommentText(e.target.value)}
+              onChange={(e) => handleInputWithCursor(e, setNewCommentText)}
               placeholder="Add an anonymous comment..."
               maxLength={1000}
               className="flex-1 bg-zinc-900/80 border border-zinc-800/90 focus:border-emerald-500/50 rounded-full px-4 py-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-all font-sans"
@@ -201,7 +202,7 @@ export default function CommentsPane({
         <input
           type="text"
           value={newCommentText}
-          onChange={(e) => setNewCommentText(e.target.value)}
+          onChange={(e) => handleInputWithCursor(e, setNewCommentText)}
           placeholder="Write a comment..."
           maxLength={1000}
           className="flex-1 bg-zinc-900/60 border border-zinc-850/80 focus:border-emerald-500/40 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none transition-colors"
@@ -226,7 +227,7 @@ export default function CommentsPane({
         ) : (
           uniqueComments.map((comment, index) => (
             <CommentItem
-              key={comment.id ? `${comment.id}_${index}` : `comment_${index}`}
+              key={`comment_${comment.id || index}_${index}`}
               postId={postId}
               comment={comment}
               index={index}
@@ -514,7 +515,7 @@ function CommentItem({
               <input
                 type="text"
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => handleInputWithCursor(e, setReplyText)}
                 placeholder="Write a reply..."
                 maxLength={1000}
                 className="flex-1 bg-zinc-900/50 border border-zinc-800 focus:border-emerald-500/30 rounded px-2.5 py-1.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none transition-colors"

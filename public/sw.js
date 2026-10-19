@@ -65,7 +65,10 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+        if (!networkResponse || networkResponse.status !== 200) {
+          if (event.request.mode === 'navigate') {
+            return caches.match('/index.html') || caches.match('/');
+          }
           return networkResponse;
         }
 
@@ -78,7 +81,7 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // Fallback for document pages when offline
         if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+          return caches.match('/index.html').then((cached) => cached || caches.match('/'));
         }
       });
     })

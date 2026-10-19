@@ -58,6 +58,7 @@ import QuarantineNoticeModal from './components/QuarantineNoticeModal';
 import { InstallPwaModal } from './components/InstallPwaModal';
 import { MobileBottomBar } from './components/MobileBottomBar';
 import InstagramCommentsSheet from './components/InstagramCommentsSheet';
+import { handleInputWithCursor } from './utils/inputFix';
 
 export default function App() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -996,7 +997,7 @@ export default function App() {
                 <input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleInputWithCursor(e, setSearchTerm)}
                   placeholder="Search..."
                   className="w-full bg-zinc-950 border border-zinc-900 focus:border-emerald-500/30 rounded-md pl-9 pr-8 py-2 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none transition-colors"
                 />

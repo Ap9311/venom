@@ -22,11 +22,11 @@
           hasAdminSession = sessionStorage.getItem('nonum_admin_auth') === 'true' && localStorage.getItem('nonum_is_admin_device') === 'true';
         } catch(e) {}
 
-        var isAdmin = hasAdminSession && (path.startsWith('/admin') || path.includes('admin'));
-        var manifestUrl = '/manifest.json';
+        var isAdminRoute = path.startsWith('/admin') || path.includes('admin');
+        var manifestUrl = isAdminRoute ? '/admin-manifest.json' : '/manifest.json';
         var faviconUrl = 'https://iili.io/nWbQlNj.png';
         var titleText = "Nonum | Decentralized Anonymous Grid";
-        if (isAdmin) {
+        if (isAdminRoute) {
           if (path.includes('report')) {
             titleText = "Nonum Admin Reports";
           } else {

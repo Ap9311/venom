@@ -24,6 +24,7 @@ import { getClientIp, getDeviceDetails, getDeviceImei, isMobileDevice, getDevice
 import { getDoc } from 'firebase/firestore';
 import { checkIpBlockStatus } from '../utils/blockChecker';
 import { motion } from 'motion/react';
+import { handleInputWithCursor } from '../utils/inputFix';
 
 interface NewNonumModalProps {
   onClose: () => void;
@@ -349,7 +350,7 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
               type="text"
               required
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => handleInputWithCursor(e, setTitle)}
               placeholder="Give your post an interesting title..."
               maxLength={200}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-emerald-500/30"
@@ -363,7 +364,7 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
             <textarea
               required={type !== 'image'}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => handleInputWithCursor(e, setContent)}
               placeholder={type === 'image' ? "Add an optional description for your image..." : "What would you like to share?"}
               rows={4}
               maxLength={5000}

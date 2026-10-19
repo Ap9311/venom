@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { X, MessageSquare } from 'lucide-react';
 import { Post } from '../types';
 import CommentsPane from './CommentsPane';
@@ -24,6 +24,8 @@ export default function InstagramCommentsSheet({
   onBlockedActionTriggered,
   onCommentsCountChange,
 }: InstagramCommentsSheetProps) {
+  const dragControls = useDragControls();
+
   // Lock body scroll when drawer is active
   useEffect(() => {
     if (post) {
@@ -47,7 +49,7 @@ export default function InstagramCommentsSheet({
   if (!post) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end pointer-events-auto select-none">
+    <div className="fixed inset-0 z-[60] flex flex-col justify-end pointer-events-auto">
       {/* Darkened Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -65,6 +67,8 @@ export default function InstagramCommentsSheet({
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 350 }}
         drag="y"
+        dragControls={dragControls}
+        dragListener={false}
         dragConstraints={{ top: 0 }}
         dragElastic={0.15}
         onDragEnd={(_, info) => {
@@ -76,9 +80,10 @@ export default function InstagramCommentsSheet({
       >
         {/* Drag Handle & Header Bar */}
         <div className="pt-2.5 pb-3 px-4 border-b border-zinc-900 bg-zinc-950/95 backdrop-blur-md shrink-0 flex flex-col">
-          {/* Centered Drag Pill */}
+          {/* Centered Drag Pill - Active Drag Target */}
           <div 
-            className="w-12 h-1.5 bg-zinc-700/80 hover:bg-zinc-500 rounded-full mx-auto mb-2.5 cursor-grab active:cursor-grabbing transition-colors" 
+            onPointerDown={(e) => dragControls.start(e)}
+            className="w-12 h-1.5 bg-zinc-700/80 hover:bg-zinc-500 rounded-full mx-auto mb-2.5 cursor-grab active:cursor-grabbing transition-colors touch-none" 
             title="Drag down to close"
           />
 
