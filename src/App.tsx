@@ -57,6 +57,7 @@ import { checkIpBlockStatus, BlockStatus } from './utils/blockChecker';
 import QuarantineNoticeModal from './components/QuarantineNoticeModal';
 import { InstallPwaModal } from './components/InstallPwaModal';
 import { MobileBottomBar } from './components/MobileBottomBar';
+import InstagramCommentsSheet from './components/InstagramCommentsSheet';
 
 export default function App() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -65,6 +66,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'likes'>('latest');
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewPostModal, setShowNewPostModal] = useState(false);
+  const [activeCommentPost, setActiveCommentPost] = useState<Post | null>(null);
   const [opId, setOpId] = useState('');
   const [dbConnected, setDbConnected] = useState<boolean | null>(null);
   const [currentPath, setCurrentPath] = useState(() =>
@@ -156,6 +158,9 @@ export default function App() {
     (window as any).triggerNewPost = () => {
       handleNewPostClick();
     };
+    (window as any).openCommentsDrawer = (postToOpen: Post) => {
+      setActiveCommentPost(postToOpen);
+    };
 
     // Lock screen orientation to startup orientation if supported
     const lockOrientation = async () => {
@@ -173,6 +178,7 @@ export default function App() {
     return () => {
       delete (window as any).openPwaInstallModal;
       delete (window as any).triggerNewPost;
+      delete (window as any).openCommentsDrawer;
     };
   }, [blockStatus]);
 
@@ -636,6 +642,9 @@ export default function App() {
       prevPosts.map((post) =>
         post.id === postId ? { ...post, ...updatedFields } : post
       )
+    );
+    setActiveCommentPost((prev) =>
+      prev && prev.id === postId ? { ...prev, ...updatedFields } : prev
     );
   };
 
@@ -1212,6 +1221,7 @@ export default function App() {
                       onPostUpdate={(fields) => handlePostUpdate(post.id, fields)}
                       isBlocked={blockStatus?.isBlocked || false}
                       onBlockedActionTriggered={() => setShowQuarantineModal(true)}
+                      onOpenComments={(postToOpen) => setActiveCommentPost(postToOpen)}
                     />
                   </motion.div>
                 ))}
@@ -1248,6 +1258,18 @@ export default function App() {
         onClose={() => setShowInstallPwaModal(false)} 
         appType={installPwaAppType}
       />
+
+      <AnimatePresence>
+        {activeCommentPost && (
+          <InstagramCommentsSheet
+            post={activeCommentPost}
+            onClose={() => setActiveCommentPost(null)}
+            isBlocked={blockStatus?.isBlocked || false}
+            onBlockedActionTriggered={() => setShowQuarantineModal(true)}
+            onCommentsCountChange={(postId, count) => handlePostUpdate(postId, { commentsCount: count })}
+          />
+        )}
+      </AnimatePresence>
 
       <MobileBottomBar currentPath={currentPath} />
 

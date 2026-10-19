@@ -49,7 +49,7 @@ export async function testConnection() {
 }
 
 // Automatically test connection on boot
-testConnection();
+testConnection().catch((err) => console.warn('Firebase test connection notice:', err));
 
 // Define OperationType and handleFirestoreError for diagnosing rules issues (Mandatory per Skill guidelines)
 export enum OperationType {

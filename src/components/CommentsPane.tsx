@@ -34,6 +34,7 @@ interface CommentsPaneProps {
   onCommentsCountChange?: (newCount: number) => void;
   isBlocked?: boolean;
   onBlockedActionTriggered?: () => void;
+  isDrawerMode?: boolean;
 }
 
 export default function CommentsPane({ 
@@ -41,6 +42,7 @@ export default function CommentsPane({
   onCommentsCountChange,
   isBlocked = false,
   onBlockedActionTriggered,
+  isDrawerMode = false,
 }: CommentsPaneProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentText, setNewCommentText] = useState('');
@@ -120,6 +122,57 @@ export default function CommentsPane({
     const date = ts.toDate ? ts.toDate() : new Date(ts);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString();
   };
+
+  if (isDrawerMode) {
+    return (
+      <div className="flex flex-col h-full font-sans bg-zinc-950 overflow-hidden">
+        {/* Comments List (Fills remaining height) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {comments.length === 0 ? (
+            <div className="text-center py-12 text-xs text-zinc-500 flex flex-col items-center justify-center gap-2 font-mono">
+              <ShieldAlert className="w-6 h-6 text-zinc-600 animate-pulse" />
+              <span className="text-zinc-300 font-sans font-medium text-sm">No comments yet</span>
+              <span className="text-[11px] text-zinc-600">Be the first to share your thoughts!</span>
+            </div>
+          ) : (
+            comments.map((comment, index) => (
+              <CommentItem
+                key={comment.id}
+                postId={postId}
+                comment={comment}
+                index={index}
+                isBlocked={isBlocked}
+                onBlockedActionTriggered={onBlockedActionTriggered}
+                formatTimestamp={formatTimestamp}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Sticky Instagram-style Comment Input Bar at the Bottom */}
+        <div className="p-3 bg-zinc-950/95 border-t border-zinc-900 shrink-0">
+          <form onSubmit={handlePostComment} className="flex items-center gap-2 max-w-2xl mx-auto">
+            <input
+              type="text"
+              value={newCommentText}
+              onChange={(e) => setNewCommentText(e.target.value)}
+              placeholder="Add an anonymous comment..."
+              maxLength={1000}
+              className="flex-1 bg-zinc-900/80 border border-zinc-800/90 focus:border-emerald-500/50 rounded-full px-4 py-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-all font-sans"
+            />
+            <button
+              type="submit"
+              disabled={!newCommentText.trim() || isSubmittingComment}
+              className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:opacity-50 px-4 py-2.5 rounded-full text-xs font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sans shrink-0 active:scale-95 shadow-md"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Post</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-zinc-900 bg-zinc-950/40 p-4 sm:p-5 font-sans">

@@ -57,6 +57,7 @@ interface NonumCardProps {
   isBlocked?: boolean;
   onBlockedActionTriggered?: () => void;
   compact?: boolean;
+  onOpenComments?: (post: Post) => void;
 }
 
 const REACTIONS = [
@@ -97,7 +98,8 @@ export default function NonumCard({
   onPostUpdate,
   isBlocked = false,
   onBlockedActionTriggered,
-  compact = false
+  compact = false,
+  onOpenComments
 }: NonumCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [isCopingHash, setIsCopingHash] = useState(false);
@@ -923,7 +925,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
       {/* Top Meta Info Header */}
       <div className={`px-4 py-3 flex items-center justify-between border-b border-zinc-900/40 text-[10px] text-zinc-500 font-mono gap-3 flex-wrap ${compact ? 'px-2.5 py-2 text-[9px]' : ''}`}>
         
-        {/* Left Side: Report Button, Poll/QA Badge & Target badge */}
+        {/* Left Side: Report Button */}
         <div className="flex items-center gap-2 min-w-0">
           {/* 1. Report Button */}
           <button
@@ -940,27 +942,6 @@ Post Nonum Now: https://mynonum.vercel.app`;
             <Flag className="w-2.5 h-2.5 text-rose-500" />
             <span>Report</span>
           </button>
-
-          {/* Poll / Q&A Type Indicator Badge */}
-          {(post.type === 'poll' || post.type === 'qa') && (
-            <>
-              <span className="text-zinc-800">•</span>
-              <span className={`text-emerald-400 font-bold bg-emerald-950/30 border border-emerald-500/20 px-2 py-0.5 rounded uppercase text-[8px] tracking-wider flex items-center gap-1 shrink-0 ${compact ? 'px-1.5 py-0 text-[7.5px]' : ''}`}>
-                {post.type === 'poll' && <BarChart2 className="w-2.5 h-2.5 text-emerald-400" />}
-                {post.type === 'qa' && <HelpCircle className="w-2.5 h-2.5 text-emerald-400" />}
-                <span>{post.type === 'qa' ? 'Q&A' : 'POLL'}</span>
-              </span>
-            </>
-          )}
-
-          {highlighted && (
-            <>
-              <span className="text-zinc-800">•</span>
-              <span className="bg-emerald-500 text-zinc-950 px-1.5 py-0.5 rounded uppercase text-[8px] font-black tracking-wider animate-pulse flex items-center gap-1">
-                Target
-              </span>
-            </>
-          )}
         </div>
 
         {/* Right Side: Share Button */}
@@ -1200,23 +1181,17 @@ Post Nonum Now: https://mynonum.vercel.app`;
             <span className="text-[10px]">{formatShortCount(post.likesCount)}</span>
           </button>
 
-          {/* Comments Expand Button */}
+          {/* Comments Button (Triggers Instagram Reels style slide-up sheet) */}
           <button
             onClick={() => {
-              const nextVal = !showComments;
-              setShowComments(nextVal);
-              if (nextVal) {
-                setTimeout(() => {
-                  const element = document.getElementById(`post-${post.id}`);
-                  if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }, 150);
+              if (onOpenComments) {
+                onOpenComments(post);
+              } else if (typeof window !== 'undefined' && (window as any).openCommentsDrawer) {
+                (window as any).openCommentsDrawer(post);
               }
             }}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1 hover:bg-emerald-950/10 rounded text-[10px] sm:text-xs transition-colors cursor-pointer ${
-              showComments ? 'text-emerald-400 font-semibold' : 'hover:text-emerald-400 text-zinc-500'
-            }`}
+            className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 hover:bg-emerald-950/10 rounded text-[10px] sm:text-xs transition-colors cursor-pointer text-zinc-500 hover:text-emerald-400"
+            title="Open Comments"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span className="text-[10px]">{formatShortCount(commentsCount)}</span>
@@ -1290,26 +1265,6 @@ Post Nonum Now: https://mynonum.vercel.app`;
           </span>
         </div>
       </div>
-
-      {/* Expandable Comments Section */}
-      <AnimatePresence>
-        {showComments && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="overflow-hidden bg-zinc-950/30"
-          >
-            <CommentsPane 
-              postId={post.id} 
-              onCommentsCountChange={handleCommentsCountChange}
-              isBlocked={isBlocked}
-              onBlockedActionTriggered={onBlockedActionTriggered}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Premium Social Sharing Modal */}
       <AnimatePresence>

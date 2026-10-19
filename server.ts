@@ -9,7 +9,15 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore';
-import { db } from './src/firebase.js';
+import { db } from './src/firebase';
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('Unhandled Rejection caught in server:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception caught in server:', err);
+});
 
 async function getPostByHash(hash: string) {
   if (!db) return null;
@@ -72,7 +80,10 @@ async function startServer() {
   let vite: any = null;
   if (process.env.NODE_ENV !== 'production') {
     vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : undefined
+      },
       appType: 'spa',
     });
   }
@@ -119,7 +130,7 @@ async function startServer() {
       console.warn('Initial admin registry sync notice:', e);
     }
   }
-  syncServerAdminRegistry();
+  syncServerAdminRegistry().catch((err) => console.warn('Admin registry background sync notice:', err));
 
   // Anti-Brute-Force & Rate-Limiting Engine against automated attacks (ffuf, hydra, curl)
   const failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
