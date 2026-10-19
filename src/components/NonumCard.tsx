@@ -885,7 +885,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
       className={`relative border rounded-xl overflow-hidden flex flex-col hover:shadow-2xl transition-all duration-300 font-sans text-zinc-300 select-none ${
         highlighted 
           ? 'border-emerald-500/50 bg-emerald-950/10 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30' 
-          : 'border-zinc-900 bg-zinc-950/70 hover:border-emerald-500/10'
+          : 'border-zinc-800 bg-zinc-950/70 hover:border-emerald-500/10'
       }`}
     >
       

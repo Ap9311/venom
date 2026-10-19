@@ -34,21 +34,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const token = (typeof tokenHeader === 'string' ? tokenHeader.replace('Bearer ', '') : '') || cookies['nonum_admin_token'];
     const devId = (typeof devIdHeader === 'string' ? devIdHeader : '') || cookies['nonum_admin_device_id'];
 
-    let isAuthorized = false;
-
-    if (token && token === ADMIN_SECRET_KEY) {
-      isAuthorized = true;
-    }
-
-    // If unauthorized, immediately return HTTP 404 status
-    if (!isAuthorized) {
-      res.statusCode = 404;
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      const reqPath = req.url || '/';
-      return res.end(`Cannot GET ${reqPath}`);
-    }
-
-    // If authorized admin, serve index.html
+    // Serve index.html, letting the SPA handle authorization redirects
     const indexFilePath = path.join(process.cwd(), 'dist', 'index.html');
     let htmlContent = '';
     if (fs.existsSync(indexFilePath)) {
