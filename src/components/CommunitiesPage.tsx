@@ -55,7 +55,7 @@ import {
   ExternalLink,
   Instagram
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceImei, getLegacyDeviceImei } from '../utils/ip';
 import { generatePostHash, hashSha256 } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
@@ -198,6 +198,104 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
   // Flying reaction emoji particles
   const [floatingEmojisByChat, setFloatingEmojisByChat] = useState<{ [chatId: string]: any[] }>({});
+
+  // Active Instagram Comments Sheet for community chats
+  const [activeChatCommentsSheet, setActiveChatCommentsSheet] = useState<any | null>(null);
+  const chatDragControls = useDragControls();
+
+  // Active Double-Tap Heart animation by chat
+  const [activeHeartByChat, setActiveHeartByChat] = useState<{
+    [chatId: string]: { id: number; x: number; y: number; theme: { id: string; stop1: string; stop2: string } } | null;
+  }>({});
+  const lastChatTapRef = useRef<{ [chatId: string]: number }>({});
+  const lastChatTouchPosRef = useRef<{ clientX: number; clientY: number }>({ clientX: 0, clientY: 0 });
+  const lastChatTriggerTimeRef = useRef<{ [chatId: string]: number }>({});
+
+  const NONUM_GRADIENT_THEMES = [
+    { id: 'white', stop1: '#ffffff', stop2: '#f4f4f5' },
+    { id: 'emerald', stop1: '#10b981', stop2: '#059669' },
+    { id: 'magenta', stop1: '#a855f7', stop2: '#ec4899' }
+  ];
+
+  const triggerChatDoubleTapLike = (chat: any, clientX?: number, clientY?: number) => {
+    const chatId = chat.id;
+    const now = Date.now();
+    if (now - (lastChatTriggerTimeRef.current[chatId] || 0) < 600) {
+      return;
+    }
+    lastChatTriggerTimeRef.current[chatId] = now;
+
+    let x = 0;
+    let y = 0;
+
+    const chatEl = document.getElementById(`chat-${chatId}`);
+    if (chatEl) {
+      const rect = chatEl.getBoundingClientRect();
+      if (clientX !== undefined && clientY !== undefined && clientX > 0 && clientY > 0) {
+        x = clientX - rect.left;
+        y = clientY - rect.top;
+      } else {
+        x = rect.width / 2;
+        y = rect.height / 2;
+      }
+    }
+
+    const roll = Math.random();
+    let randomTheme = NONUM_GRADIENT_THEMES[2];
+    if (roll < 0.01) {
+      randomTheme = NONUM_GRADIENT_THEMES[0];
+    } else if (roll < 0.406) {
+      randomTheme = NONUM_GRADIENT_THEMES[1];
+    }
+    const heartId = Date.now();
+
+    setActiveHeartByChat((prev) => ({
+      ...prev,
+      [chatId]: { id: heartId, x, y, theme: randomTheme }
+    }));
+
+    setTimeout(() => {
+      setActiveHeartByChat((prev) => (prev[chatId]?.id === heartId ? { ...prev, [chatId]: null } : prev));
+    }, 750);
+
+    if (!likedChats.includes(chatId)) {
+      handleLikeChat(chatId);
+    }
+  };
+
+  const handleChatDoubleTap = (e: React.MouseEvent, chat: any) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, textarea, a, [role="button"]')) {
+      return;
+    }
+    e.preventDefault();
+    triggerChatDoubleTapLike(chat, e.clientX, e.clientY);
+  };
+
+  const handleChatTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      lastChatTouchPosRef.current = {
+        clientX: e.touches[0].clientX,
+        clientY: e.touches[0].clientY,
+      };
+    }
+  };
+
+  const handleChatTouchEnd = (e: React.TouchEvent, chat: any) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, textarea, a, [role="button"]')) {
+      return;
+    }
+    const chatId = chat.id;
+    const now = Date.now();
+    const lastTap = lastChatTapRef.current[chatId] || 0;
+    if (now - lastTap < 350 && now - lastTap > 50) {
+      lastChatTapRef.current[chatId] = 0;
+      triggerChatDoubleTapLike(chat, lastChatTouchPosRef.current.clientX, lastChatTouchPosRef.current.clientY);
+    } else {
+      lastChatTapRef.current[chatId] = now;
+    }
+  };
 
   const spawnFloatingEmojis = (chatId: string, emoji: string) => {
     const newParticles = Array.from({ length: 12 }).map((_, i) => ({
@@ -1694,10 +1792,46 @@ Post Nonum Now: https://mynonum.vercel.app`;
                     <div
                       key={chat.id}
                       id={`chat-${chat.id}`}
-                      className={`flex flex-col max-w-md md:max-w-xl border border-zinc-900 bg-zinc-950/80 p-3.5 rounded-2xl relative transition-all shadow-md group/chat z-10 ${
+                      onDoubleClick={(e) => handleChatDoubleTap(e, chat)}
+                      onTouchStart={handleChatTouchStart}
+                      onTouchEnd={(e) => handleChatTouchEnd(e, chat)}
+                      className={`flex flex-col max-w-md md:max-w-xl border border-zinc-900 bg-zinc-950/80 p-3.5 rounded-2xl relative transition-all shadow-md group/chat z-10 select-none ${
                         isUserSender ? 'ml-auto border-emerald-500/10 bg-emerald-500/[0.01]' : 'mr-auto'
                       }`}
                     >
+                      {/* Double Tap Gradient Heart Animation */}
+                      <AnimatePresence mode="wait">
+                        {activeHeartByChat[chat.id] && (
+                          <motion.div
+                            key={activeHeartByChat[chat.id]!.id}
+                            initial={{ scale: 0, opacity: 0, x: activeHeartByChat[chat.id]!.x, y: activeHeartByChat[chat.id]!.y }}
+                            animate={{ scale: [0, 1.25, 1], opacity: [0, 1, 1], y: activeHeartByChat[chat.id]!.y - 12 }}
+                            exit={{ scale: 0.85, opacity: 0, y: activeHeartByChat[chat.id]!.y - 25 }}
+                            transition={{ duration: 0.65, ease: 'easeOut' }}
+                            className="absolute pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2"
+                            style={{ left: 0, top: 0 }}
+                          >
+                            <svg 
+                              className="w-16 h-16 sm:w-20 sm:h-20 filter drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)] drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" 
+                              viewBox="0 0 24 24" 
+                              fill="none" 
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <defs>
+                                <linearGradient id={`chat-heart-grad-${activeHeartByChat[chat.id]!.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                                  <stop offset="0%" stopColor={activeHeartByChat[chat.id]!.theme.stop1} />
+                                  <stop offset="100%" stopColor={activeHeartByChat[chat.id]!.theme.stop2} />
+                                </linearGradient>
+                              </defs>
+                              <path 
+                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
+                                fill={`url(#chat-heart-grad-${activeHeartByChat[chat.id]!.id})`}
+                              />
+                            </svg>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
                       {/* Top metadata tags */}
                       <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500 mb-1.5 gap-4 relative z-10">
                         <span className="font-bold truncate text-zinc-400 flex items-center gap-1.5">
@@ -1894,21 +2028,14 @@ Post Nonum Now: https://mynonum.vercel.app`;
                           </div>
                         </div>
 
-                        {/* Comments button moved fully right */}
+                        {/* Comments button moved fully right - opens Instagram style sheet drawer */}
                         <div className="flex justify-end">
                           <button
                             onClick={() => {
-                              const nextVal = expandedCommentsChatId === chat.id ? null : chat.id;
-                              setExpandedCommentsChatId(nextVal);
-                              if (nextVal) {
-                                setTimeout(() => {
-                                  document.getElementById(`chat-${chat.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }, 300);
-                              }
+                              setActiveChatCommentsSheet(chat);
                             }}
-                            className={`flex items-center gap-1.5 text-[10px] font-mono font-bold transition-colors cursor-pointer shrink-0 ${
-                              expandedCommentsChatId === chat.id ? 'text-emerald-400 font-bold' : 'hover:text-zinc-300 text-zinc-500'
-                            }`}
+                            className="flex items-center gap-1.5 text-[10px] font-mono font-bold transition-colors cursor-pointer shrink-0 hover:text-emerald-400 text-zinc-500"
+                            title="Open Instagram Style Comments"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                             <span>{formatShortCount(chat.commentsCount || 0)}</span>
@@ -2794,6 +2921,86 @@ Post Nonum Now: https://mynonum.vercel.app`;
               </form>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* INSTAGRAM REELS STYLE COMMENTS SHEET DRAWER FOR COMMUNITY CHATS */}
+      <AnimatePresence>
+        {activeChatCommentsSheet && activeCommunity && (
+          <div className="fixed inset-0 z-[60] flex flex-col justify-end pointer-events-auto">
+            {/* Darkened Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setActiveChatCommentsSheet(null)}
+            />
+
+            {/* Slide-up Instagram Reels Style Sheet Drawer */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+              drag="y"
+              dragControls={chatDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0 }}
+              dragElastic={0.15}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 450) {
+                  setActiveChatCommentsSheet(null);
+                }
+              }}
+              className="relative w-full max-w-2xl mx-auto bg-zinc-950 border-t border-x border-zinc-850 rounded-t-2xl sm:rounded-t-3xl shadow-[0_-16px_48px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden h-[75vh] max-h-[calc(100vh-68px)] bottom-0 z-10"
+            >
+              {/* Drag Handle & Header Bar */}
+              <div className="pt-2.5 pb-3 px-4 border-b border-zinc-900 bg-zinc-950/95 backdrop-blur-md shrink-0 flex flex-col">
+                {/* Centered Drag Pill - Active Drag Target */}
+                <div 
+                  onPointerDown={(e) => chatDragControls.start(e)}
+                  className="w-12 h-1.5 bg-zinc-700/80 hover:bg-zinc-500 rounded-full mx-auto mb-2.5 cursor-grab active:cursor-grabbing transition-colors touch-none" 
+                  title="Drag down to close"
+                />
+
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-mono font-bold text-xs uppercase tracking-wider text-zinc-200">
+                      Community Chat Comments
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                      {formatShortCount(activeChatCommentsSheet.commentsCount || 0)}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveChatCommentsSheet(null)}
+                    className="p-1.5 hover:bg-zinc-900 rounded-full text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer"
+                    title="Close Comments (Esc)"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Chat Message Context Bar */}
+                <div className="mt-2 text-xs text-zinc-400 truncate font-sans bg-zinc-900/60 px-3 py-1.5 rounded-lg border border-zinc-850">
+                  <span className="text-zinc-500 font-mono text-[10px] mr-1.5 uppercase tracking-wider font-bold">Message:</span>
+                  <span className="text-zinc-200 font-medium">"{activeChatCommentsSheet.content || '[Attached Graphic/Poll]'}"</span>
+                </div>
+              </div>
+
+              {/* Scrollable Comments Content Container */}
+              <div className="flex-1 min-h-0 flex flex-col bg-zinc-950 overflow-y-auto">
+                <ChatCommentsPane 
+                  communityId={activeCommunity.id} 
+                  chatId={activeChatCommentsSheet.id} 
+                />
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
