@@ -725,16 +725,13 @@ export default function App() {
 
   // Cryptographic Administrative Access Gate (/admin and sub-routes)
   // ONLY devices with registered and active hardware admin fingerprint identity can access /admin.
-  // All unauthorized devices receive the real web server 404 response directly.
+  // All unauthorized devices receive the standard 404 response.
   if (currentPath.startsWith('/admin')) {
     if (isAdminDevice !== true) {
       if (isAdminDevice === null) {
-        return <div className="min-h-screen bg-[#202124]" />;
+        return <div className="min-h-screen bg-white" />;
       }
-      if (typeof window !== 'undefined') {
-        window.location.href = window.location.href;
-      }
-      return null;
+      return <Standard404Page />;
     }
 
     // Admin audit & gate security terminal route check
@@ -1255,5 +1252,18 @@ export default function App() {
       <MobileBottomBar currentPath={currentPath} />
 
     </motion.div>
+  );
+}
+
+function Standard404Page() {
+  return (
+    <div className="min-h-screen bg-white text-black p-8 font-sans selection:bg-none">
+      <h1 className="text-2xl font-bold mb-2">404 Not Found</h1>
+      <p className="text-sm text-gray-700 mb-4">Cannot GET {typeof window !== 'undefined' ? window.location.pathname : '/admin'}</p>
+      <hr className="border-gray-300 my-4" />
+      <address className="text-xs text-gray-500 not-italic">
+        Apache Server at {typeof window !== 'undefined' ? window.location.hostname : 'nonum.online'} Port 443
+      </address>
+    </div>
   );
 }
