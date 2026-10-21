@@ -4,7 +4,7 @@ import { resolveEffectivePath, navigateToDomainRoute } from './utils/subdomainRo
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { 
   collection, 
   query, 
@@ -23,19 +23,20 @@ import { getClientIp, getDeviceImei, getLegacyDeviceImei } from './utils/ip';
 import Header from './components/Header';
 import NonumCard from './components/NonumCard';
 import NewNonumModal from './components/NewNonumModal';
-import AdminPanel from './components/AdminPanel';
 import InfoModals from './components/InfoModals';
 import GuidelinesPage from './components/GuidelinesPage';
 import PoliciesPage from './components/PoliciesPage';
 import ReportPage from './components/ReportPage';
-import AdminReports from './components/admin/AdminReports';
 import CommunitiesPage from './components/CommunitiesPage';
-import AdminCommunities from './components/admin/AdminCommunities';
-import AdminCommunityReports from './components/admin/AdminCommunityReports';
-import AdminAudit from './components/admin/AdminAudit';
-import LoginPage from './components/LoginPage';
 import NxDomainError from './components/NxDomainError';
 import { checkIsAdminDevice, getAdminDeviceId } from './utils/adminAuth';
+
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const AdminReports = lazy(() => import('./components/admin/AdminReports'));
+const AdminCommunities = lazy(() => import('./components/admin/AdminCommunities'));
+const AdminCommunityReports = lazy(() => import('./components/admin/AdminCommunityReports'));
+const AdminAudit = lazy(() => import('./components/admin/AdminAudit'));
+const LoginPage = lazy(() => import('./components/LoginPage'));
 import { 
   Cpu, 
   Search,
@@ -726,98 +727,109 @@ export default function App() {
   // Administrator Clearance Gate (/login)
   if (currentPath.startsWith('/login')) {
     return (
-      <LoginPage 
-        onNavigateAdmin={handleNavigateAdmin} 
-        onBackToHome={handleBackToHome} 
-      />
+      <Suspense fallback={<div className="min-h-screen bg-[#202124]" />}>
+        <LoginPage 
+          onNavigateAdmin={handleNavigateAdmin} 
+          onBackToHome={handleBackToHome} 
+        />
+      </Suspense>
     );
   }
 
   // Cryptographic Administrative Access Gate (/admin and sub-routes)
   // ONLY devices with registered and active hardware admin fingerprint identity can access /admin.
-  // All unauthorized devices receive the real web server 404 response directly from Vercel/Express backend.
   if (currentPath.startsWith('/admin')) {
     if (isAdminDevice !== true) {
       if (isAdminDevice === null) {
         return <div className="min-h-screen bg-black" />;
       }
-      return null;
+      return <NxDomainError />;
     }
 
     // Admin audit & gate security terminal route check
     if (currentPath.startsWith('/admin/audit')) {
       return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminAudit onNavigateHome={handleBackToHome} />
-        </motion.div>
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminAudit onNavigateHome={handleBackToHome} />
+          </motion.div>
+        </Suspense>
       );
     }
 
     // Admin community reports terminal route check
     if (currentPath.startsWith('/admin/report-communities') || currentPath.startsWith('/admin/community-reports')) {
       return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminCommunityReports />
-        </motion.div>
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminCommunityReports />
+          </motion.div>
+        </Suspense>
       );
     }
 
     // Admin reports terminal route check
     if (currentPath.startsWith('/admin/report')) {
       return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminReports />
-        </motion.div>
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminReports />
+          </motion.div>
+        </Suspense>
       );
     }
 
     // Admin communities terminal route check
     if (currentPath.startsWith('/admin/communities')) {
       return (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="min-h-screen bg-[#030303]"
-        >
-          <AdminCommunities onNavigateHome={handleBackToHome} />
-        </motion.div>
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminCommunities onNavigateHome={handleBackToHome} />
+          </motion.div>
+        </Suspense>
       );
     }
 
     // Admin dashboard root
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -15 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
-        className="min-h-screen bg-zinc-950"
-      >
-        <AdminPanel 
-          posts={posts} 
-          onNavigateHome={handleBackToHome} 
-        />
-      </motion.div>
+      <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="min-h-screen bg-zinc-950"
+        >
+          <AdminPanel 
+            posts={posts} 
+            onNavigateHome={handleBackToHome} 
+          />
+        </motion.div>
+      </Suspense>
     );
   }
 

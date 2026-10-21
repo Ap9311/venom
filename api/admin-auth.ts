@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { setCorsHeaders, parseJsonBody, verifyAdminCredentials, ADMIN_SECRET_KEY } from './_helpers.js';
+import { setCorsHeaders, parseJsonBody, verifyAdminCredentials, setAdminCookies, ADMIN_SECRET_KEY } from './_helpers.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
@@ -17,9 +17,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const body = await parseJsonBody(req);
-    const { username, password } = body || {};
+    const { username, password, adminDeviceId } = body || {};
 
     if (verifyAdminCredentials(username, password)) {
+      setAdminCookies(res, req, adminDeviceId, ADMIN_SECRET_KEY);
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       return res.end(

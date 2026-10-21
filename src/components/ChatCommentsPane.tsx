@@ -45,15 +45,19 @@ function deduplicateById<T extends { id?: string }>(items: T[]): T[] {
 interface ChatCommentsPaneProps {
   communityId: string;
   chatId: string;
+  onCommentsCountChange?: (newCount: number) => void;
   isBlocked?: boolean;
   onBlockedActionTriggered?: () => void;
+  isDrawerMode?: boolean;
 }
 
 export default function ChatCommentsPane({ 
   communityId, 
   chatId, 
+  onCommentsCountChange,
   isBlocked = false,
   onBlockedActionTriggered,
+  isDrawerMode = false,
 }: ChatCommentsPaneProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentText, setNewCommentText] = useState('');
@@ -72,10 +76,14 @@ export default function ChatCommentsPane({
           ...docSnap.data(),
         })) as Comment[];
         
-        setComments(deduplicateById(fetchedComments));
+        const deduped = deduplicateById(fetchedComments);
+        setComments(deduped);
+        if (onCommentsCountChange) {
+          onCommentsCountChange(deduped.length);
+        }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `communities/${communityId}/chats/${chatId}/comments`);
+        console.warn('Chat comments query fallback notice:', error);
       }
     );
 
@@ -109,10 +117,14 @@ export default function ChatCommentsPane({
       });
 
       // Increment comments count on parent chat
-      const chatRef = doc(db, 'communities', communityId, 'chats', chatId);
-      await updateDoc(chatRef, {
-        commentsCount: increment(1),
-      });
+      try {
+        const chatRef = doc(db, 'communities', communityId, 'chats', chatId);
+        await updateDoc(chatRef, {
+          commentsCount: increment(1),
+        });
+      } catch (cntErr) {
+        console.warn('Chat comment counter increment notice:', cntErr);
+      }
 
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `communities/${communityId}/chats/${chatId}/comments`);
@@ -129,6 +141,58 @@ export default function ChatCommentsPane({
 
   const uniqueComments = deduplicateById<Comment>(comments);
 
+  if (isDrawerMode) {
+    return (
+      <div className="flex flex-col h-full font-sans bg-zinc-950 overflow-hidden">
+        {/* Comments List (Fills remaining height) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {uniqueComments.length === 0 ? (
+            <div className="text-center py-12 text-xs text-zinc-500 flex flex-col items-center justify-center gap-2 font-mono">
+              <ShieldAlert className="w-6 h-6 text-zinc-600 animate-pulse" />
+              <span className="text-zinc-300 font-sans font-medium text-sm">No comments yet</span>
+              <span className="text-[11px] text-zinc-600">Be the first to share your thoughts!</span>
+            </div>
+          ) : (
+            uniqueComments.map((comment, index) => (
+              <ChatCommentItem
+                key={`comment_${comment.id || index}_${index}`}
+                communityId={communityId}
+                chatId={chatId}
+                comment={comment}
+                index={index}
+                isBlocked={isBlocked}
+                onBlockedActionTriggered={onBlockedActionTriggered}
+                formatTimestamp={formatTimestamp}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Sticky Instagram-style Comment Input Bar at the Bottom */}
+        <div className="p-3 bg-zinc-950/95 border-t border-zinc-900 shrink-0">
+          <form onSubmit={handlePostComment} className="flex items-center gap-2 max-w-2xl mx-auto">
+            <input
+              type="text"
+              value={newCommentText}
+              onChange={(e) => handleInputWithCursor(e, setNewCommentText)}
+              placeholder="Add an anonymous comment..."
+              maxLength={1000}
+              className="flex-1 bg-zinc-900/80 border border-zinc-800/90 focus:border-emerald-500/50 rounded-full px-4 py-2.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none transition-all font-sans"
+            />
+            <button
+              type="submit"
+              disabled={!newCommentText.trim() || isSubmittingComment}
+              className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:opacity-50 px-4 py-2.5 rounded-full text-xs font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer font-sans shrink-0 active:scale-95 shadow-md"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Post</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border-t border-zinc-900 bg-zinc-950/40 p-4 sm:p-5 font-sans">
       <div className="flex items-center gap-2 mb-4 text-xs text-zinc-400 font-semibold uppercase tracking-wider font-mono">
@@ -136,26 +200,29 @@ export default function ChatCommentsPane({
         <span>COMMENTS ({uniqueComments.length})</span>
       </div>
 
-      <CommentInput 
-        value={newCommentText}
-        onChange={setNewCommentText}
-        onSubmit={handlePostComment}
-        placeholder="Add your anonymous comment..."
-        isSubmitting={isSubmittingComment}
-        disabled={isBlocked}
-      />
+      {/* Input Form */}
+      <div className="mb-6">
+        <CommentInput 
+          value={newCommentText}
+          onChange={setNewCommentText}
+          onSubmit={handlePostComment}
+          placeholder="Write a comment..."
+          isSubmitting={isSubmittingComment}
+          disabled={isBlocked}
+        />
+      </div>
 
       {/* Comments List */}
       <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
         {uniqueComments.length === 0 ? (
-          <div className="text-center py-4 text-[10px] text-zinc-600 flex flex-col items-center gap-1 font-mono">
-            <ShieldAlert className="w-4 h-4 text-zinc-800 animate-pulse" />
-            <span>No arguments recorded yet. Be first!</span>
+          <div className="text-center py-6 text-xs text-zinc-600 flex flex-col items-center gap-2 font-mono">
+            <ShieldAlert className="w-5 h-5 text-zinc-700 animate-pulse" />
+            <span>No comments yet. Share your thoughts above!</span>
           </div>
         ) : (
           uniqueComments.map((comment, index) => (
             <ChatCommentItem
-              key={comment.id ? `${comment.id}_${index}` : `comment_${index}`}
+              key={`comment_${comment.id || index}_${index}`}
               communityId={communityId}
               chatId={chatId}
               comment={comment}
@@ -172,7 +239,7 @@ export default function ChatCommentsPane({
 }
 
 interface ChatCommentItemProps {
-  key?: any;
+  key?: React.Key;
   communityId: string;
   chatId: string;
   comment: Comment;
@@ -225,7 +292,6 @@ function ChatCommentItem({
         setReplies(merged);
       },
       (error) => {
-        // Fallback to comment.repliesList if subcollection query triggers permission notice
         if (Array.isArray((comment as any).repliesList)) {
           setReplies(deduplicateById((comment as any).repliesList));
         }
@@ -254,7 +320,6 @@ function ChatCommentItem({
       toggleCommentLikeStore(key);
       setCommentLiked(!liked);
       setLikesCount(prev => prev + (!liked ? 1 : -1));
-      handleFirestoreError(error, OperationType.UPDATE, `communities/${communityId}/chats/${chatId}/comments/${comment.id}`);
     }
   };
 
@@ -266,9 +331,8 @@ function ChatCommentItem({
     const key = `${comment.id}_${replyId}`;
     const liked = toggleReplyLikeStore(key);
     
-    // Optimistic UI update
     const updated = replies.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (liked ? 1 : -1)) } : r);
-    setReplies(updated);
+    setReplies(deduplicateById(updated));
 
     try {
       const commentRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id);
@@ -288,16 +352,15 @@ function ChatCommentItem({
     }
   };
 
-  const handlePostReply = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePostReply = async () => {
     if (isBlocked) {
       if (onBlockedActionTriggered) onBlockedActionTriggered();
       return;
     }
-    if (!replyText.trim() || isSubmittingReply) return;
+    const text = replyText.trim();
+    if (!text || isSubmittingReply) return;
 
     setIsSubmittingReply(true);
-    const text = replyText.trim();
     setReplyText('');
 
     try {
@@ -308,17 +371,14 @@ function ChatCommentItem({
         createdAt: new Date().toISOString()
       };
 
-      // Store in comment document array (100% permitted operation)
       const commentRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id);
       await updateDoc(commentRef, {
         repliesList: arrayUnion(newReplyObj),
         repliesCount: increment(1)
       });
 
-      // Update local state immediately
       setReplies(prev => deduplicateById([...prev, newReplyObj]));
 
-      // Attempt subcollection write as secondary
       try {
         const repliesRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id, 'replies');
         await setDoc(doc(repliesRef, newReplyObj.id), {
@@ -327,7 +387,6 @@ function ChatCommentItem({
         });
       } catch (subErr) {}
 
-      setShowReplyInput(false);
     } catch (error) {
       console.error('Failed to post reply:', error);
     } finally {
@@ -335,113 +394,130 @@ function ChatCommentItem({
     }
   };
 
+  const signature = `User#${(comment.id || '0000').substring(0, 4).toUpperCase()}`;
+  const uniqueReplies = deduplicateById<Reply>(replies);
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, delay: Math.min(index * 0.05, 0.3) }}
-      className="p-3 border border-zinc-900 rounded-xl bg-zinc-950/80 space-y-2 relative"
+      transition={{ duration: 0.2, delay: Math.min(index * 0.05, 0.4) }}
+      className="border-b border-zinc-900/40 pb-4 last:border-0 last:pb-0"
     >
-      <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500">
-        <span className="text-emerald-500/80">ANONYMOUS MEMBER</span>
-        <span className="flex items-center gap-1">
-          <Clock className="w-2.5 h-2.5 text-zinc-600" />
-          {formatTimestamp(comment.createdAt)}
-        </span>
+      {/* Comment Meta / Signature */}
+      <div className="flex items-center justify-between mb-1.5 font-mono">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-zinc-400 font-bold bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800/60 uppercase">
+            {signature}
+          </span>
+          <span className="text-[8px] text-zinc-600 flex items-center gap-1">
+            <Clock className="w-2.5 h-2.5" />
+            {formatTimestamp(comment.createdAt)}
+          </span>
+        </div>
       </div>
 
-      <p className="text-xs text-zinc-300 leading-relaxed break-words">{comment.content}</p>
+      {/* Content */}
+      <p className="text-xs text-zinc-300 leading-relaxed pl-1 mb-2.5 break-words font-sans">
+        {comment.content}
+      </p>
 
-      {/* Action Footer */}
-      <div className="flex items-center gap-4 text-[10px] text-zinc-500 font-mono select-none">
-        {/* Like Button */}
-        <button 
+      {/* Comment Actions */}
+      <div className="flex items-center gap-4 text-[10px] text-zinc-500 pl-1 font-mono">
+        <button
           onClick={handleCommentLike}
-          className={`flex items-center gap-1 hover:text-emerald-400 transition-colors cursor-pointer font-bold ${
-            commentLiked ? 'text-emerald-400' : ''
+          className={`flex items-center gap-1 transition-colors cursor-pointer ${
+            commentLiked ? 'text-rose-500 font-bold' : 'hover:text-rose-400'
           }`}
         >
-          <Heart className={`w-3 h-3 ${commentLiked ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+          <Heart className={`w-3.5 h-3.5 ${commentLiked ? 'fill-rose-500' : ''}`} />
           <span>{likesCount}</span>
         </button>
 
-        {/* Reply Toggle */}
-        <button 
-          onClick={() => setShowReplyInput(!showReplyInput)}
-          className="flex items-center gap-1 hover:text-emerald-400 transition-colors cursor-pointer font-bold"
+        <button
+          onClick={() => setShowReplyInput(prev => !prev)}
+          className="flex items-center gap-1 hover:text-emerald-400 transition-colors cursor-pointer"
         >
-          <MessageSquare className="w-3 h-3" />
-          <span>Reply</span>
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>{comment.repliesCount || uniqueReplies.length} {(comment.repliesCount || uniqueReplies.length) === 1 ? 'reply' : 'replies'}</span>
         </button>
       </div>
 
-      {/* Reply Input Form */}
+      {/* Expanded Replies Block */}
       <AnimatePresence>
         {showReplyInput && (
-          <motion.form 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            onSubmit={handlePostReply}
-            className="flex gap-2 pt-2 border-t border-zinc-900/40"
+            transition={{ duration: 0.15 }}
+            className="mt-3 pl-4 border-l border-zinc-800/80 space-y-3"
           >
-            <input
-              type="text"
-              value={replyText}
-              onChange={(e) => handleInputWithCursor(e, setReplyText)}
-              placeholder="Write a nested reply..."
-              required
-              className="flex-1 bg-zinc-900/80 border border-zinc-850 focus:border-emerald-500/30 rounded px-2.5 py-1 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!replyText.trim() || isSubmittingReply}
-              className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-emerald-400 hover:text-emerald-300 px-3 py-1 rounded text-[10px] font-bold"
-            >
-              Reply
-            </button>
-          </motion.form>
+            {/* Replies List */}
+            {uniqueReplies.length > 0 && (
+              <div className="space-y-3 pt-1">
+                {uniqueReplies.map((reply, replyIdx) => {
+                  const replyLiked = isReplyLiked(`${comment.id}_${reply.id}`);
+                  const replySig = `User#${(reply.id || '').substring(0, 4).toUpperCase()}`;
+                  const replyKey = reply.id ? `${reply.id}_${replyIdx}` : `reply_${replyIdx}`;
+
+                  return (
+                    <div key={replyKey} className="bg-zinc-950/20 p-2 rounded border border-zinc-900/60 font-sans">
+                      <div className="flex items-center justify-between mb-1 font-mono">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] text-zinc-400 font-bold bg-zinc-900 px-1 py-0.2 rounded border border-zinc-800/50 uppercase">
+                            {replySig}
+                          </span>
+                          <span className="text-[8px] text-zinc-600">
+                            {formatTimestamp(reply.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-zinc-400 pl-1 break-words leading-relaxed mb-1.5 font-sans">
+                        {reply.content}
+                      </p>
+                      <button
+                        onClick={() => handleReplyLike(reply.id)}
+                        className={`flex items-center gap-1 text-[9px] text-zinc-500 pl-1 transition-colors cursor-pointer font-mono ${
+                          replyLiked ? 'text-rose-500 font-bold' : 'hover:text-rose-400'
+                        }`}
+                      >
+                        <Heart className={`w-3 h-3 ${replyLiked ? 'fill-rose-500' : ''}`} />
+                        <span>{reply.likesCount}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Reply Form */}
+            <div className="flex gap-2 items-center pt-2">
+              <CornerDownRight className="w-4 h-4 text-zinc-600 shrink-0" />
+              <input
+                type="text"
+                value={replyText}
+                onChange={(e) => handleInputWithCursor(e, setReplyText)}
+                placeholder="Write a reply..."
+                maxLength={1000}
+                className="flex-1 bg-zinc-900/50 border border-zinc-800 focus:border-emerald-500/30 rounded px-2.5 py-1.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && replyText.trim()) {
+                    handlePostReply();
+                  }
+                }}
+              />
+              <button
+                onClick={handlePostReply}
+                disabled={!replyText.trim() || isSubmittingReply}
+                className="px-2.5 py-1.5 rounded text-[10px] font-bold bg-emerald-950/25 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-900/30 transition-colors disabled:opacity-40 cursor-pointer font-sans"
+              >
+                Reply
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Nested Replies List */}
-      {(() => {
-        const uniqueReplies = deduplicateById<Reply>(replies);
-        if (uniqueReplies.length === 0) return null;
-        return (
-          <div className="pl-4 border-l border-zinc-900/60 mt-3 space-y-2.5">
-            {uniqueReplies.map((reply, replyIdx) => {
-              const replyLiked = isReplyLiked(`${comment.id}_${reply.id}`);
-              const replyKey = reply.id ? `${reply.id}_${replyIdx}` : `reply_${replyIdx}`;
-              return (
-                <div key={replyKey} className="text-xs bg-zinc-900/20 p-2.5 rounded-lg space-y-1.5 border border-zinc-900/40 relative">
-                  <div className="flex justify-between items-center text-[8px] font-mono text-zinc-600">
-                    <span className="flex items-center gap-0.5">
-                      <CornerDownRight className="w-2.5 h-2.5 text-zinc-700" />
-                      COHORT RESPONSE
-                    </span>
-                    <span>{formatTimestamp(reply.createdAt)}</span>
-                  </div>
-                  <p className="text-zinc-300 break-words font-sans">{reply.content}</p>
-                  
-                  {/* Reply Footer */}
-                  <div className="flex items-center gap-3 text-[9px] text-zinc-500 font-mono">
-                    <button 
-                      onClick={() => handleReplyLike(reply.id)}
-                      className={`flex items-center gap-0.5 hover:text-emerald-400 transition-colors cursor-pointer font-bold ${
-                        replyLiked ? 'text-emerald-400' : ''
-                      }`}
-                    >
-                      <Heart className={`w-2.5 h-2.5 ${replyLiked ? 'fill-emerald-400 text-emerald-400' : ''}`} />
-                      <span>{reply.likesCount || 0}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
     </motion.div>
   );
 }

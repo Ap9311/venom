@@ -2969,7 +2969,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   <div className="flex items-center gap-2 min-w-0">
                     <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span className="font-mono font-bold text-xs uppercase tracking-wider text-zinc-200">
-                      Community Chat Comments
+                      Comments
                     </span>
                     <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                       {formatShortCount(activeChatCommentsSheet.commentsCount || 0)}
@@ -2985,18 +2985,22 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   </button>
                 </div>
 
-                {/* Chat Message Context Bar */}
+                {/* Post Context Bar */}
                 <div className="mt-2 text-xs text-zinc-400 truncate font-sans bg-zinc-900/60 px-3 py-1.5 rounded-lg border border-zinc-850">
-                  <span className="text-zinc-500 font-mono text-[10px] mr-1.5 uppercase tracking-wider font-bold">Message:</span>
+                  <span className="text-zinc-500 font-mono text-[10px] mr-1.5 uppercase tracking-wider font-bold">Post:</span>
                   <span className="text-zinc-200 font-medium">"{activeChatCommentsSheet.content || '[Attached Graphic/Poll]'}"</span>
                 </div>
               </div>
 
               {/* Scrollable Comments Content Container */}
-              <div className="flex-1 min-h-0 flex flex-col bg-zinc-950 overflow-y-auto">
+              <div className="flex-1 min-h-0 flex flex-col bg-zinc-950">
                 <ChatCommentsPane 
                   communityId={activeCommunity.id} 
-                  chatId={activeChatCommentsSheet.id} 
+                  chatId={activeChatCommentsSheet.id}
+                  isDrawerMode={true}
+                  onCommentsCountChange={(cnt) => {
+                    setActiveChatCommentsSheet((prev: any) => prev ? { ...prev, commentsCount: cnt } : null);
+                  }}
                 />
               </div>
             </motion.div>
