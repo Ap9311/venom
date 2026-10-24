@@ -19,7 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
-import { getDeviceImei } from '../utils/ip';
+import { getDeviceImei, getClientIp, getAllDeviceImeis } from '../utils/ip';
 import { 
   isCommentLiked, 
   toggleCommentLikeStore, 
@@ -256,10 +256,25 @@ function CommentItem({
   const [likesCount, setLikesCount] = useState(comment.likesCount);
   const [commentLiked, setCommentLiked] = useState(isCommentLiked(`${postId}_${comment.id}`));
 
+  const [, setSyncTick] = useState(0);
+
   useEffect(() => {
     setLikesCount(comment.likesCount);
     setCommentLiked(isCommentLiked(`${postId}_${comment.id}`));
   }, [comment.id, comment.likesCount, postId]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      setCommentLiked(isCommentLiked(`${postId}_${comment.id}`));
+      setSyncTick((t) => t + 1);
+    };
+    window.addEventListener('nonum_interactions_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('nonum_interactions_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [postId, comment.id]);
 
   // Real-time listener for replies on THIS comment with fallback to comment document's repliesList array
   useEffect(() => {
@@ -308,8 +323,7 @@ function CommentItem({
         likesCount: increment(liked ? 1 : -1),
       });
 
-      // Persist to interactions collection for device fingerprint tracking
-      const deviceImei = await getDeviceImei();
+      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
       const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_comment_like`);
       if (liked) {
         setDoc(interactionRef, {
@@ -318,10 +332,16 @@ function CommentItem({
           postId,
           commentId: comment.id,
           imei: deviceImei,
+          ip: userIp,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       } else {
         deleteDoc(interactionRef).catch(console.error);
+        for (const alias of getAllDeviceImeis()) {
+          if (alias !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${key}_${alias}_comment_like`)).catch(() => {});
+          }
+        }
       }
     } catch (error) {
       toggleCommentLikeStore(key);
@@ -353,6 +373,28 @@ function CommentItem({
           likesCount: increment(liked ? 1 : -1),
         });
       } catch (subErr) {}
+
+      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_reply_like`);
+      if (liked) {
+        setDoc(interactionRef, {
+          type: 'like_reply',
+          replyKey: key,
+          postId,
+          commentId: comment.id,
+          replyId,
+          imei: deviceImei,
+          ip: userIp,
+          createdAt: new Date().toISOString()
+        }).catch(console.error);
+      } else {
+        deleteDoc(interactionRef).catch(console.error);
+        for (const alias of getAllDeviceImeis()) {
+          if (alias !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${key}_${alias}_reply_like`)).catch(() => {});
+          }
+        }
+      }
     } catch (error) {
       toggleReplyLikeStore(key);
       setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (!liked ? 1 : -1)) } : r));

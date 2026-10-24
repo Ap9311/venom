@@ -54,6 +54,9 @@ export function getInteractionState(): UserInteractionState {
 export function saveInteractionState(state: UserInteractionState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('nonum_interactions_updated'));
+    }
   } catch (e) {
     console.error('Failed to save interaction state', e);
   }

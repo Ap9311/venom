@@ -9,6 +9,7 @@ import {
   doc, 
   setDoc, 
   updateDoc, 
+  deleteDoc,
   query, 
   orderBy, 
   onSnapshot, 
@@ -18,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
+import { getDeviceImei, getClientIp, getAllDeviceImeis } from '../utils/ip';
 import { 
   isCommentLiked, 
   toggleCommentLikeStore, 
@@ -265,10 +267,25 @@ function ChatCommentItem({
   const [likesCount, setLikesCount] = useState(comment.likesCount);
   const [commentLiked, setCommentLiked] = useState(isCommentLiked(`${chatId}_${comment.id}`));
 
+  const [, setSyncTick] = useState(0);
+
   useEffect(() => {
     setLikesCount(comment.likesCount);
     setCommentLiked(isCommentLiked(`${chatId}_${comment.id}`));
   }, [comment.id, comment.likesCount, chatId]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      setCommentLiked(isCommentLiked(`${chatId}_${comment.id}`));
+      setSyncTick((t) => t + 1);
+    };
+    window.addEventListener('nonum_interactions_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('nonum_interactions_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [chatId, comment.id]);
 
   // Real-time listener for replies on THIS comment with fallback to comment document's repliesList array
   useEffect(() => {
@@ -316,6 +333,28 @@ function ChatCommentItem({
       await updateDoc(commentRef, {
         likesCount: increment(liked ? 1 : -1),
       });
+
+      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_comment_like`);
+      if (liked) {
+        setDoc(interactionRef, {
+          type: 'like_comment',
+          commentKey: key,
+          communityId,
+          chatId,
+          commentId: comment.id,
+          imei: deviceImei,
+          ip: userIp,
+          createdAt: new Date().toISOString()
+        }).catch(console.error);
+      } else {
+        deleteDoc(interactionRef).catch(console.error);
+        for (const alias of getAllDeviceImeis()) {
+          if (alias !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${key}_${alias}_comment_like`)).catch(() => {});
+          }
+        }
+      }
     } catch (error) {
       toggleCommentLikeStore(key);
       setCommentLiked(!liked);
@@ -346,6 +385,29 @@ function ChatCommentItem({
           likesCount: increment(liked ? 1 : -1),
         });
       } catch (subErr) {}
+
+      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_reply_like`);
+      if (liked) {
+        setDoc(interactionRef, {
+          type: 'like_reply',
+          replyKey: key,
+          communityId,
+          chatId,
+          commentId: comment.id,
+          replyId,
+          imei: deviceImei,
+          ip: userIp,
+          createdAt: new Date().toISOString()
+        }).catch(console.error);
+      } else {
+        deleteDoc(interactionRef).catch(console.error);
+        for (const alias of getAllDeviceImeis()) {
+          if (alias !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${key}_${alias}_reply_like`)).catch(() => {});
+          }
+        }
+      }
     } catch (error) {
       toggleReplyLikeStore(key);
       setReplies(prev => prev.map(r => r.id === replyId ? { ...r, likesCount: Math.max(0, (r.likesCount || 0) + (!liked ? 1 : -1)) } : r));

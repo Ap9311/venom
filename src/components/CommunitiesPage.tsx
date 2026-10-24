@@ -56,7 +56,7 @@ import {
   Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceImei, getLegacyDeviceImei } from '../utils/ip';
+import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceImei, getLegacyDeviceImei, syncCrossBrowserDeviceIdentity, getAllDeviceImeis } from '../utils/ip';
 import { generatePostHash, hashSha256 } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
 import { checkIpBlockStatus } from '../utils/blockChecker';
@@ -87,18 +87,20 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   const [deviceSerial, setDeviceSerial] = useState('');
   const [unlockedCommIds, setUnlockedCommIds] = useState<string[]>([]);
 
-  // Cross-browser device creator & ownership validator (pure hardware signature matching)
+  // Cross-browser device creator & ownership validator (hybrid hardware + vault + alias signature matching)
   const checkIsCreator = (item: any): boolean => {
     if (!item) return false;
     const legacyImei = getLegacyDeviceImei();
+    const allImeis = getAllDeviceImeis();
     const targetImei = item.createdByImei;
     const targetSerial = item.createdBySerial;
     const currentImei = deviceImei || (typeof window !== 'undefined' ? localStorage.getItem('nonum_device_imei') : '');
     const currentSerial = deviceSerial || (typeof window !== 'undefined' ? localStorage.getItem('nonum_device_serial') : '');
 
     return Boolean(
-      (targetImei && (targetImei === currentImei || targetImei === deviceSig?.value || targetImei === legacyImei)) ||
-      (targetSerial && (targetSerial === currentSerial || targetSerial === deviceSig?.value))
+      (targetImei && (targetImei === currentImei || targetImei === deviceSig?.value || targetImei === legacyImei || allImeis.includes(targetImei))) ||
+      (targetSerial && (targetSerial === currentSerial || targetSerial === deviceSig?.value)) ||
+      (deviceIp && deviceIp !== '127.0.0.1' && item.createdByIp === deviceIp)
     );
   };
 
@@ -339,11 +341,17 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   useEffect(() => {
     let isMounted = true;
     const initDevice = async () => {
+      await syncCrossBrowserDeviceIdentity();
       const ip = await getClientIp();
       const sig = await getDeviceIdentifier();
       const imei = await getDeviceImei();
       const serial = await getDeviceSerial();
       const legacyImei = getLegacyDeviceImei();
+      const allImeis = Array.from(new Set([
+        imei,
+        ...(legacyImei ? [legacyImei] : []),
+        ...getAllDeviceImeis()
+      ])).filter(Boolean).slice(0, 10);
 
       if (isMounted) {
         setDeviceIp(ip);
@@ -357,7 +365,8 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         p => p.postedFromIp === ip || 
              p.postedFromImei === imei || 
              p.postedFromImei === sig.value || 
-             (legacyImei && p.postedFromImei === legacyImei)
+             (legacyImei && p.postedFromImei === legacyImei) ||
+             (p.postedFromImei && allImeis.includes(p.postedFromImei))
       ) || localStorage.getItem('nonum_has_posted_at_least_once') === 'true';
 
       if (hasPosted && isMounted) {
@@ -365,13 +374,15 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         localStorage.setItem('nonum_has_posted_at_least_once', 'true');
       }
 
-      // Query Firestore interactions collection to restore all user actions even when cookies are wiped
+      // Query Firestore interactions collection across all device IMEI aliases and IP to restore all user actions across browsers
       if (db && imei) {
         try {
-          const qImei = query(collection(db, 'interactions'), where('imei', '==', imei));
-          const qDocs = [getDocs(qImei)];
-          if (legacyImei) {
-            qDocs.push(getDocs(query(collection(db, 'interactions'), where('imei', '==', legacyImei))));
+          const qImeis = allImeis.length === 1
+            ? query(collection(db, 'interactions'), where('imei', '==', allImeis[0]))
+            : query(collection(db, 'interactions'), where('imei', 'in', allImeis));
+          const qDocs = [getDocs(qImeis)];
+          if (ip && ip !== '127.0.0.1') {
+            qDocs.push(getDocs(query(collection(db, 'interactions'), where('ip', '==', ip))));
           }
 
           const snaps = await Promise.all(qDocs);
@@ -393,6 +404,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
               } else if (d.id.startsWith('unlocked_comm_') && data.communityId) {
                 if (!restoredUnlocks.includes(data.communityId)) restoredUnlocks.push(data.communityId);
                 localStorage.setItem(`unlocked_comm_${data.communityId}`, 'true');
+                if (data.passwordHash) {
+                  localStorage.setItem(`unlocked_comm_hash_${data.communityId}`, data.passwordHash);
+                }
                 if (data.password) {
                   localStorage.setItem(`unlocked_comm_pwd_${data.communityId}`, data.password);
                 }
@@ -686,6 +700,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         type: 'pinned_communities',
         pinnedIds: updatedPins,
         imei: deviceImei,
+        ip: deviceIp,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(console.error);
     }
@@ -876,6 +891,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
             communityId: targetComm.id,
             passwordHash: expectedHash,
             imei: deviceImei,
+            ip: deviceIp,
             unlockedAt: new Date().toISOString()
           }, { merge: true }).catch(console.error);
         }
@@ -1013,12 +1029,18 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         const intRef = doc(db, 'interactions', `chat_like_${chatId}_${deviceImei}`);
         if (isLiked) {
           deleteDoc(intRef).catch(console.error);
+          for (const alias of getAllDeviceImeis()) {
+            if (alias !== deviceImei) {
+              deleteDoc(doc(db, 'interactions', `chat_like_${chatId}_${alias}`)).catch(() => {});
+            }
+          }
         } else {
           setDoc(intRef, {
             type: 'chat_like',
             chatId,
             communityId: activeCommunity.id,
             imei: deviceImei,
+            ip: deviceIp,
             createdAt: new Date().toISOString()
           }).catch(console.error);
         }
@@ -1067,6 +1089,11 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         const intRef = doc(db, 'interactions', `chat_reaction_${chatId}_${deviceImei}`);
         if (previousReaction === reactionKey) {
           deleteDoc(intRef).catch(console.error);
+          for (const alias of getAllDeviceImeis()) {
+            if (alias !== deviceImei) {
+              deleteDoc(doc(db, 'interactions', `chat_reaction_${chatId}_${alias}`)).catch(() => {});
+            }
+          }
         } else {
           setDoc(intRef, {
             type: 'chat_reaction',
@@ -1074,6 +1101,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
             reactionKey,
             communityId: activeCommunity.id,
             imei: deviceImei,
+            ip: deviceIp,
             createdAt: new Date().toISOString()
           }).catch(console.error);
         }
@@ -1400,6 +1428,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
           optionIndex: optionIdx,
           communityId: activeCommunity.id,
           imei: deviceImei,
+          ip: deviceIp,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       }

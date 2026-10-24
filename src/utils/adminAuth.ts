@@ -6,7 +6,7 @@
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
-import { getFingerprint, getDeviceImei, getDeviceDetails, getPureDeviceOS, getClientIp } from './ip';
+import { getFingerprint, getLegacyHardwareFingerprint, getDeviceImei, getDeviceDetails, getPureDeviceOS, getClientIp } from './ip';
 import { murmurX64Hash128 } from '@fingerprintjs/fingerprintjs';
 
 export interface AdminDevice {
@@ -84,9 +84,9 @@ export async function ensureFirestoreAdminClaim(providedToken?: string): Promise
 }
 
 /**
- * Computes a permanent, 100% hardware-derived Admin Device Fingerprint ID.
- * Cannot be cleared or changed by the user, browser cache, or switching browsers
- * on the same physical machine.
+ * Computes a permanent, hardware + vault derived Admin Device Fingerprint ID.
+ * Preserves any previously registered legacy ADM-XXXXXXXXXXXX ID on this machine
+ * while unifying across browsers via the Cross-Browser Device Anchor.
  * Format: ADM-XXXXXXXXXXXX (12 hex uppercase)
  */
 export async function getAdminDeviceId(): Promise<string> {
@@ -94,15 +94,42 @@ export async function getAdminDeviceId(): Promise<string> {
     return cachedAdminDeviceId;
   }
 
-  // 1. Get pure cross-browser hardware fingerprint
+  // 1. Check if this device already has a stored or legacy registered Admin ID
+  try {
+    const storedAdminId = localStorage.getItem('nonum_admin_device_id');
+    if (storedAdminId && storedAdminId.startsWith('ADM-') && db) {
+      const snap = await getDoc(doc(db, 'interactions', `admin_device_${storedAdminId}`)).catch(() => null);
+      if (snap && snap.exists() && snap.data()?.status === 'active') {
+        cachedAdminDeviceId = storedAdminId;
+        return storedAdminId;
+      }
+    }
+  } catch {}
+
+  // 2. Check legacy hardware fingerprint in case admin registered before v4 hybrid vault upgrade
+  const legacyHwFp = getLegacyHardwareFingerprint();
+  const legacyAdminHash = murmurX64Hash128(`${legacyHwFp}|${ADMIN_SALT}`);
+  const legacyAdminId = `ADM-${legacyAdminHash.substring(0, 12).toUpperCase()}`;
+
+  if (db) {
+    try {
+      const legacySnap = await getDoc(doc(db, 'interactions', `admin_device_${legacyAdminId}`)).catch(() => null);
+      if (legacySnap && legacySnap.exists() && legacySnap.data()?.status === 'active') {
+        cachedAdminDeviceId = legacyAdminId;
+        try {
+          localStorage.setItem('nonum_admin_device_id', legacyAdminId);
+        } catch {}
+        return legacyAdminId;
+      }
+    } catch {}
+  }
+
+  // 3. Get hybrid cross-browser device fingerprint
   const rawHardwareFp = await getFingerprint();
-  
-  // 2. Hash with admin salt for an independent, cryptographic admin identity
   const adminHash = murmurX64Hash128(`${rawHardwareFp}|${ADMIN_SALT}`);
   const idSuffix = adminHash.substring(0, 12).toUpperCase();
   const adminId = `ADM-${idSuffix}`;
 
-  // Cache in memory and localStorage for convenience
   cachedAdminDeviceId = adminId;
   try {
     localStorage.setItem('nonum_admin_device_id', adminId);

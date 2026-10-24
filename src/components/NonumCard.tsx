@@ -43,8 +43,8 @@ import {
   saveInteractionState
 } from '../utils/storage';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, runTransaction } from 'firebase/firestore';
-import { getClientIp, getDeviceImei, getLegacyDeviceImei } from '../utils/ip';
+import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, runTransaction, collection, query, where, getDocs } from 'firebase/firestore';
+import { getClientIp, getDeviceImei, getLegacyDeviceImei, getAllDeviceImeis } from '../utils/ip';
 import { copyToClipboard } from '../utils/clipboard';
 import { formatTimeAgo, formatShortCount } from '../utils/time';
 import CommentsPane from './CommentsPane';
@@ -129,6 +129,18 @@ export default function NonumCard({
 
   React.useEffect(() => {
     setActiveReaction(getPostReaction(post.id));
+    const handleSyncUpdate = () => {
+      setActiveReaction(getPostReaction(post.id));
+      setDummyTrigger((prev) => prev + 1);
+    };
+    window.addEventListener('nonum_interactions_updated', handleSyncUpdate);
+    window.addEventListener('storage', handleSyncUpdate);
+    window.addEventListener('nonum_identity_synced', handleSyncUpdate);
+    return () => {
+      window.removeEventListener('nonum_interactions_updated', handleSyncUpdate);
+      window.removeEventListener('storage', handleSyncUpdate);
+      window.removeEventListener('nonum_identity_synced', handleSyncUpdate);
+    };
   }, [post.id]);
 
   // Lock body scroll when share modal overlay is active
@@ -149,135 +161,79 @@ export default function NonumCard({
         if (!db || !post?.id) return;
         const deviceImei = await getDeviceImei();
         if (!deviceImei) return;
-        const legacyImei = getLegacyDeviceImei();
+        const allImeis = Array.from(new Set([
+          deviceImei,
+          ...(getLegacyDeviceImei() ? [getLegacyDeviceImei()!] : []),
+          ...getAllDeviceImeis()
+        ])).filter(Boolean);
 
-        // Fetch like interaction
-        const likeRef = doc(db, 'interactions', `${post.id}_${deviceImei}_like`);
-        let likeSnap = await getDoc(likeRef);
-        if (!likeSnap.exists() && legacyImei) {
-          const legacyLikeRef = doc(db, 'interactions', `${post.id}_${legacyImei}_like`);
-          const legacyLikeSnap = await getDoc(legacyLikeRef);
-          if (legacyLikeSnap.exists()) {
-            await setDoc(likeRef, {
-              ...legacyLikeSnap.data(),
-              imei: deviceImei
-            });
-            likeSnap = legacyLikeSnap;
+        const findAndMigrateDoc = async (suffix: 'like' | 'vote' | 'poll' | 'reaction') => {
+          const primaryRef = doc(db, 'interactions', `${post.id}_${deviceImei}_${suffix}`);
+          const primarySnap = await getDoc(primaryRef);
+          if (primarySnap.exists()) return primarySnap;
+
+          for (const aliasImei of allImeis) {
+            if (aliasImei === deviceImei) continue;
+            const aliasRef = doc(db, 'interactions', `${post.id}_${aliasImei}_${suffix}`);
+            const aliasSnap = await getDoc(aliasRef);
+            if (aliasSnap.exists()) {
+              await setDoc(primaryRef, {
+                ...aliasSnap.data(),
+                imei: deviceImei
+              }, { merge: true }).catch(() => {});
+              return aliasSnap;
+            }
           }
-        }
+          return primarySnap;
+        };
+
+        const [likeSnap, voteSnap, pollSnap, reactionSnap] = await Promise.all([
+          findAndMigrateDoc('like'),
+          findAndMigrateDoc('vote'),
+          findAndMigrateDoc('poll'),
+          findAndMigrateDoc('reaction')
+        ]);
+
         if (!active) return;
-        
+
         const state = getInteractionState();
         let changed = false;
 
-        const isCurrentlyLikedInStore = state.likedPosts.includes(post.id);
-        if (likeSnap.exists()) {
-          if (!isCurrentlyLikedInStore) {
-            state.likedPosts.push(post.id);
-            changed = true;
-          }
-        } else {
-          if (isCurrentlyLikedInStore) {
-            const index = state.likedPosts.indexOf(post.id);
-            state.likedPosts.splice(index, 1);
-            changed = true;
-          }
+        if (likeSnap.exists() && !state.likedPosts.includes(post.id)) {
+          state.likedPosts.push(post.id);
+          changed = true;
         }
 
-        // Fetch vote interaction
-        const voteRef = doc(db, 'interactions', `${post.id}_${deviceImei}_vote`);
-        let voteSnap = await getDoc(voteRef);
-        if (!voteSnap.exists() && legacyImei) {
-          const legacyVoteRef = doc(db, 'interactions', `${post.id}_${legacyImei}_vote`);
-          const legacyVoteSnap = await getDoc(legacyVoteRef);
-          if (legacyVoteSnap.exists()) {
-            await setDoc(voteRef, {
-              ...legacyVoteSnap.data(),
-              imei: deviceImei
-            });
-            voteSnap = legacyVoteSnap;
-          }
-        }
-        if (!active) return;
-        
-        const currentVoteInStore = state.votedPosts[post.id];
         if (voteSnap.exists()) {
           const voteData = voteSnap.data();
-          if (currentVoteInStore !== voteData.direction) {
+          if (state.votedPosts[post.id] !== voteData.direction) {
             state.votedPosts[post.id] = voteData.direction;
             changed = true;
           }
-        } else {
-          if (currentVoteInStore) {
-            delete state.votedPosts[post.id];
-            changed = true;
-          }
         }
 
-        // Fetch poll interaction
-        const pollRef = doc(db, 'interactions', `${post.id}_${deviceImei}_poll`);
-        let pollSnap = await getDoc(pollRef);
-        if (!pollSnap.exists() && legacyImei) {
-          const legacyPollRef = doc(db, 'interactions', `${post.id}_${legacyImei}_poll`);
-          const legacyPollSnap = await getDoc(legacyPollRef);
-          if (legacyPollSnap.exists()) {
-            await setDoc(pollRef, {
-              ...legacyPollSnap.data(),
-              imei: deviceImei
-            });
-            pollSnap = legacyPollSnap;
-          }
-        }
-        if (!active) return;
-        
-        const currentPollInStore = state.votedPolls[post.id];
         if (pollSnap.exists()) {
           const pollData = pollSnap.data();
-          if (currentPollInStore !== pollData.optionIndex) {
+          if (state.votedPolls[post.id] !== pollData.optionIndex) {
             state.votedPolls[post.id] = pollData.optionIndex;
             changed = true;
           }
         }
 
-        // Fetch reaction interaction
-        const reactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_reaction`);
-        let reactionSnap = await getDoc(reactionRef);
-        if (!reactionSnap.exists() && legacyImei) {
-          const legacyReactionRef = doc(db, 'interactions', `${post.id}_${legacyImei}_reaction`);
-          const legacyReactionSnap = await getDoc(legacyReactionRef);
-          if (legacyReactionSnap.exists()) {
-            await setDoc(reactionRef, {
-              ...legacyReactionSnap.data(),
-              imei: deviceImei
-            });
-            reactionSnap = legacyReactionSnap;
-          }
-        }
-        if (!active) return;
-        
-        const currentReactionInStore = state.reactedPosts ? state.reactedPosts[post.id] : null;
         if (reactionSnap.exists()) {
           const reactionData = reactionSnap.data();
+          const currentReactionInStore = state.reactedPosts ? state.reactedPosts[post.id] : null;
           if (currentReactionInStore !== reactionData.reactionKey) {
             if (!state.reactedPosts) state.reactedPosts = {};
             state.reactedPosts[post.id] = reactionData.reactionKey;
             setActiveReaction(reactionData.reactionKey);
             changed = true;
           }
-        } else {
-          if (currentReactionInStore) {
-            if (state.reactedPosts) {
-              delete state.reactedPosts[post.id];
-            }
-            setActiveReaction(null);
-            changed = true;
-          }
         }
 
         if (changed) {
           saveInteractionState(state);
-          // Trigger local state update to re-render component
-          setDummyTrigger(prev => prev + 1);
+          setDummyTrigger((prev) => prev + 1);
         }
       } catch (err) {
         console.error('Failed to sync interactions from Firestore:', err);
@@ -313,8 +269,10 @@ export default function NonumCard({
     try {
       const userIp = await getClientIp();
       const deviceImei = await getDeviceImei();
+      const allImeis = Array.from(new Set([deviceImei, ...getAllDeviceImeis()])).filter(Boolean);
       const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_like`);
       const postRef = doc(db, 'posts', post.id);
+      const wasLikedInStore = isPostLiked(post.id);
 
       await runTransaction(db, async (transaction) => {
         const likeSnap = await transaction.get(interactionRef);
@@ -324,13 +282,14 @@ export default function NonumCard({
         const currentPostData = postSnap.data();
         const existingLikes = currentPostData.likesCount || 0;
 
-        if (likeSnap.exists()) {
-          // Unlike
-          transaction.delete(interactionRef);
+        if (likeSnap.exists() || wasLikedInStore) {
+          // Unlike (and clean up any cross-browser alias like documents after transaction)
+          if (likeSnap.exists()) {
+            transaction.delete(interactionRef);
+          }
           const newLikes = Math.max(0, existingLikes - 1);
           transaction.update(postRef, { likesCount: newLikes });
-          
-          // Reconcile local storage
+
           const state = getInteractionState();
           const idx = state.likedPosts.indexOf(post.id);
           if (idx !== -1) {
@@ -353,7 +312,6 @@ export default function NonumCard({
           const newLikes = existingLikes + 1;
           transaction.update(postRef, { likesCount: newLikes });
 
-          // Reconcile local storage
           const state = getInteractionState();
           if (!state.likedPosts.includes(post.id)) {
             state.likedPosts.push(post.id);
@@ -365,6 +323,25 @@ export default function NonumCard({
           }
         }
       });
+
+      // If unliked, also remove any alias IMEI or IP-matched like documents for this post so all browsers stay in sync
+      if (wasLikedInStore) {
+        for (const aliasImei of allImeis) {
+          if (aliasImei !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${post.id}_${aliasImei}_like`)).catch(() => {});
+          }
+        }
+        if (userIp && userIp !== '127.0.0.1') {
+          getDocs(query(collection(db, 'interactions'), where('postId', '==', post.id), where('ip', '==', userIp))).then((snap) => {
+            snap.forEach((d) => {
+              if (d.data()?.type === 'like') {
+                deleteDoc(d.ref).catch(() => {});
+              }
+            });
+          }).catch(() => {});
+        }
+      }
+      setDummyTrigger((prev) => prev + 1);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `posts/${post.id}`);
     } finally {

@@ -13,13 +13,14 @@ import {
   onSnapshot, 
   doc, 
   getDoc, 
+  setDoc,
   where, 
   getDocs,
   deleteDoc
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { Post } from './types';
-import { getClientIp, getDeviceImei, getLegacyDeviceImei } from './utils/ip';
+import { getClientIp, getDeviceImei, getLegacyDeviceImei, syncCrossBrowserDeviceIdentity, getAllDeviceImeis } from './utils/ip';
 import Header from './components/Header';
 import NonumCard from './components/NonumCard';
 import NewNonumModal from './components/NewNonumModal';
@@ -546,97 +547,171 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Load and synchronize IMEI & IP-based interactions on boot to lock votes and likes securely on device-level
+  // Load and synchronize IMEI & IP-based interactions in real-time across all browsers on this device
   useEffect(() => {
-    const syncInteractions = async () => {
-      if (!db) return;
+    if (!db || !dbConnected) return;
+    let isActive = true;
+    const unsubs: (() => void)[] = [];
+
+    const setupRealtimeInteractionSync = async () => {
       try {
+        // 1. Unite cross-browser device identity via Firestore anchor first
+        await syncCrossBrowserDeviceIdentity();
+        if (!isActive) return;
+
         const userIp = await getClientIp();
         const deviceImei = await getDeviceImei();
-        const legacyImei = getLegacyDeviceImei();
-        
-        // Query by IMEI primarily (100% stable device-level persistent tracking)
-        const qImei = query(collection(db, 'interactions'), where('imei', '==', deviceImei));
-        // Query by IP as legacy fallback (in case IMEI is not set on older documents)
-        const qIp = query(collection(db, 'interactions'), where('ip', '==', userIp));
-        
-        const queries = [getDocs(qImei), getDocs(qIp)];
-        if (legacyImei) {
-          queries.push(getDocs(query(collection(db, 'interactions'), where('imei', '==', legacyImei))));
-        }
-        
-        const snapshots = await Promise.all(queries);
-        
-        const likedPosts: string[] = [];
-        const votedPosts: { [postId: string]: 'up' | 'down' } = {};
-        const votedPolls: { [postId: string]: number } = {};
-        const reactedPosts: { [postId: string]: string } = {};
-        const likedComments: string[] = [];
-        const likedReplies: string[] = [];
-        const reportedPosts: string[] = [];
-        
-        const processDoc = (docSnap: any) => {
-          const data = docSnap.data();
-          if (data.type === 'like_comment' && data.commentKey) {
-            if (!likedComments.includes(data.commentKey)) likedComments.push(data.commentKey);
-            return;
-          }
-          if (data.type === 'like_reply' && data.replyKey) {
-            if (!likedReplies.includes(data.replyKey)) likedReplies.push(data.replyKey);
-            return;
-          }
-          if (data.type === 'report_post' && data.postId) {
-            if (!reportedPosts.includes(data.postId)) reportedPosts.push(data.postId);
-            return;
-          }
+        const allImeis = Array.from(new Set([
+          deviceImei,
+          ...(getLegacyDeviceImei() ? [getLegacyDeviceImei()!] : []),
+          ...getAllDeviceImeis()
+        ])).filter(Boolean).slice(0, 10);
 
-          const pId = data.postId;
-          if (!pId) return;
-          
-          if (data.type === 'like') {
-            if (!likedPosts.includes(pId)) likedPosts.push(pId);
-          } else if (data.type === 'vote') {
-            votedPosts[pId] = data.direction;
-          } else if (data.type === 'poll') {
-            votedPolls[pId] = data.optionIndex;
-          } else if (data.type === 'reaction') {
-            reactedPosts[pId] = data.reactionKey;
-          }
+        if (!isActive) return;
+
+        const docsByKey = new Map<string, any>();
+
+        const recomputeAndBroadcast = () => {
+          if (!isActive) return;
+          const likedPosts: string[] = [];
+          const votedPosts: { [postId: string]: 'up' | 'down' } = {};
+          const votedPolls: { [postId: string]: number } = {};
+          const reactedPosts: { [postId: string]: string } = {};
+          const likedComments: string[] = [];
+          const likedReplies: string[] = [];
+          const reportedPosts: string[] = [];
+
+          docsByKey.forEach((data, docId) => {
+            if (!data || data.type === 'device_anchor' || data.type === 'admin_device' || data.type === 'admin_config') {
+              return;
+            }
+            if (data.type === 'like_comment' && data.commentKey) {
+              if (!likedComments.includes(data.commentKey)) likedComments.push(data.commentKey);
+              return;
+            }
+            if (data.type === 'like_reply' && data.replyKey) {
+              if (!likedReplies.includes(data.replyKey)) likedReplies.push(data.replyKey);
+              return;
+            }
+            if (data.type === 'report_post' && data.postId) {
+              if (!reportedPosts.includes(data.postId)) reportedPosts.push(data.postId);
+              return;
+            }
+
+            const pId = data.postId;
+            if (!pId) return;
+
+            if (data.type === 'like') {
+              if (!likedPosts.includes(pId)) likedPosts.push(pId);
+              // Mirror alias/IP like doc to canonical deviceImei so any browser can toggle/unlike cleanly
+              const canonicalId = `${pId}_${deviceImei}_like`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            } else if (data.type === 'vote') {
+              votedPosts[pId] = data.direction;
+              const canonicalId = `${pId}_${deviceImei}_vote`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            } else if (data.type === 'poll') {
+              votedPolls[pId] = data.optionIndex;
+              const canonicalId = `${pId}_${deviceImei}_poll`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            } else if (data.type === 'reaction') {
+              reactedPosts[pId] = data.reactionKey;
+              const canonicalId = `${pId}_${deviceImei}_reaction`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            }
+          });
+
+          localStorage.setItem('nonum_user_interactions', JSON.stringify({
+            likedPosts,
+            votedPosts,
+            votedPolls,
+            likedComments,
+            likedReplies,
+            reactedPosts,
+            reportedPosts,
+          }));
+
+          window.dispatchEvent(new CustomEvent('nonum_interactions_updated'));
+          window.dispatchEvent(new Event('storage'));
         };
 
-        snapshots.forEach(snap => snap.forEach(processDoc));
-        
-        const existing = localStorage.getItem('nonum_user_interactions');
-        let parsed: any = { likedComments: [], likedReplies: [] };
-        if (existing) {
-          try {
-            parsed = JSON.parse(existing);
-          } catch (e) {}
+        // Listen to all IMEI aliases for this physical device
+        if (allImeis.length > 0) {
+          const qImeis = allImeis.length === 1
+            ? query(collection(db, 'interactions'), where('imei', '==', allImeis[0]))
+            : query(collection(db, 'interactions'), where('imei', 'in', allImeis));
+
+          const unsubImei = onSnapshot(qImeis, (snap) => {
+            snap.docChanges().forEach((change) => {
+              if (change.type === 'removed') {
+                docsByKey.delete(change.doc.id);
+              } else {
+                docsByKey.set(change.doc.id, change.doc.data());
+              }
+            });
+            recomputeAndBroadcast();
+          }, () => {});
+          unsubs.push(unsubImei);
         }
 
-        const mergedComments = Array.from(new Set([...likedComments, ...(parsed.likedComments || [])]));
-        const mergedReplies = Array.from(new Set([...likedReplies, ...(parsed.likedReplies || [])]));
-        
-        localStorage.setItem('nonum_user_interactions', JSON.stringify({
-          likedPosts,
-          votedPosts,
-          votedPolls,
-          likedComments: mergedComments,
-          likedReplies: mergedReplies,
-          reactedPosts,
-          reportedPosts,
-        }));
-        
-        // Dispatch storage event to notify components of synchronized state
-        window.dispatchEvent(new Event('storage'));
+        // Also listen by IP so interactions from another browser on the same device/network sync immediately
+        if (userIp && userIp !== '127.0.0.1') {
+          const qIp = query(collection(db, 'interactions'), where('ip', '==', userIp));
+          const unsubIp = onSnapshot(qIp, (snap) => {
+            snap.docChanges().forEach((change) => {
+              if (change.type === 'removed') {
+                docsByKey.delete(change.doc.id);
+              } else {
+                docsByKey.set(change.doc.id, change.doc.data());
+              }
+            });
+            recomputeAndBroadcast();
+          }, () => {});
+          unsubs.push(unsubIp);
+        }
       } catch (err) {
         console.error('Failed to sync device-level interactions:', err);
       }
     };
-    
-    if (dbConnected) {
-      syncInteractions();
-    }
+
+    setupRealtimeInteractionSync();
+
+    const handleIdentitySynced = () => {
+      unsubs.forEach(u => u());
+      unsubs.length = 0;
+      setupRealtimeInteractionSync();
+    };
+    window.addEventListener('nonum_identity_synced', handleIdentitySynced);
+
+    return () => {
+      isActive = false;
+      unsubs.forEach(u => u());
+      window.removeEventListener('nonum_identity_synced', handleIdentitySynced);
+    };
   }, [dbConnected]);
 
   const handlePostUpdate = (postId: string, updatedFields: Partial<Post>) => {

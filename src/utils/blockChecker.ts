@@ -1,6 +1,6 @@
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getDeviceImei } from './ip';
+import { getDeviceImei, getAllDeviceImeis, addAliasImei } from './ip';
 
 export interface BlockStatus {
   isBlocked: boolean;
@@ -19,7 +19,7 @@ export interface BlockStatus {
 }
 
 /**
- * Checks if a client's IP or Device IMEI is active or blocked.
+ * Checks if a client's IP or any of its Device IMEI / Vault / Cross-Browser signatures is blocked.
  * If a temporary block has expired, it automatically updates the database to lift the ban.
  */
 export async function checkIpBlockStatus(ip: string, imei?: string): Promise<BlockStatus> {
@@ -27,17 +27,20 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
     return { isBlocked: false };
   }
 
-  const deviceImei = imei || await getDeviceImei();
+  const primaryImei = imei || await getDeviceImei();
+  const candidateImeis = Array.from(new Set([
+    ...(primaryImei ? [primaryImei] : []),
+    ...getAllDeviceImeis()
+  ])).filter(Boolean);
 
   try {
-    // 1. Prioritize check by IMEI to prevent evasion by IP hopping
-    if (deviceImei) {
-      const imeiBlockRef = doc(db, 'blockedImeis', deviceImei);
+    // 1. Prioritize check across all Device IMEIs (primary + 4-vault + cross-browser aliases) to prevent evasion by IP/VPN hopping
+    for (const candidateImei of candidateImeis) {
+      const imeiBlockRef = doc(db, 'blockedImeis', candidateImei);
       const imeiBlockSnap = await getDoc(imeiBlockRef);
       if (imeiBlockSnap.exists()) {
         const data = imeiBlockSnap.data();
         if (data.isBlocked) {
-          // Check if temporary block has expired
           if (data.expiresAt) {
             const expires = new Date(data.expiresAt);
             const now = new Date();
@@ -46,7 +49,7 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
                 isBlocked: false,
                 expiresAt: null,
                 blockedAt: null
-              });
+              }).catch(() => {});
             } else {
               const diffMs = expires.getTime() - now.getTime();
               const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -56,7 +59,10 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
               if (diffDays > 0) label += `${diffDays}d `;
               if (diffHours > 0 || diffDays > 0) label += `${diffHours}h `;
               label += `${diffMins}m remaining`;
-              
+
+              // Lock banned IMEI into all 4 browser vaults so switching to VPN later still blocks this browser
+              addAliasImei(candidateImei);
+
               return {
                 isBlocked: true,
                 timeLeftLabel: label,
@@ -66,6 +72,7 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
               };
             }
           } else {
+            addAliasImei(candidateImei);
             return {
               isBlocked: true,
               timeLeftLabel: 'Permanent Ban',
@@ -77,44 +84,47 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
       }
     }
 
-    // 2. Fallback check by IP address
+    // 2. Fallback check by Network IP address (catches Incognito / secondary browsers on the same network)
     if (!ip) return { isBlocked: false };
     const blockRef = doc(db, 'blockedIps', ip);
     const blockSnap = await getDoc(blockRef);
     if (!blockSnap.exists()) {
       return { isBlocked: false };
     }
-    
+
     const data = blockSnap.data();
     if (!data.isBlocked) {
       return { isBlocked: false };
     }
-    
-    // Check if the block has expired
+
+    // Check if the IP block has expired
     if (data.expiresAt) {
       const expires = new Date(data.expiresAt);
       const now = new Date();
       if (now >= expires) {
-        // Expired! Update database to unblock IP while preserving blockCount (offense tier)
         await updateDoc(blockRef, {
           isBlocked: false,
           expiresAt: null,
           blockedAt: null,
           totalReports: 0
-        });
+        }).catch(() => {});
         return { isBlocked: false };
       } else {
-        // Formulate remaining duration details
+        // Bind banned IMEI into this browser's multi-vault storage so enabling a VPN after loading cannot evade the block
+        if (data.imei) {
+          addAliasImei(data.imei);
+        }
+
         const diffMs = expires.getTime() - now.getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-        
+
         let label = '';
         if (diffDays > 0) label += `${diffDays}d `;
         if (diffHours > 0 || diffDays > 0) label += `${diffHours}h `;
         label += `${diffMins}m remaining`;
-        
+
         return {
           isBlocked: true,
           timeLeftLabel: label,
@@ -132,7 +142,9 @@ export async function checkIpBlockStatus(ip: string, imei?: string): Promise<Blo
         };
       }
     } else {
-      // Permanent block
+      if (data.imei) {
+        addAliasImei(data.imei);
+      }
       return {
         isBlocked: true,
         timeLeftLabel: 'Permanent Ban',
