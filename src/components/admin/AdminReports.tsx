@@ -866,10 +866,20 @@ export default function AdminReports() {
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
             onClick={() => navigateToDomainRoute('/')}
           >
-            <NonumLogo className="w-16 h-16 sm:w-18 sm:h-18" />
+            <NonumLogo className="w-20 h-20 sm:w-24 sm:h-24" />
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">
+            {/* Download Admin PWA Webapp Button */}
+            <button
+              onClick={() => (window as any).openPwaInstallModal?.('admin')}
+              className="px-3 py-1 bg-rose-950/25 hover:bg-rose-900/40 border border-rose-500/30 text-rose-300 hover:text-white text-[10px] font-bold rounded transition-all uppercase tracking-wider cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
+              title="Download Nonum Admin Webapp (PWA)"
+            >
+              <Download className="w-3.5 h-3.5 text-rose-400" />
+              <span>Download Admin App</span>
+            </button>
+
             {/* Redirect back to homepage */}
             <button
               onClick={() => navigateToDomainRoute('/')}
