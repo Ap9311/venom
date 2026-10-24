@@ -7,18 +7,22 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Nonum | Decentralized Anonymous Grid</title>
-    <link id="pwa-manifest-link" rel="manifest" href="/manifest.json" />
     <script>
       (function() {
-        // Capture PWA install prompt without suppressing native browser omnibox/search bar download button
+        // Capture PWA install prompt as early as possible
         window.addEventListener('beforeinstallprompt', function(e) {
+          e.preventDefault();
           window.pwaInstallPrompt = e;
           window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
         });
 
-        var host = (window.location.hostname || '').toLowerCase();
-        var path = (window.location.pathname || '').toLowerCase();
-        var isAdminRoute = host.startsWith('admin.') || host.includes('admin') || path.startsWith('/admin') || path.includes('admin');
+        var path = window.location.pathname;
+        var hasAdminSession = false;
+        try {
+          hasAdminSession = sessionStorage.getItem('nonum_admin_auth') === 'true' && localStorage.getItem('nonum_is_admin_device') === 'true';
+        } catch(e) {}
+
+        var isAdminRoute = path.startsWith('/admin') || path.includes('admin');
         var manifestUrl = isAdminRoute ? '/admin-manifest.json' : '/manifest.json';
         var faviconUrl = isAdminRoute
           ? 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png'
@@ -41,16 +45,12 @@
         }
         
         try {
-          var manifestLink = document.getElementById('pwa-manifest-link');
-          if (manifestLink) {
-            manifestLink.href = manifestUrl;
-          } else {
-            manifestLink = document.createElement('link');
-            manifestLink.id = 'pwa-manifest-link';
-            manifestLink.rel = 'manifest';
-            manifestLink.href = manifestUrl;
-            document.head.appendChild(manifestLink);
-          }
+          // Dynamically create and append the links to head to avoid the browser pre-loading /manifest.json by default on /admin route
+          var manifestLink = document.createElement('link');
+          manifestLink.id = 'pwa-manifest-link';
+          manifestLink.rel = 'manifest';
+          manifestLink.href = manifestUrl;
+          document.head.appendChild(manifestLink);
 
           var favicon32 = document.createElement('link');
           favicon32.id = 'favicon-link-32';
