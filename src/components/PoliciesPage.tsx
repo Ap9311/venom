@@ -28,7 +28,7 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
               }
             }}
           >
-            <NonumLogo className="w-20 h-20 sm:w-24 sm:h-24" />
+            <NonumLogo className="w-16 h-16 sm:w-18 sm:h-18" />
           </div>
           
           <div className="flex items-center gap-2">

@@ -4,7 +4,7 @@ import NonumLogo from '../NonumLogo';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
-import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle, Download } from 'lucide-react';
+import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function AdminCommunityReports() {
@@ -270,7 +270,7 @@ export default function AdminCommunityReports() {
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
             onClick={() => navigateTo('/')}
           >
-            <NonumLogo className="w-20 h-20 sm:w-24 sm:h-24" />
+            <NonumLogo className="w-16 h-16 sm:w-18 sm:h-18" />
             <div>
               <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 COMMUNITY SHIELD LOGS
@@ -279,16 +279,6 @@ export default function AdminCommunityReports() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-center">
-            {/* Download Admin PWA Webapp Button */}
-            <button
-              onClick={() => (window as any).openPwaInstallModal?.('admin')}
-              className="px-3 py-1.5 bg-rose-950/25 hover:bg-rose-900/40 border border-rose-500/30 text-rose-300 hover:text-white text-[10px] font-bold rounded transition-all uppercase tracking-wider cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
-              title="Download Nonum Admin Webapp (PWA)"
-            >
-              <Download className="w-3.5 h-3.5 text-rose-400" />
-              <span>Download Admin App</span>
-            </button>
-
             <button
               onClick={() => navigateTo('/admin')}
               className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 text-zinc-400 hover:text-zinc-200 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
