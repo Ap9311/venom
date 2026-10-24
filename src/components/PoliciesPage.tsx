@@ -28,12 +28,7 @@ export default function PoliciesPage({ onBackToHome }: PoliciesPageProps) {
               }
             }}
           >
-            <NonumLogo className="w-11 h-11" />
-            <div>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
-                By Obsidian
-              </p>
-            </div>
+            <NonumLogo className="w-16 h-16 sm:w-18 sm:h-18" />
           </div>
           
           <div className="flex items-center gap-2">

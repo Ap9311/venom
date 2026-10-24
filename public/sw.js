@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const CACHE_NAME = 'nonum-obsidian-cache-v1';
+const CACHE_NAME = 'nonum-app-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   '/admin-manifest.json',
-  'https://img.icons8.com/nolan/256/shield.png',
-  'https://img.icons8.com/nolan/512/shield.png'
+  '/nonum-logo.svg',
+  '/nonum-admin-logo.svg'
 ];
 
 // Install service worker and cache essential assets

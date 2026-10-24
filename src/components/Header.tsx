@@ -44,16 +44,16 @@ export default function Header({
     <header className="border-b border-zinc-900 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6">
       <div className="max-w-2xl mx-auto flex items-center justify-between gap-4 relative">
         
-        {/* Brand Logo & Title */}
+        {/* Brand Logo */}
         <div className="flex items-center gap-3">
           <NonumLogo 
-            className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer z-10 relative"
+            className="w-16 h-16 sm:w-18 sm:h-18 object-contain select-none transition-transform duration-300 hover:scale-105 active:scale-95 cursor-pointer z-10 relative"
             onClick={() => onNavigate('/')}
           />
         </div>
 
         {/* Center Graphic */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0 w-full max-w-[200px] sm:max-w-[250px]">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0 w-full max-w-[200px] sm:max-w-[260px]">
           <img 
             src="https://i.ibb.co/j92rmp84/94045-removebg-preview.png" 
             alt="Nonum Logo" 

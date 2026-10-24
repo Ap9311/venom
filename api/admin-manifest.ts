@@ -41,12 +41,12 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
       theme_color: '#f43f5e',
       icons: [
         {
-          src: 'https://iili.io/nWbQlNj.png',
+          src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
           sizes: '192x192',
           type: 'image/png'
         },
         {
-          src: 'https://iili.io/nWbQlNj.png',
+          src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
           sizes: '512x512',
           type: 'image/png'
         }

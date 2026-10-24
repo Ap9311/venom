@@ -270,7 +270,7 @@ export default function AdminCommunityReports() {
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
             onClick={() => navigateTo('/')}
           >
-            <NonumLogo className="w-11 h-11" />
+            <NonumLogo className="w-16 h-16 sm:w-18 sm:h-18" />
             <div>
               <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase select-none leading-none">
                 COMMUNITY SHIELD LOGS

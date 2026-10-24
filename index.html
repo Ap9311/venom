@@ -24,7 +24,9 @@
 
         var isAdminRoute = path.startsWith('/admin') || path.includes('admin');
         var manifestUrl = isAdminRoute ? '/admin-manifest.json' : '/manifest.json';
-        var faviconUrl = 'https://iili.io/nWbQlNj.png';
+        var faviconUrl = isAdminRoute
+          ? 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png'
+          : 'https://i.ibb.co/jkVhh3Bt/96737.jpg';
         var titleText = "Nonum | Decentralized Anonymous Grid";
         if (isAdminRoute) {
           if (path.includes('report')) {

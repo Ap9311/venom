@@ -461,12 +461,12 @@ async function startServer() {
       theme_color: '#f43f5e',
       icons: [
         {
-          src: 'https://iili.io/nWbQlNj.png',
+          src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
           sizes: '192x192',
           type: 'image/png'
         },
         {
-          src: 'https://iili.io/nWbQlNj.png',
+          src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
           sizes: '512x512',
           type: 'image/png'
         }
@@ -494,7 +494,7 @@ async function startServer() {
 
   // Redirect root favicon requests to the custom favicon to guarantee tab display
   app.get(['/favicon.ico', '/favicon.png'], (req, res) => {
-    res.redirect('https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png');
+    res.redirect('https://i.ibb.co/jkVhh3Bt/96737.jpg');
   });
 
   // Serve the post's dynamic image for social media crawler preview (handles base64 data URIs perfectly)

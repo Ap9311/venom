@@ -329,7 +329,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Deep linking sharing state
   const [initialDeepLinkProcessed, setInitialDeepLinkProcessed] = useState(false);
 
-  const DEFAULT_COMMUNITY_LOGO = 'https://iili.io/nWbQlNj.png';
+  const DEFAULT_COMMUNITY_LOGO = '/nonum-logo.svg';
 
   const createFileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);

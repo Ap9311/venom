@@ -488,7 +488,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
             className="flex items-center gap-3 cursor-pointer select-none"
             onClick={onNavigateHome}
           >
-            <NonumLogo className="w-11 h-11" />
+            <NonumLogo className="w-16 h-16 sm:w-18 sm:h-18" />
             <div>
               <p className="text-[9px] text-zinc-500 font-mono tracking-wider uppercase leading-none mt-0.5">
                 COMMUNITIES SECTOR [admin/communities]
@@ -649,8 +649,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                           }`}
                         >
                           <img
-                            src={c.imageUrl || 'https://iili.io/nWbQlNj.png'}
-                            onError={(e) => { e.currentTarget.src = 'https://iili.io/nWbQlNj.png'; }}
+                            src={c.imageUrl || '/nonum-logo.svg'}
+                            onError={(e) => { e.currentTarget.src = '/nonum-logo.svg'; }}
                             alt={c.name}
                             className="w-10 h-10 rounded object-cover bg-zinc-900 border border-zinc-800 shrink-0"
                             referrerPolicy="no-referrer"

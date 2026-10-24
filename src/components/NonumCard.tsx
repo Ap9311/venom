@@ -523,9 +523,6 @@ export default function NonumCard({
   const shareUrl = `${window.location.origin}/?id=${post.encryptedHash}`;
   const shareTitle = post.title;
 
-  const imageUrl = post.imageUrl 
-    ? `${window.location.origin}/api/post-image/${post.encryptedHash}`
-    : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
 
   // Format a simple, humble and elegant dispatch message matching the user request
   const dispatchText = `Nonum

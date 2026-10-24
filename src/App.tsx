@@ -404,7 +404,9 @@ export default function App() {
 
     document.title = pageTitle;
 
-    const iconUrl = "https://iili.io/nWbQlNj.png";
+    const iconUrl = (isAdminRoute || isAdminReportRoute)
+      ? "https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png"
+      : "https://i.ibb.co/jkVhh3Bt/96737.jpg";
 
     const manifestUrl = (isAdminRoute || isAdminReportRoute)
       ? "/api/admin-manifest"

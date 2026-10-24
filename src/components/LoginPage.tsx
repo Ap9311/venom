@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { checkIsAdminDevice, getAdminConfig, registerAdminDevice } from '../utils/adminAuth';
 import { NxDomainError } from './NxDomainError';
+import NonumLogo from './NonumLogo';
 import { Lock, Key, ArrowRight, AlertCircle } from 'lucide-react';
 
 interface LoginPageProps {
@@ -116,9 +117,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateAdmin, onBackToH
       <div className="max-w-sm w-full relative z-10 space-y-6">
         
         {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 shadow-2xl">
-            <Lock className="w-6 h-6 text-emerald-400" />
+        <div className="text-center space-y-3">
+          <div 
+            className="inline-flex cursor-pointer select-none transition-transform hover:scale-105 active:scale-95"
+            onClick={onBackToHome}
+            title="Return to Nonum Feed"
+          >
+            <NonumLogo className="w-18 h-18 sm:w-20 sm:h-20" />
           </div>
           <div>
             <h1 className="text-lg font-black tracking-widest text-zinc-100 uppercase">
