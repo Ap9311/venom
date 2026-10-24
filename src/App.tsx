@@ -337,7 +337,6 @@ export default function App() {
   // Listen to beforeinstallprompt event to support manual PWA installations from admin console
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
       (window as any).pwaInstallPrompt = e;
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);

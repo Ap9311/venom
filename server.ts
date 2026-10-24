@@ -450,25 +450,34 @@ async function startServer() {
     res.setHeader('Content-Type', 'application/manifest+json');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.json({
-      id: 'nonum-admin',
+      id: '/admin',
       scope: '/admin',
       name: 'Nonum Admin Console',
       short_name: 'Nonum Admin',
       description: 'Nonum Security & Moderator Command Center',
-      start_url: '/admin?pwa=admin',
+      start_url: '/admin',
       display: 'standalone',
       background_color: '#09090b',
       theme_color: '#f43f5e',
+      orientation: 'any',
       icons: [
         {
           src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
           sizes: '192x192',
-          type: 'image/png'
+          type: 'image/png',
+          purpose: 'any'
         },
         {
           src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
           sizes: '512x512',
-          type: 'image/png'
+          type: 'image/png',
+          purpose: 'any'
+        },
+        {
+          src: 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png',
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'maskable'
         }
       ]
     });

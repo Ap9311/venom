@@ -4,79 +4,59 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#09090b" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Nonum" />
+    <meta name="application-name" content="Nonum" />
+
+    <!-- Static Web App Manifest for instant browser searchbar & tab settings PWA detection -->
+    <link rel="manifest" href="/manifest.json" id="pwa-manifest-link" />
+
+    <!-- Apple Touch Icons & Favicons -->
+    <link rel="apple-touch-icon" href="https://i.ibb.co/jkVhh3Bt/96737.jpg" id="apple-icon-link" />
+    <link rel="icon" type="image/png" sizes="32x32" href="https://i.ibb.co/jkVhh3Bt/96737.jpg?v=2" id="favicon-link-32" />
+    <link rel="icon" type="image/png" sizes="16x16" href="https://i.ibb.co/jkVhh3Bt/96737.jpg?v=2" id="favicon-link-16" />
+
     <title>Nonum | Decentralized Anonymous Grid</title>
+
     <script>
       (function() {
-        // Capture PWA install prompt as early as possible
+        // Capture PWA install prompt without suppressing native browser search bar download icon
         window.addEventListener('beforeinstallprompt', function(e) {
-          e.preventDefault();
           window.pwaInstallPrompt = e;
           window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
         });
 
         var path = window.location.pathname;
-        var hasAdminSession = false;
-        try {
-          hasAdminSession = sessionStorage.getItem('nonum_admin_auth') === 'true' && localStorage.getItem('nonum_is_admin_device') === 'true';
-        } catch(e) {}
-
         var isAdminRoute = path.startsWith('/admin') || path.includes('admin');
-        var manifestUrl = isAdminRoute ? '/admin-manifest.json' : '/manifest.json';
-        var faviconUrl = isAdminRoute
-          ? 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png'
-          : 'https://i.ibb.co/jkVhh3Bt/96737.jpg';
-        var titleText = "Nonum | Decentralized Anonymous Grid";
+
         if (isAdminRoute) {
+          var manifestLink = document.getElementById('pwa-manifest-link');
+          if (manifestLink) {
+            manifestLink.href = '/admin-manifest.json';
+          }
+          var faviconUrl = 'https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png';
+          var fav32 = document.getElementById('favicon-link-32');
+          var fav16 = document.getElementById('favicon-link-16');
+          var appIcon = document.getElementById('apple-icon-link');
+          if (fav32) fav32.href = faviconUrl + '?v=2';
+          if (fav16) fav16.href = faviconUrl + '?v=2';
+          if (appIcon) appIcon.href = faviconUrl + '?v=2';
+
           if (path.includes('report')) {
-            titleText = "Nonum Admin Reports";
+            document.title = "Nonum Admin Reports";
           } else {
-            titleText = "Nonum Admin Console";
+            document.title = "Nonum Admin Console";
           }
         } else {
           if (path.startsWith('/report') || path.includes('report')) {
-            titleText = "Nonum Security Report";
+            document.title = "Nonum Security Report";
           } else if (path.startsWith('/policies') || path.includes('policies')) {
-            titleText = "Nonum Policies";
+            document.title = "Nonum Policies";
           } else if (path.startsWith('/guidelines') || path.includes('guidelines')) {
-            titleText = "Nonum Guidelines";
+            document.title = "Nonum Guidelines";
           }
-        }
-        
-        try {
-          // Dynamically create and append the links to head to avoid the browser pre-loading /manifest.json by default on /admin route
-          var manifestLink = document.createElement('link');
-          manifestLink.id = 'pwa-manifest-link';
-          manifestLink.rel = 'manifest';
-          manifestLink.href = manifestUrl;
-          document.head.appendChild(manifestLink);
-
-          var favicon32 = document.createElement('link');
-          favicon32.id = 'favicon-link-32';
-          favicon32.rel = 'icon';
-          favicon32.type = 'image/png';
-          favicon32.sizes = '32x32';
-          favicon32.href = faviconUrl + '?v=2';
-          document.head.appendChild(favicon32);
-
-          var favicon16 = document.createElement('link');
-          favicon16.id = 'favicon-link-16';
-          favicon16.rel = 'icon';
-          favicon16.type = 'image/png';
-          favicon16.sizes = '16x16';
-          favicon16.href = faviconUrl + '?v=2';
-          document.head.appendChild(favicon16);
-
-          var appleIcon = document.createElement('link');
-          appleIcon.id = 'apple-icon-link';
-          appleIcon.rel = 'apple-touch-icon';
-          appleIcon.href = faviconUrl + '?v=2';
-          document.head.appendChild(appleIcon);
-
-          document.title = titleText;
-        } catch(e) {
-          console.error('Error executing head initialization script:', e);
         }
       })();
     </script>

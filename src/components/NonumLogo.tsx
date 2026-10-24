@@ -6,7 +6,7 @@ interface NonumLogoProps {
   onClick?: () => void;
 }
 
-export default function NonumLogo({ className = "w-16 h-16 sm:w-18 sm:h-18", style, onClick }: NonumLogoProps) {
+export default function NonumLogo({ className = "w-20 h-20 sm:w-24 sm:h-24", style, onClick }: NonumLogoProps) {
   return (
     <svg 
       className={`nonum-logo shrink-0 select-none ${className}`}
