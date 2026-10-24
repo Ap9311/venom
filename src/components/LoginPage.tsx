@@ -6,8 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { checkIsAdminDevice, getAdminConfig, registerAdminDevice } from '../utils/adminAuth';
 import { NxDomainError } from './NxDomainError';
-import NonumLogo from './NonumLogo';
-import { Lock, Key, ArrowRight, AlertCircle, Download } from 'lucide-react';
+import { Lock, Key, ArrowRight, AlertCircle } from 'lucide-react';
 
 interface LoginPageProps {
   onNavigateAdmin: () => void;
@@ -117,13 +116,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateAdmin, onBackToH
       <div className="max-w-sm w-full relative z-10 space-y-6">
         
         {/* Brand Header */}
-        <div className="text-center space-y-3">
-          <div 
-            className="inline-flex cursor-pointer select-none transition-transform hover:scale-105 active:scale-95"
-            onClick={onBackToHome}
-            title="Return to Nonum Feed"
-          >
-            <NonumLogo className="w-20 h-20 sm:w-24 sm:h-24" />
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-3 rounded-2xl bg-zinc-900/90 border border-zinc-800 shadow-2xl">
+            <Lock className="w-6 h-6 text-emerald-400" />
           </div>
           <div>
             <h1 className="text-lg font-black tracking-widest text-zinc-100 uppercase">
@@ -201,22 +196,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateAdmin, onBackToH
           </button>
         </form>
 
-        {/* Action Options */}
-        <div className="flex flex-col items-center gap-2 text-center">
-          <button
-            type="button"
-            onClick={() => (window as any).openPwaInstallModal?.('admin')}
-            className="w-full py-2 px-3 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 shadow-sm"
-            title="Download Nonum Admin Webapp (PWA)"
-          >
-            <Download className="w-3.5 h-3.5 text-rose-400" />
-            <span>Download Admin Webapp (PWA)</span>
-          </button>
-
+        {/* Back to Home Link */}
+        <div className="text-center">
           <button
             type="button"
             onClick={onBackToHome}
-            className="text-[11px] text-zinc-500 hover:text-zinc-400 uppercase tracking-wider transition-colors cursor-pointer mt-1"
+            className="text-[11px] text-zinc-500 hover:text-zinc-400 uppercase tracking-wider transition-colors cursor-pointer"
           >
             ← Return to Feed
           </button>

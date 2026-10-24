@@ -44,20 +44,20 @@ export default function Header({
     <header className="border-b border-zinc-900 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-40 px-4 py-3 sm:px-6">
       <div className="max-w-2xl mx-auto flex items-center justify-between gap-4 relative">
         
-        {/* Brand Logo */}
+        {/* Brand Logo & Title */}
         <div className="flex items-center gap-3">
           <NonumLogo 
-            className="w-20 h-20 sm:w-24 sm:h-24 object-contain select-none transition-transform duration-300 hover:scale-105 active:scale-95 cursor-pointer z-10 relative"
+            className="w-11 h-11 object-contain select-none drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-transform duration-500 hover:scale-110 active:scale-95 cursor-pointer z-10 relative"
             onClick={() => onNavigate('/')}
           />
         </div>
 
         {/* Center Graphic */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0 w-full max-w-[220px] sm:max-w-[280px]">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none z-0 w-full max-w-[200px] sm:max-w-[250px]">
           <img 
             src="https://i.ibb.co/j92rmp84/94045-removebg-preview.png" 
             alt="Nonum Logo" 
-            className="h-24 sm:h-28 object-contain pointer-events-auto cursor-pointer select-none transition-transform hover:scale-105"
+            className="h-20 sm:h-24 object-contain pointer-events-auto cursor-pointer select-none transition-transform hover:scale-105"
             referrerPolicy="no-referrer"
             onClick={() => onNavigate('/')}
           />
@@ -66,16 +66,6 @@ export default function Header({
         {/* Action Controls - Menu beside Refresh, beside Create Post */}
         <div className="flex items-center gap-2 z-10 relative">
           
-          {/* Download Webapp Button */}
-          <button
-            onClick={() => (window as any).openPwaInstallModal?.('main')}
-            className="p-2 border border-zinc-850 hover:border-emerald-500/30 rounded bg-zinc-900/40 hover:bg-zinc-950 text-zinc-400 hover:text-emerald-400 transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Download Nonum Webapp (PWA)"
-          >
-            <Download className="w-4 h-4 text-emerald-400" />
-            <span className="hidden sm:inline text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-300">App</span>
-          </button>
-
           {/* Refresh Button */}
           <button
             onClick={onRefresh}
@@ -160,16 +150,6 @@ export default function Header({
                         color: 'text-rose-400 bg-rose-500/5 border border-rose-500/10',
                         onClick: () => {
                           onNavigate('/report');
-                          setShowMenuDropdown(false);
-                        }
-                      },
-                      {
-                        label: 'Download Webapp',
-                        desc: 'Install Nonum as Native PWA',
-                        icon: Download,
-                        color: 'text-teal-400 bg-teal-500/5 border border-teal-500/10',
-                        onClick: () => {
-                          (window as any).openPwaInstallModal?.('main');
                           setShowMenuDropdown(false);
                         }
                       }

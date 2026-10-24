@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import NonumLogo from './NonumLogo';
 import { 
   X, 
   Download, 
@@ -127,7 +128,7 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-xl bg-zinc-900 border ${isAdmin ? 'border-rose-500/20' : 'border-emerald-500/20'} flex items-center justify-center shrink-0 p-1 relative overflow-hidden`}>
                   <img 
-                    src={isAdmin ? "https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png" : "https://i.ibb.co/jkVhh3Bt/96737.jpg"} 
+                    src={isAdmin ? "https://iili.io/nWbQlNj.png" : "https://iili.io/nWbyrQa.md.png"} 
                     alt={appName} 
                     className="w-full h-full object-contain rounded-md select-none"
                   />

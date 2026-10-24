@@ -337,6 +337,7 @@ export default function App() {
   // Listen to beforeinstallprompt event to support manual PWA installations from admin console
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
       (window as any).pwaInstallPrompt = e;
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -403,9 +404,7 @@ export default function App() {
 
     document.title = pageTitle;
 
-    const iconUrl = (isAdminRoute || isAdminReportRoute)
-      ? "https://i.ibb.co/ZRKMHqfJ/file-0000000031c082118352d747206b85c5.png"
-      : "https://i.ibb.co/jkVhh3Bt/96737.jpg";
+    const iconUrl = "https://iili.io/nWbQlNj.png";
 
     const manifestUrl = (isAdminRoute || isAdminReportRoute)
       ? "/api/admin-manifest"

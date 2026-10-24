@@ -27,7 +27,6 @@ import {
   Globe, 
   Users, 
   Search, 
-  Download, 
   Eye, 
   ShieldAlert, 
   ShieldCheck, 
@@ -489,7 +488,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
             className="flex items-center gap-3 cursor-pointer select-none"
             onClick={onNavigateHome}
           >
-            <NonumLogo className="w-20 h-20 sm:w-24 sm:h-24" />
+            <NonumLogo className="w-11 h-11" />
             <div>
               <p className="text-[9px] text-zinc-500 font-mono tracking-wider uppercase leading-none mt-0.5">
                 COMMUNITIES SECTOR [admin/communities]
@@ -497,17 +496,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Download Admin PWA Webapp Button */}
-            <button
-              onClick={() => (window as any).openPwaInstallModal?.('admin')}
-              className="px-3 py-1 bg-rose-950/25 hover:bg-rose-900/40 border border-rose-500/30 text-rose-300 hover:text-white text-[10px] font-bold rounded transition-all uppercase tracking-wider cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
-              title="Download Nonum Admin Webapp (PWA)"
-            >
-              <Download className="w-3.5 h-3.5 text-rose-400" />
-              <span>Download Admin App</span>
-            </button>
-
+          <div className="flex items-center gap-2">
             <button
               onClick={() => navigateToDomainRoute('/admin')}
               className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer flex items-center gap-1"
@@ -660,8 +649,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
                           }`}
                         >
                           <img
-                            src={c.imageUrl || '/nonum-logo.svg'}
-                            onError={(e) => { e.currentTarget.src = '/nonum-logo.svg'; }}
+                            src={c.imageUrl || 'https://iili.io/nWbQlNj.png'}
+                            onError={(e) => { e.currentTarget.src = 'https://iili.io/nWbQlNj.png'; }}
                             alt={c.name}
                             className="w-10 h-10 rounded object-cover bg-zinc-900 border border-zinc-800 shrink-0"
                             referrerPolicy="no-referrer"
