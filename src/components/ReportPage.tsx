@@ -307,8 +307,8 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
               {/* POST ID VERIFICATION BOX */}
               <div className="bg-zinc-950 border border-zinc-900 p-4 rounded-lg space-y-3">
                 <div className="space-y-1">
-                  <label className="text-[9px] uppercase text-zinc-400 block font-bold tracking-wider">
-                    TARGET POST IDENTIFIER (COMPULSORY)
+                  <label className="text-xs uppercase text-zinc-300 block font-medium tracking-wide">
+                    Post ID (required)
                   </label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
@@ -319,17 +319,17 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
                           setPostId(e.target.value);
                           setVerifiedPost(null);
                         }}
-                        placeholder="Enter 20-character Post ID... (e.g. mAtE7p8O...)"
+                        placeholder="Enter Post ID... (e.g. mAtE7p8O...)"
                         disabled={isVerifying || isSubmitting}
                         required
-                        className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded px-3 py-2 text-xs text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors font-mono"
+                        className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/50 rounded px-3 py-2 text-xs sm:text-sm text-zinc-200 focus:outline-none placeholder-zinc-400 transition-colors font-mono"
                       />
                     </div>
                     <button
                       type="button"
                       onClick={() => handleVerifyPost()}
                       disabled={isVerifying || isSubmitting || !postId.trim()}
-                      className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 disabled:opacity-40 text-zinc-300 text-[10px] font-bold rounded transition-colors uppercase tracking-wider flex items-center gap-1 cursor-pointer font-mono shrink-0"
+                      className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 disabled:opacity-40 text-zinc-300 text-xs font-bold rounded transition-colors uppercase tracking-wider flex items-center gap-1 cursor-pointer font-mono shrink-0"
                     >
                       {isVerifying ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <Search className="w-3.5 h-3.5" />}
                       <span>Verify</span>
@@ -339,7 +339,7 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
 
                 {/* VERIFICATION ERROR FEEDBACK */}
                 {verificationError && (
-                  <div className="text-[10px] text-rose-400 flex items-center gap-1.5 bg-rose-950/5 border border-rose-900/40 p-2.5 rounded">
+                  <div className="text-xs text-rose-400 flex items-center gap-1.5 bg-rose-950/20 border border-rose-900/50 p-2.5 rounded">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>{verificationError}</span>
                   </div>
@@ -349,7 +349,7 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
                 {verifiedPost && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5">
-                      <div className="flex items-center gap-1.5 text-[8px] text-emerald-400 font-bold font-mono tracking-widest uppercase">
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold font-mono tracking-widest uppercase">
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                         <span>POST SECURELY VERIFIED</span>
                       </div>
@@ -361,8 +361,8 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
 
               {/* COMPULSORY SELECTABLE REASON */}
               <div className="bg-zinc-950 border border-zinc-900 p-4 rounded-lg space-y-3">
-                <label className="text-[9px] uppercase text-zinc-400 block font-bold tracking-wider">
-                  SELECTABLE REASON OF REPORT (COMPULSORY)
+                <label className="text-xs uppercase text-zinc-300 block font-medium tracking-wide">
+                  Choose a reason
                 </label>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

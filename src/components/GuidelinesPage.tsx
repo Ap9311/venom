@@ -66,7 +66,7 @@ export default function GuidelinesPage({ onBackToHome }: GuidelinesPageProps) {
             <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">OFFICIAL NONUM PROTOCOL</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase leading-none">
-            COMMUNITY GUIDELINES & USING RIGHTS
+            Community Guidelines & Your Rights
           </h1>
           <p className="text-xs text-zinc-500 font-sans leading-relaxed max-w-2xl">
             Nonum is a zero-friction, cryptographic decentralized social space for sharing unfiltered polls, Q&A sessions, and texts. 

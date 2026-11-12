@@ -1563,20 +1563,20 @@ Post Nonum Now: https://mynonum.vercel.app`;
             className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-sans font-bold text-xs rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/20 active:scale-98 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3px]" />
-            <span>CREATE CYBER HUB</span>
+            <span>Create Community</span>
           </button>
         </div>
 
         {/* Communities feed scroll list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-32 md:pb-12 select-none">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 text-zinc-500 font-mono text-[10px]">
+            <div className="flex flex-col items-center justify-center py-12 text-zinc-400 font-sans text-xs">
               <span className="animate-spin text-emerald-400 mb-2">●</span>
-              <span>SYNCHRONISING DISPATCH GRID...</span>
+              <span>Loading...</span>
             </div>
           ) : sortedAndFilteredComms.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-zinc-900 rounded-xl p-4 text-zinc-500 font-mono text-[10px]">
-              <span>NO ACTIVE COGNITIVE COHORTS LOCATED</span>
+            <div className="text-center py-12 border border-dashed border-zinc-900 rounded-xl p-4 text-zinc-400 font-sans text-xs">
+              <span>No communities found</span>
             </div>
           ) : (
             sortedAndFilteredComms.map((comm) => {

@@ -527,28 +527,12 @@ export default function NonumCard({
     ? `${window.location.origin}/api/post-image/${post.encryptedHash}`
     : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
 
-  // Format a simple, humble and elegant dispatch message matching the user request
-  const dispatchText = `Nonum
-
-Review Post:
-"${post.title}"
-"${post.content || ''}"
-
-Link: ${shareUrl}
-
-Post Nonum Now: https://mynonum.vercel.app`;
-
-  const twitterDispatchText = `Nonum
-
-Review Post:
-"${post.title}"
-
-Link: ${shareUrl}
-
-Post Nonum Now: https://mynonum.vercel.app`;
+  // Format a simple, friendly share message matching user request
+  const dispatchText = `Read this anonymous post on Nonum: ${shareUrl}`;
+  const twitterDispatchText = `Read this anonymous post on Nonum: ${shareUrl}`;
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(shareUrl);
+    navigator.clipboard.writeText(`Read this anonymous post on Nonum: ${shareUrl}`);
     setIsCopiedLink(true);
     setTimeout(() => setIsCopiedLink(false), 2000);
   };

@@ -90,13 +90,13 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
             className={`w-5 h-5 transition-colors duration-250 ${
               isTabActive('/policies') 
                 ? 'text-emerald-400' 
-                : 'text-zinc-500 group-hover:text-zinc-300'
+                : 'text-zinc-400 group-hover:text-zinc-200'
             }`} 
           />
-          <span className={`text-[8px] font-mono font-black mt-1 uppercase tracking-wider transition-colors duration-250 ${
+          <span className={`text-[10px] font-sans font-bold mt-1 uppercase tracking-wider transition-colors duration-250 ${
             isTabActive('/policies') 
               ? 'text-emerald-400' 
-              : 'text-zinc-600 group-hover:text-zinc-400'
+              : 'text-zinc-400 group-hover:text-zinc-200'
           }`}>
             Policy
           </span>
@@ -114,13 +114,13 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
             className={`w-5 h-5 transition-colors duration-250 ${
               isTabActive('/communities') 
                 ? 'text-emerald-400' 
-                : 'text-zinc-500 group-hover:text-zinc-300'
+                : 'text-zinc-400 group-hover:text-zinc-200'
             }`} 
           />
-          <span className={`text-[8px] font-mono font-black mt-1 uppercase tracking-wider transition-colors duration-250 ${
+          <span className={`text-[10px] font-sans font-bold mt-1 uppercase tracking-wider transition-colors duration-250 ${
             isTabActive('/communities') 
               ? 'text-emerald-400' 
-              : 'text-zinc-600 group-hover:text-zinc-400'
+              : 'text-zinc-400 group-hover:text-zinc-200'
           }`}>
             Community
           </span>
@@ -152,13 +152,13 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
             className={`w-5 h-5 transition-colors duration-250 ${
               isTabActive('/') 
                 ? 'text-emerald-400' 
-                : 'text-zinc-500 group-hover:text-zinc-300'
+                : 'text-zinc-400 group-hover:text-zinc-200'
             }`} 
           />
-          <span className={`text-[8px] font-mono font-black mt-1 uppercase tracking-wider transition-colors duration-250 ${
+          <span className={`text-[10px] font-sans font-bold mt-1 uppercase tracking-wider transition-colors duration-250 ${
             isTabActive('/') 
               ? 'text-emerald-400' 
-              : 'text-zinc-600 group-hover:text-zinc-400'
+              : 'text-zinc-400 group-hover:text-zinc-200'
           }`}>
             Home
           </span>
@@ -176,13 +176,13 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
             className={`w-5 h-5 transition-colors duration-250 ${
               isTabActive('/report') 
                 ? 'text-rose-400' 
-                : 'text-zinc-500 group-hover:text-zinc-300'
+                : 'text-zinc-400 group-hover:text-zinc-200'
             }`} 
           />
-          <span className={`text-[8px] font-mono font-black mt-1 uppercase tracking-wider transition-colors duration-250 ${
+          <span className={`text-[10px] font-sans font-bold mt-1 uppercase tracking-wider transition-colors duration-250 ${
             isTabActive('/report') 
               ? 'text-rose-400' 
-              : 'text-zinc-600 group-hover:text-zinc-400'
+              : 'text-zinc-400 group-hover:text-zinc-200'
           }`}>
             Report
           </span>

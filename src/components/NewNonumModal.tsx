@@ -287,7 +287,7 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
           
           {/* Action Choice Tabs */}
           <div>
-            <label className="block text-[10px] text-zinc-500 font-bold tracking-wider mb-2 font-mono">
+            <label className="block text-xs text-zinc-300 font-medium tracking-wide mb-2">
               POST FORMAT
             </label>
             <div className="grid grid-cols-4 gap-1.5 bg-zinc-900/60 p-1 rounded border border-zinc-900">
@@ -296,10 +296,10 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
                   key={tab}
                   type="button"
                   onClick={() => { setType(tab); setErrorMsg(''); }}
-                  className={`py-2 rounded text-[10px] font-bold font-mono tracking-wider uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                  className={`py-2 rounded text-xs font-bold tracking-wider uppercase transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                     type === tab
                       ? 'bg-emerald-500 text-zinc-950 font-black shadow-lg'
-                      : 'text-zinc-400 hover:text-emerald-400 hover:bg-zinc-950/40'
+                      : 'text-zinc-300 hover:text-emerald-400 hover:bg-zinc-950/40'
                   }`}
                 >
                   {tab === 'text' && <FileText className="w-3.5 h-3.5" />}
@@ -315,13 +315,13 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
           {/* Form input elements */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] text-zinc-500 font-bold tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs text-zinc-300 font-medium tracking-wide mb-1.5">
                 SELECT CHANNEL / CATEGORY
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-emerald-500/30 font-sans"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/50 font-sans"
               >
                 {categories.map((cat) => (
                   <option key={cat.value} value={cat.value} className="bg-zinc-950">
@@ -332,20 +332,25 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
             </div>
             
             <div>
-              <label className="block text-[10px] text-zinc-500 font-bold tracking-wider mb-1.5 font-mono">
+              <label className="block text-xs text-zinc-300 font-medium tracking-wide mb-1.5">
                 POST SIGNATURE
               </label>
-              <div className="w-full bg-zinc-900/40 border border-zinc-900/80 rounded px-2.5 py-1.5 text-xs text-zinc-600 select-none flex items-center gap-1.5 font-mono">
-                <Hash className="w-3.5 h-3.5" />
+              <div className="w-full bg-zinc-900/60 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-400 select-none flex items-center gap-1.5">
+                <Hash className="w-3.5 h-3.5 text-emerald-400" />
                 <span>ANONYMOUS</span>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] text-zinc-500 font-bold tracking-wider mb-1.5 font-mono">
-              TITLE
-            </label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs text-zinc-300 font-medium tracking-wide">
+                TITLE
+              </label>
+              <span className={`text-xs font-mono ${title.length >= 200 ? 'text-rose-400 font-bold' : 'text-zinc-400'}`}>
+                {title.length} / 200
+              </span>
+            </div>
             <input
               type="text"
               required
@@ -353,14 +358,19 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
               onChange={(e) => handleInputWithCursor(e, setTitle)}
               placeholder="Give your post an interesting title..."
               maxLength={200}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-emerald-500/30"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs sm:text-sm text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] text-zinc-500 font-bold tracking-wider mb-1.5 font-mono">
-              CONTENT / DESCRIPTION
-            </label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs text-zinc-300 font-medium tracking-wide">
+                CONTENT / DESCRIPTION
+              </label>
+              <span className={`text-xs font-mono ${content.length >= 5000 ? 'text-rose-400 font-bold' : 'text-zinc-400'}`}>
+                {content.length} / 5000
+              </span>
+            </div>
             <textarea
               required={type !== 'image'}
               value={content}
@@ -368,14 +378,14 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
               placeholder={type === 'image' ? "Add an optional description for your image..." : "What would you like to share?"}
               rows={4}
               maxLength={5000}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-emerald-500/30"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs sm:text-sm text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-emerald-500/50"
             />
           </div>
 
           {/* --- Render Image File Drag-Drop Area (Now optional for text/poll/qa, required for image) --- */}
           <div>
             <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-[10px] text-zinc-500 font-bold tracking-wider font-mono">
+              <label className="block text-xs text-zinc-300 font-medium tracking-wide">
                 IMAGE ATTACHMENT {type === 'image' ? '(REQUIRED)' : '(OPTIONAL)'}
               </label>
               {imagePreview && (

@@ -51,7 +51,8 @@ import {
   Check,
   ArrowLeft,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getOperativeID } from './utils/crypto';
@@ -88,6 +89,14 @@ export default function App() {
   const [showInstallPwaModal, setShowInstallPwaModal] = useState(false);
   const [installPwaAppType, setInstallPwaAppType] = useState<'main' | 'admin'>('main');
   const [isAdminDevice, setIsAdminDevice] = useState<boolean | null>(null);
+  const [showWelcomeCard, setShowWelcomeCard] = useState(() => {
+    return typeof window !== 'undefined' && !localStorage.getItem('nonum_welcome_dismissed');
+  });
+
+  const handleDismissWelcomeCard = () => {
+    localStorage.setItem('nonum_welcome_dismissed', 'true');
+    setShowWelcomeCard(false);
+  };
 
   // Verify whether this physical device holds active administrative clearance in real-time
   useEffect(() => {
@@ -727,7 +736,7 @@ export default function App() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 600);
+    setTimeout(() => setIsRefreshing(false), 1200);
   };
 
   // Robust timestamp helper for all Firestore/client date formats
@@ -1020,6 +1029,53 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* First-Visit Welcome Card */}
+        {showWelcomeCard && !(sharedPostId || sharedHashId) && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-zinc-900/60 border border-emerald-500/30 rounded-xl p-4 sm:p-5 relative overflow-hidden backdrop-blur-md shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-400 mt-0.5">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-white tracking-wide">
+                    Welcome to Nonum
+                  </h3>
+                  <p className="text-xs text-zinc-300 leading-relaxed max-w-lg">
+                    Nonum is an anonymous social space for sharing thoughts, polls, Q&A, and communities. No accounts, no password, and zero tracking.
+                  </p>
+                  <div className="pt-2 flex items-center gap-3">
+                    <button
+                      onClick={handleNewPostClick}
+                      className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-md transition-all cursor-pointer shadow-md"
+                    >
+                      + Make Your First Post
+                    </button>
+                    <button
+                      onClick={handleDismissWelcomeCard}
+                      className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer font-medium"
+                    >
+                      Got it, dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleDismissWelcomeCard}
+                className="p-1 text-zinc-500 hover:text-zinc-300 rounded transition-colors cursor-pointer shrink-0"
+                title="Dismiss welcome message"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Shared Post Header Banner */}
         {(sharedPostId || sharedHashId) ? (
           <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 backdrop-blur-md relative overflow-hidden">
@@ -1031,7 +1087,7 @@ export default function App() {
                   Viewing Shared Nonum
                 </span>
                 <span className="text-[8px] text-zinc-500 uppercase tracking-tight font-mono mt-1 block">
-                  Secure cryptographic transmission decrypted
+                  Secure transmission decrypted
                 </span>
               </div>
             </div>
@@ -1254,16 +1310,16 @@ export default function App() {
             </div>
           ) : filteredPosts.length === 0 ? (
             /* Empty slate placeholder */
-            <div className="border border-zinc-900 bg-zinc-950/40 rounded-xl p-16 text-center flex flex-col items-center justify-center gap-4">
-              <ShieldAlert className="w-8 h-8 text-zinc-700" />
+            <div className="border border-zinc-900 bg-zinc-950/40 rounded-xl p-12 text-center flex flex-col items-center justify-center gap-3">
+              <ShieldAlert className="w-8 h-8 text-zinc-600" />
               <div className="max-w-sm space-y-1">
-                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">
-                  {(sharedPostId || sharedHashId) ? 'Shared Nonum Not Found' : 'No Posts Detected'}
+                <h3 className="text-sm font-bold text-zinc-300">
+                  {(sharedPostId || sharedHashId) ? 'Shared Post Not Found' : 'No posts yet'}
                 </h3>
-                <p className="text-xs text-zinc-500 leading-relaxed">
+                <p className="text-xs text-zinc-400 leading-relaxed">
                   {(sharedPostId || sharedHashId)
-                    ? 'The shared post link is invalid, expired, or was purged by system security.' 
-                    : 'This channel is currently empty.'}
+                    ? 'The shared post link is invalid, expired, or was removed.' 
+                    : 'Be the first to post here.'}
                 </p>
               </div>
               {(sharedPostId || sharedHashId) ? (
@@ -1274,14 +1330,14 @@ export default function App() {
                     setActiveCategory('all');
                     handleBackToHome();
                   }}
-                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 hover:border-zinc-750 text-xs font-bold rounded transition-all cursor-pointer font-mono uppercase tracking-wider"
+                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-bold rounded transition-all cursor-pointer"
                 >
                   Go to Main Feed
                 </button>
               ) : (
                 <button
                   onClick={handleNewPostClick}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded transition-all cursor-pointer"
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-md"
                 >
                   + Create the First Post
                 </button>
