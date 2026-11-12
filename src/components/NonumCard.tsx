@@ -1294,8 +1294,8 @@ export default function NonumCard({
 
                 {/* Copy Link input box */}
                 <div className="space-y-1.5 pt-1">
-                  <div className="text-[9px] text-zinc-600 font-mono font-bold tracking-wider uppercase text-left">
-                    Direct Secure Link
+                  <div className="text-xs text-zinc-400 font-medium tracking-wide text-left">
+                    Post link
                   </div>
                   <div className="flex gap-2">
                     <input
@@ -1303,7 +1303,7 @@ export default function NonumCard({
                       readOnly
                       value={shareUrl}
                       onClick={(e) => (e.target as HTMLInputElement).select()}
-                      className="bg-zinc-900 border border-zinc-850 rounded-lg px-3 py-1.5 text-[11px] text-zinc-400 select-all font-mono flex-1 focus:outline-none focus:border-zinc-700"
+                      className="bg-zinc-900 border border-zinc-850 rounded-lg px-3 py-1.5 text-xs text-zinc-300 select-all font-mono flex-1 focus:outline-none focus:border-zinc-700"
                     />
                     <button
                       onClick={handleCopyLink}
@@ -1312,22 +1312,17 @@ export default function NonumCard({
                       {isCopiedLink ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                          <span className="text-emerald-400 text-[10px]">COPIED</span>
+                          <span className="text-emerald-400 text-xs">COPIED</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3.5 h-3.5 text-zinc-500" />
-                          <span className="text-[10px]">COPY LINK</span>
+                          <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                          <span className="text-xs">COPY LINK</span>
                         </>
                       )}
                     </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Footer status */}
-              <div className="px-4 py-3 bg-zinc-900/40 border-t border-zinc-900 text-center text-[9px] text-zinc-500 font-mono">
-                DECENTRALIZED ANONYMOUS LINK SECURED
               </div>
             </motion.div>
           </motion.div>

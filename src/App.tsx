@@ -1047,7 +1047,7 @@ export default function App() {
                     Welcome to Nonum
                   </h3>
                   <p className="text-xs text-zinc-300 leading-relaxed max-w-lg">
-                    Nonum is an anonymous social space for sharing thoughts, polls, Q&A, and communities. No accounts, no password, and zero tracking.
+                    Share thoughts, polls and questions, and explore anonymous communities.
                   </p>
                   <div className="pt-2 flex items-center gap-3">
                     <button
