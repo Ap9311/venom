@@ -1,10 +1,10 @@
-import { resolveEffectivePath, navigateToDomainRoute } from './utils/subdomainRouting';
+import { resolveEffectivePath, navigateToDomainRoute, ASSISTANT_PORTAL_SEGMENT } from './utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   collection, 
   query, 
@@ -30,7 +30,13 @@ import PoliciesPage from './components/PoliciesPage';
 import ReportPage from './components/ReportPage';
 import CommunitiesPage from './components/CommunitiesPage';
 import NxDomainError from './components/NxDomainError';
-import { checkIsAdminDevice, getAdminDeviceId } from './utils/adminAuth';
+import {
+  checkIsAdminDevice,
+  getAdminDeviceId,
+  setInMemoryAssistantToken,
+  clearAssistantFirestoreClaim,
+  ensureFirestoreAdminClaim
+} from './utils/adminAuth';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 const AdminReports = lazy(() => import('./components/admin/AdminReports'));
@@ -89,9 +95,39 @@ export default function App() {
   const [showInstallPwaModal, setShowInstallPwaModal] = useState(false);
   const [installPwaAppType, setInstallPwaAppType] = useState<'main' | 'admin'>('main');
   const [isAdminDevice, setIsAdminDevice] = useState<boolean | null>(null);
+  const [assistantToken, setAssistantToken] = useState<string | null>(null);
+  const assistantTokenRef = useRef<string | null>(null);
   const [showWelcomeCard, setShowWelcomeCard] = useState(() => {
     return typeof window !== 'undefined' && !localStorage.getItem('nonum_welcome_dismissed');
   });
+
+  const handleAssistantLogin = async (token: string) => {
+    assistantTokenRef.current = token;
+    setInMemoryAssistantToken(token);
+    setAssistantToken(token);
+    await ensureFirestoreAdminClaim(token);
+  };
+
+  const handleAssistantLogout = () => {
+    assistantTokenRef.current = null;
+    setAssistantToken(null);
+    clearAssistantFirestoreClaim().catch(() => {});
+  };
+
+  // Clear one-time assistant session on tab close / page refresh
+  useEffect(() => {
+    if (!assistantToken) return;
+    const handleUnload = () => {
+      assistantTokenRef.current = null;
+      clearAssistantFirestoreClaim().catch(() => {});
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+    };
+  }, [assistantToken]);
 
   const handleDismissWelcomeCard = () => {
     localStorage.setItem('nonum_welcome_dismissed', 'true');
@@ -126,11 +162,13 @@ export default function App() {
           } else {
             // Revoked or does not exist in active registry!
             setIsAdminDevice(false);
-            sessionStorage.removeItem('nonum_admin_auth');
-            sessionStorage.removeItem('nonum_admin_token');
-            localStorage.removeItem('nonum_is_admin_device');
-            if (auth?.currentUser && db) {
-              deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
+            if (!assistantTokenRef.current) {
+              sessionStorage.removeItem('nonum_admin_auth');
+              sessionStorage.removeItem('nonum_admin_token');
+              localStorage.removeItem('nonum_is_admin_device');
+              if (auth?.currentUser && db) {
+                deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
+              }
             }
           }
         }, (err) => {
@@ -309,7 +347,7 @@ export default function App() {
       localStorage.setItem('nonum_pwa_active_app', 'main');
     } else {
       // Determine based on current path if no active PWA type is stored
-      if (window.location.pathname.startsWith('/admin')) {
+      if (window.location.pathname.startsWith('/admin') && !window.location.pathname.includes(ASSISTANT_PORTAL_SEGMENT)) {
         activeApp = 'admin';
         localStorage.setItem('nonum_pwa_active_app', 'admin');
       } else if (!activeApp) {
@@ -392,7 +430,12 @@ export default function App() {
     const appleIconLink = document.getElementById('apple-icon-link') as HTMLLinkElement | null;
     const manifestLink = document.getElementById('pwa-manifest-link') as HTMLLinkElement | null;
     
-    const isAdminReportRoute = currentPath.startsWith('/admin/report') || currentPath.includes('admin/report') || currentPath.includes('reports');
+    const isAdminReportRoute =
+      currentPath.startsWith('/admin/report') ||
+      currentPath.includes('admin/report') ||
+      currentPath.includes('/community-reports') ||
+      (currentPath.includes(ASSISTANT_PORTAL_SEGMENT) && currentPath.includes('/report')) ||
+      currentPath.includes('reports');
     const isAdminRoute = currentPath.startsWith('/admin');
     const isReportRoute = currentPath.startsWith('/report');
     const isPoliciesRoute = currentPath.startsWith('/policies');
@@ -818,6 +861,111 @@ export default function App() {
         />
       </Suspense>
     );
+  }
+
+  // Dedicated Assistant Admin Portal (/admin/@ssist@nt/nup@nel and admin.nonum.online/@ssist@nt/nup@nel)
+  // Uses strictly in-memory one-time credentials; does NOT create or require hardware Admin IDs.
+  // Admin Audit is completely excluded and blocked here.
+  const cleanEffectivePath = currentPath.split('?')[0].replace(/\/+$/, '') || '/';
+  const assistantBasePath = `/admin${ASSISTANT_PORTAL_SEGMENT}`;
+
+  if (cleanEffectivePath === assistantBasePath || cleanEffectivePath.startsWith(`${assistantBasePath}/`)) {
+    const assistantSub = cleanEffectivePath.slice(assistantBasePath.length);
+
+    if (assistantSub === '/audit' || assistantSub.startsWith('/audit/')) {
+      return <NxDomainError />;
+    }
+
+    if (assistantSub === '/report-communities' || assistantSub === '/community-reports') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminCommunityReports
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    if (assistantSub === '/report') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminReports
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    if (assistantSub === '/communities') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminCommunities
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    if (assistantSub === '') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-zinc-950"
+          >
+            <AdminPanel
+              posts={posts}
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    return <NxDomainError />;
   }
 
   // Cryptographic Administrative Access Gate (/admin and sub-routes)

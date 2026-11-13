@@ -1,4 +1,4 @@
-import { navigateToDomainRoute } from '../../utils/subdomainRouting';
+import { navigateToDomainRoute, navigateAssistantRoute } from '../../utils/subdomainRouting';
 import { hashSha256 } from '../../utils/crypto';
 /**
  * @license
@@ -20,7 +20,12 @@ import {
   updateDoc,
   where
 } from 'firebase/firestore';
-import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
+import {
+  ensureFirestoreAdminClaim,
+  checkIsAdminDevice,
+  verifyAdminCredentials,
+  verifyAssistantCredentials
+} from '../../utils/adminAuth';
 import { 
   Trash2, 
   Lock, 
@@ -48,10 +53,20 @@ import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminCommunitiesProps {
   onNavigateHome: () => void;
+  isAssistantMode?: boolean;
+  assistantAuthenticated?: boolean;
+  onAssistantLogin?: (token: string) => Promise<void> | void;
+  onAssistantLogout?: () => void;
 }
 
-export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHome }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
+  onNavigateHome,
+  isAssistantMode = false,
+  assistantAuthenticated = false,
+  onAssistantLogin,
+  onAssistantLogout
+}) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(isAssistantMode ? assistantAuthenticated : false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -104,6 +119,14 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
 
   // Check existing admin device status
   useEffect(() => {
+    if (isAssistantMode) {
+      setIsAuthenticated(Boolean(assistantAuthenticated));
+      if (assistantAuthenticated) {
+        ensureFirestoreAdminClaim().catch(console.warn);
+      }
+      return;
+    }
+
     let isMounted = true;
     const verify = async () => {
       const isAdm = await checkIsAdminDevice();
@@ -119,7 +142,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     };
     verify();
     return () => { isMounted = false; };
-  }, []);
+  }, [isAssistantMode, assistantAuthenticated]);
 
   // Listen to all communities (including blocked ones)
   useEffect(() => {
@@ -233,6 +256,19 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
     e.preventDefault();
     setLoginError(null);
 
+    if (isAssistantMode) {
+      const res = await verifyAssistantCredentials(username, password);
+      if (res.success && res.token) {
+        await onAssistantLogin?.(res.token);
+        setIsAuthenticated(true);
+        setUsername('');
+        setPassword('');
+      } else {
+        setLoginError(res.error || 'Invalid Assistant credentials.');
+      }
+      return;
+    }
+
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
@@ -246,6 +282,10 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    if (isAssistantMode) {
+      onAssistantLogout?.();
+      return;
+    }
     sessionStorage.removeItem('nonum_admin_auth');
   };
 
@@ -498,7 +538,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({ onNavigateHo
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigateToDomainRoute('/admin')}
+              onClick={() => (isAssistantMode ? navigateAssistantRoute('') : navigateToDomainRoute('/admin'))}
               className="px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer flex items-center gap-1"
             >
               <span>Admin Portal</span>

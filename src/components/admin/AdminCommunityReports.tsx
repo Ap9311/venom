@@ -1,14 +1,33 @@
-import { navigateToDomainRoute } from '../../utils/subdomainRouting';
+import { navigateToDomainRoute, navigateAssistantRoute } from '../../utils/subdomainRouting';
 import React, { useState, useEffect } from 'react';
 import NonumLogo from '../NonumLogo';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
+import {
+  ensureFirestoreAdminClaim,
+  checkIsAdminDevice,
+  verifyAdminCredentials,
+  verifyAssistantCredentials
+} from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function AdminCommunityReports() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+interface AdminCommunityReportsProps {
+  onNavigateHome?: () => void;
+  isAssistantMode?: boolean;
+  assistantAuthenticated?: boolean;
+  onAssistantLogin?: (token: string) => Promise<void> | void;
+  onAssistantLogout?: () => void;
+}
+
+export default function AdminCommunityReports({
+  onNavigateHome,
+  isAssistantMode = false,
+  assistantAuthenticated = false,
+  onAssistantLogin,
+  onAssistantLogout
+}: AdminCommunityReportsProps = {}) {
+  const [isAuthenticated, setIsAuthenticated] = useState(isAssistantMode ? assistantAuthenticated : false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -28,6 +47,14 @@ export default function AdminCommunityReports() {
 
   // Check login session on load
   useEffect(() => {
+    if (isAssistantMode) {
+      setIsAuthenticated(Boolean(assistantAuthenticated));
+      if (assistantAuthenticated) {
+        ensureFirestoreAdminClaim().catch(console.warn);
+      }
+      return;
+    }
+
     let isMounted = true;
     const verify = async () => {
       const isAdm = await checkIsAdminDevice();
@@ -43,7 +70,7 @@ export default function AdminCommunityReports() {
     };
     verify();
     return () => { isMounted = false; };
-  }, []);
+  }, [isAssistantMode, assistantAuthenticated]);
 
   // Real-time Communities listener
   useEffect(() => {
@@ -91,6 +118,19 @@ export default function AdminCommunityReports() {
     e.preventDefault();
     setLoginError(null);
 
+    if (isAssistantMode) {
+      const res = await verifyAssistantCredentials(username, password);
+      if (res.success && res.token) {
+        await onAssistantLogin?.(res.token);
+        setIsAuthenticated(true);
+        setUsername('');
+        setPassword('');
+      } else {
+        setLoginError(res.error || 'Invalid assistant credentials. Authentication denied.');
+      }
+      return;
+    }
+
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
@@ -104,6 +144,10 @@ export default function AdminCommunityReports() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    if (isAssistantMode) {
+      onAssistantLogout?.();
+      return;
+    }
     sessionStorage.removeItem('nonum_admin_auth');
   };
 
@@ -256,6 +300,20 @@ export default function AdminCommunityReports() {
 
   // Helper to trigger navigation
   const navigateTo = (path: string) => {
+    if (path === '/' && onNavigateHome) {
+      onNavigateHome();
+      return;
+    }
+    if (isAssistantMode) {
+      if (path === '/admin') {
+        navigateAssistantRoute('');
+        return;
+      }
+      if (path === '/admin/communities') {
+        navigateAssistantRoute('/communities');
+        return;
+      }
+    }
     navigateToDomainRoute(path);
   };
 

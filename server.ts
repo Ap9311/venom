@@ -8,8 +8,9 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
-import { collection, query, where, getDocs, limit, doc, getDoc } from 'firebase/firestore';
-import { db } from './src/firebase';
+import { collection, query, where, getDocs, limit, doc, getDoc, setDoc } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
+import { db, auth } from './src/firebase';
 
 process.on('unhandledRejection', (reason, promise) => {
   console.warn('Unhandled Rejection caught in server:', reason);
@@ -248,6 +249,10 @@ async function startServer() {
     'c7b202f04099de3e326c694ef90f6ea12a8645710b42dc50b41551e2bc96591c',
     'de78d95003cd707d532fa842148463de6b14f76bf7e85e7a178fd5eba89f8874',
   ];
+  const DEFAULT_ASSISTANT_USER_DIGEST =
+    '737a5cc65c6d4ee7bf6ce378815cef6c8faff462b8e2f4a3492d7a3c1bcd2fb6';
+  const DEFAULT_ASSISTANT_PASS_DIGEST =
+    'c7b202f04099de3e326c694ef90f6ea12a8645710b42dc50b41551e2bc96591c';
 
   function deriveDigestBuffer(input: string): Buffer {
     return crypto.pbkdf2Sync(input, KDF_SALT, 10000, 32, 'sha256');
@@ -256,6 +261,7 @@ async function startServer() {
   function timingSafeMatchDigest(candidateBuf: Buffer, hexDigests: readonly string[]): boolean {
     let matched = false;
     for (const hex of hexDigests) {
+      if (!hex || typeof hex !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hex)) continue;
       const targetBuf = Buffer.from(hex, 'hex');
       if (
         targetBuf.length === candidateBuf.length &&
@@ -306,6 +312,64 @@ async function startServer() {
     return isUserValid && isPassValid;
   }
 
+  function verifyAssistantCredentialsServer(
+    user: any,
+    pass: any,
+    custom?: { usernameHash?: string; passwordHash?: string } | null
+  ): boolean {
+    if (!user || !pass) return false;
+    const cleanUser = String(user).trim().toLowerCase();
+    const cleanPass = String(pass).trim();
+    if (!cleanUser || !cleanPass) return false;
+
+    const userDigest = deriveDigestBuffer(cleanUser);
+    const passDigestExact = deriveDigestBuffer(cleanPass);
+
+    const expectedUserHash =
+      custom?.usernameHash && typeof custom.usernameHash === 'string'
+        ? custom.usernameHash
+        : DEFAULT_ASSISTANT_USER_DIGEST;
+    const expectedPassHash =
+      custom?.passwordHash && typeof custom.passwordHash === 'string'
+        ? custom.passwordHash
+        : DEFAULT_ASSISTANT_PASS_DIGEST;
+
+    return (
+      timingSafeMatchDigest(userDigest, [expectedUserHash]) &&
+      timingSafeMatchDigest(passDigestExact, [expectedPassHash])
+    );
+  }
+
+  async function fetchCustomAssistantCreds(): Promise<{ usernameHash?: string; passwordHash?: string } | null> {
+    if (!db || !auth) return null;
+    try {
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+      }
+      if (auth.currentUser) {
+        await setDoc(
+          doc(db, 'admins', auth.currentUser.uid),
+          {
+            isAdmin: true,
+            secretKey: ADMIN_SECRET_KEY,
+            registeredAt: new Date().toISOString()
+          },
+          { merge: true }
+        );
+      }
+      const snap = await getDoc(doc(db, 'admin_config', 'assistant_credentials'));
+      if (snap.exists()) {
+        const data = snap.data() as any;
+        if (data?.usernameHash && data?.passwordHash) {
+          return { usernameHash: data.usernameHash, passwordHash: data.passwordHash };
+        }
+      }
+    } catch (err) {
+      console.warn('Assistant credential lookup fallback:', err);
+    }
+    return null;
+  }
+
   // Administrator login authentication endpoint
   app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
     const clientIp = getClientIpFromReq(req);
@@ -328,6 +392,36 @@ async function startServer() {
     return res.status(401).json({
       success: false,
       error: 'Invalid Administrator credentials.'
+    });
+  });
+
+  // Ephemeral one-time assistant portal authentication endpoint (zero cookies / zero Admin IDs)
+  app.post('/api/assistant-auth', async (req, res) => {
+    const clientIp = getClientIpFromReq(req);
+    if (isRateLimited(clientIp)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many failed attempts. Try again later.'
+      });
+    }
+
+    const { username, password } = req.body || {};
+    const customCreds = await fetchCustomAssistantCreds();
+
+    if (verifyAssistantCredentialsServer(username, password, customCreds)) {
+      clearFailedAttempts(clientIp);
+      return res.json({
+        success: true,
+        token: ADMIN_SECRET_KEY,
+        role: 'assistant',
+        message: 'Assistant session verified.'
+      });
+    }
+
+    recordFailedAttempt(clientIp);
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid Assistant credentials.'
     });
   });
 

@@ -1,4 +1,4 @@
-import { navigateToDomainRoute } from '../../utils/subdomainRouting';
+import { navigateToDomainRoute, navigateAssistantRoute } from '../../utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,7 +13,12 @@ import { AdminTelemetry } from './AdminTelemetry';
 import { AdminSecurity } from './AdminSecurity';
 import { AdminPosts } from './AdminPosts';
 import { AdminEditModal } from './AdminEditModal';
-import { checkIsAdminDevice, ensureFirestoreAdminClaim, verifyAdminCredentials } from '../../utils/adminAuth';
+import {
+  checkIsAdminDevice,
+  ensureFirestoreAdminClaim,
+  verifyAdminCredentials,
+  verifyAssistantCredentials
+} from '../../utils/adminAuth';
 import { 
   ShieldAlert, 
   ShieldCheck,
@@ -34,10 +39,21 @@ import { handleInputWithCursor } from '../../utils/inputFix';
 interface AdminDashboardProps {
   posts: Post[];
   onNavigateHome: () => void;
+  isAssistantMode?: boolean;
+  assistantAuthenticated?: boolean;
+  onAssistantLogin?: (token: string) => Promise<void> | void;
+  onAssistantLogout?: () => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigateHome }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  posts,
+  onNavigateHome,
+  isAssistantMode = false,
+  assistantAuthenticated = false,
+  onAssistantLogin,
+  onAssistantLogout
+}) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(isAssistantMode ? assistantAuthenticated : false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -46,6 +62,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
 
   // Check existing session authorization or hardware admin device identity on load
   useEffect(() => {
+    if (isAssistantMode) {
+      setIsAuthenticated(Boolean(assistantAuthenticated));
+      if (assistantAuthenticated) {
+        ensureFirestoreAdminClaim().catch(console.warn);
+      }
+      return;
+    }
+
     let isMounted = true;
     const checkAuth = async () => {
       const isAdminDevice = await checkIsAdminDevice();
@@ -64,12 +88,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAssistantMode, assistantAuthenticated]);
 
   // Handle administrator credentials authentication
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
+
+    if (isAssistantMode) {
+      const res = await verifyAssistantCredentials(username, password);
+      if (res.success && res.token) {
+        await onAssistantLogin?.(res.token);
+        setIsAuthenticated(true);
+        setUsername('');
+        setPassword('');
+      } else {
+        setLoginError(res.error || 'Invalid Assistant credentials.');
+      }
+      return;
+    }
 
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
@@ -84,6 +121,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    if (isAssistantMode) {
+      onAssistantLogout?.();
+      return;
+    }
     sessionStorage.removeItem('nonum_admin_auth');
   };
 
@@ -154,7 +195,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             >
               Feed Home
             </button>
-            {isAuthenticated && (
+            {isAuthenticated && !isAssistantMode && (
               <button
                 onClick={() => navigateToDomainRoute('/admin/audit')}
                 className="px-3 py-1 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
@@ -164,7 +205,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             )}
             {isAuthenticated && (
               <button
-                onClick={() => navigateToDomainRoute('/admin/communities')}
+                onClick={() => isAssistantMode ? navigateAssistantRoute('/communities') : navigateToDomainRoute('/admin/communities')}
                 className="px-3 py-1 bg-emerald-950/20 hover:bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
               >
                 Admin Communities
@@ -259,7 +300,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
             <AdminTelemetry posts={posts} />
 
             {/* THREAT RAPID-RESPONSE ACCESS BAR & COMMUNITY CONTROL PANEL */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAssistantMode ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
               {/* Report Triage */}
               <div className="bg-zinc-950 border border-emerald-500/10 p-4 rounded-xl flex flex-col items-stretch justify-between gap-4 shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/[0.02] rounded-full blur-xl pointer-events-none" />
@@ -278,7 +319,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => navigateToDomainRoute('/admin/report')}
+                  onClick={() => isAssistantMode ? navigateAssistantRoute('/report') : navigateToDomainRoute('/admin/report')}
                   className="w-full px-4 py-2 bg-rose-950/20 border border-rose-500/30 hover:border-rose-500 text-rose-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Launch Reports Terminal</span>
@@ -304,7 +345,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => navigateToDomainRoute('/admin/community-reports')}
+                  onClick={() => isAssistantMode ? navigateAssistantRoute('/community-reports') : navigateToDomainRoute('/admin/community-reports')}
                   className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Community Reports Terminal</span>
@@ -330,7 +371,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </div>
                 
                 <button
-                  onClick={() => navigateToDomainRoute('/admin/communities')}
+                  onClick={() => isAssistantMode ? navigateAssistantRoute('/communities') : navigateToDomainRoute('/admin/communities')}
                   className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
                 >
                   <span>Admin Communities</span>
@@ -338,31 +379,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ posts, onNavigat
                 </button>
               </div>
 
-              {/* Admin Audit & Gate Security */}
-              <div className="bg-zinc-950 border border-emerald-500/10 p-4 rounded-xl flex flex-col items-stretch justify-between gap-4 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/[0.02] rounded-full blur-xl pointer-events-none" />
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              {/* Admin Audit & Gate Security (Hidden in Assistant Mode) */}
+              {!isAssistantMode && (
+                <div className="bg-zinc-950 border border-emerald-500/10 p-4 rounded-xl flex flex-col items-stretch justify-between gap-4 shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/[0.02] rounded-full blur-xl pointer-events-none" />
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block leading-none">
+                        Admin Identity & Gate Audit
+                      </span>
+                      <span className="text-[9px] text-zinc-500 uppercase font-sans mt-1.5 block leading-relaxed">
+                        Review admin authorization key, session clearance, system privileges, and gate security status.
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block leading-none">
-                      Admin Identity & Gate Audit
-                    </span>
-                    <span className="text-[9px] text-zinc-500 uppercase font-sans mt-1.5 block leading-relaxed">
-                      Review admin authorization key, session clearance, system privileges, and gate security status.
-                    </span>
-                  </div>
+                  
+                  <button
+                    onClick={() => navigateToDomainRoute('/admin/audit')}
+                    className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+                  >
+                    <span>Launch Audit Terminal</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                  </button>
                 </div>
-                
-                <button
-                  onClick={() => navigateToDomainRoute('/admin/audit')}
-                  className="w-full px-4 py-2 bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer"
-                >
-                  <span>Launch Audit Terminal</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-                </button>
-              </div>
+              )}
             </div>
 
             {/* FIREWALL SECURITY & DATABASE EXPENDITURE GRID */}

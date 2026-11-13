@@ -1,9 +1,14 @@
-import { navigateToDomainRoute } from '../../utils/subdomainRouting';
+import { navigateToDomainRoute, navigateAssistantRoute } from '../../utils/subdomainRouting';
 import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, orderBy, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { getClientIp } from '../../utils/ip';
-import { ensureFirestoreAdminClaim, checkIsAdminDevice, verifyAdminCredentials } from '../../utils/adminAuth';
+import {
+  ensureFirestoreAdminClaim,
+  checkIsAdminDevice,
+  verifyAdminCredentials,
+  verifyAssistantCredentials
+} from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Key, ChevronLeft, RefreshCw, Trash2, Check, Unlock, Clock, Plus, Minus, Server, HelpCircle, ExternalLink, Search, Eye, AlertCircle, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { submitPostReport } from '../../utils/reports';
@@ -322,8 +327,22 @@ function ReportPostGroupView({
   );
 }
 
-export default function AdminReports() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+interface AdminReportsProps {
+  onNavigateHome?: () => void;
+  isAssistantMode?: boolean;
+  assistantAuthenticated?: boolean;
+  onAssistantLogin?: (token: string) => Promise<void> | void;
+  onAssistantLogout?: () => void;
+}
+
+export default function AdminReports({
+  onNavigateHome,
+  isAssistantMode = false,
+  assistantAuthenticated = false,
+  onAssistantLogin,
+  onAssistantLogout
+}: AdminReportsProps = {}) {
+  const [isAuthenticated, setIsAuthenticated] = useState(isAssistantMode ? assistantAuthenticated : false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -362,6 +381,18 @@ export default function AdminReports() {
   // Check login session on load
   useEffect(() => {
     let isMounted = true;
+    getClientIp().then(ip => {
+      if (isMounted) setAdminIp(ip);
+    }).catch(console.error);
+
+    if (isAssistantMode) {
+      setIsAuthenticated(Boolean(assistantAuthenticated));
+      if (assistantAuthenticated) {
+        ensureFirestoreAdminClaim().catch(console.warn);
+      }
+      return () => { isMounted = false; };
+    }
+
     const verify = async () => {
       const isAdm = await checkIsAdminDevice();
       if (!isMounted) return;
@@ -375,11 +406,8 @@ export default function AdminReports() {
       }
     };
     verify();
-    getClientIp().then(ip => {
-      if (isMounted) setAdminIp(ip);
-    }).catch(console.error);
     return () => { isMounted = false; };
-  }, []);
+  }, [isAssistantMode, assistantAuthenticated]);
 
   // Real-time Reports listener
   useEffect(() => {
@@ -434,6 +462,19 @@ export default function AdminReports() {
     e.preventDefault();
     setLoginError(null);
 
+    if (isAssistantMode) {
+      const res = await verifyAssistantCredentials(username, password);
+      if (res.success && res.token) {
+        await onAssistantLogin?.(res.token);
+        setIsAuthenticated(true);
+        setUsername('');
+        setPassword('');
+      } else {
+        setLoginError(res.error || 'Invalid assistant credentials. Authentication denied.');
+      }
+      return;
+    }
+
     const res = await verifyAdminCredentials(username, password);
     if (res.success) {
       setIsAuthenticated(true);
@@ -447,6 +488,10 @@ export default function AdminReports() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    if (isAssistantMode) {
+      onAssistantLogout?.();
+      return;
+    }
     sessionStorage.removeItem('nonum_admin_auth');
   };
 
@@ -864,7 +909,7 @@ export default function AdminReports() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div 
             className="flex items-center gap-3 cursor-pointer select-none transition-transform active:scale-95"
-            onClick={() => navigateToDomainRoute('/')}
+            onClick={() => (onNavigateHome ? onNavigateHome() : navigateToDomainRoute('/'))}
           >
             <NonumLogo className="w-11 h-11" />
             <div>
@@ -877,7 +922,7 @@ export default function AdminReports() {
           <div className="flex items-center gap-2 flex-wrap justify-center">
             {/* Redirect back to homepage */}
             <button
-              onClick={() => navigateToDomainRoute('/')}
+              onClick={() => (onNavigateHome ? onNavigateHome() : navigateToDomainRoute('/'))}
               className="px-3 py-1 bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 text-zinc-500 hover:text-zinc-300 text-[10px] font-bold rounded transition-colors uppercase tracking-wider cursor-pointer"
             >
               Feed Home
@@ -885,7 +930,7 @@ export default function AdminReports() {
             
             {/* Redirect back to admin console inside the app */}
             <button
-              onClick={() => navigateToDomainRoute('/admin')}
+              onClick={() => (isAssistantMode ? navigateAssistantRoute('') : navigateToDomainRoute('/admin'))}
               className="px-3 py-1 bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold rounded transition-colors uppercase tracking-wider flex items-center gap-1 cursor-pointer"
             >
               <span>Admin Console</span>

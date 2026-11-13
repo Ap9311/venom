@@ -198,6 +198,19 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["maxAdmins"]
+    },
+    "AssistantCredentials": {
+      "title": "AssistantCredentials",
+      "description": "PBKDF2-SHA256 credential digests and metadata for the one-time assistant portal.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "usernameDisplay": { "type": "string" },
+        "usernameHash": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "usernameDisplay", "usernameHash", "passwordHash", "updatedAt"]
     }
   },
   "firestore": {
@@ -207,7 +220,7 @@
     },
     "/admin_config/{configId}": {
       "schema": "AdminConfig",
-      "description": "Global administrator configuration and limit allocation."
+      "description": "Global administrator configuration, slot limit allocation, and assistant portal credentials."
     },
     "/posts/{postId}": {
       "schema": "Post",

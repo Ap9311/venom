@@ -27,7 +27,33 @@ export interface AdminConfig {
 }
 
 const ADMIN_SALT = 'NONUM_ADMIN_HARDWARE_KEY_2026_SECURE_HASH';
+const KDF_SALT = 'n0num_v3_kdf_9f8a7b6c5d4e3f2a';
 let cachedAdminDeviceId: string | null = null;
+let inMemoryAssistantToken: string | null = null;
+
+export function setInMemoryAssistantToken(token: string | null): void {
+  inMemoryAssistantToken = token;
+}
+
+export function getInMemoryAssistantToken(): string | null {
+  return inMemoryAssistantToken;
+}
+
+export function clearInMemoryAssistantToken(): void {
+  inMemoryAssistantToken = null;
+}
+
+/**
+ * Clears ephemeral assistant auth claim from memory and Firestore `/admins/{uid}`.
+ */
+export async function clearAssistantFirestoreClaim(): Promise<void> {
+  inMemoryAssistantToken = null;
+  try {
+    if (auth?.currentUser && db) {
+      await deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
+    }
+  } catch {}
+}
 
 /**
  * Ensures that the active Firebase Auth anonymous session UID is registered
@@ -48,8 +74,11 @@ export async function ensureFirestoreAdminClaim(providedToken?: string): Promise
       }
     }
     if (currentUser) {
-      let secretKey = providedToken || sessionStorage.getItem('nonum_admin_token');
+      let secretKey: string | null = providedToken || inMemoryAssistantToken || null;
       if (!secretKey) {
+        secretKey = sessionStorage.getItem('nonum_admin_token');
+      }
+      if (!secretKey && !inMemoryAssistantToken) {
         const adminDeviceId = await getAdminDeviceId();
         try {
           const res = await fetch('/api/admin-token', {
@@ -482,6 +511,173 @@ export async function revokeAdminDevice(deviceId: string): Promise<boolean> {
     return true;
   } catch (err) {
     console.error('Failed to revoke admin device:', err);
+    return false;
+  }
+}
+
+/**
+ * Validates one-time assistant portal credentials via server without creating
+ * hardware Admin IDs, cookies, or persistent browser storage entries.
+ */
+export async function verifyAssistantCredentials(
+  usernameInput: string,
+  passwordInput: string
+): Promise<{ success: boolean; token?: string; error?: string }> {
+  const u = usernameInput.trim();
+  const p = passwordInput.trim();
+
+  if (!u || !p) {
+    return { success: false, error: 'Username and password are required.' };
+  }
+
+  try {
+    const res = await fetch('/api/assistant-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: u,
+        password: p
+      })
+    });
+    let data: any = {};
+    try {
+      const rawText = await res.text();
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = {};
+    }
+
+    if (res.ok && data.success && data.token) {
+      setInMemoryAssistantToken(data.token);
+      await ensureFirestoreAdminClaim(data.token);
+      return { success: true, token: data.token };
+    }
+
+    return { success: false, error: data.error || 'Invalid assistant credentials.' };
+  } catch {
+    return { success: false, error: 'Authentication server unreachable.' };
+  }
+}
+
+async function deriveKdfHex(input: string): Promise<string> {
+  const enc = new TextEncoder();
+  const keyMaterial = await window.crypto.subtle.importKey(
+    'raw',
+    enc.encode(input),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await window.crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: enc.encode(KDF_SALT),
+      iterations: 10000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    256
+  );
+  return Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export interface AssistantCredentialsMeta {
+  usernameDisplay: string;
+  isCustom: boolean;
+  updatedAt?: string;
+}
+
+/**
+ * Reads assistant portal credential metadata (Admin Audit only).
+ */
+export async function getAssistantCredentialsMeta(): Promise<AssistantCredentialsMeta> {
+  try {
+    if (!db) {
+      return { usernameDisplay: 'theakshatpopat', isCustom: false };
+    }
+    await ensureFirestoreAdminClaim();
+    const snap = await getDoc(doc(db, 'admin_config', 'assistant_credentials'));
+    if (snap.exists()) {
+      const data = snap.data() as any;
+      return {
+        usernameDisplay: data.usernameDisplay || 'theakshatpopat',
+        isCustom: Boolean(data.usernameHash && data.passwordHash),
+        updatedAt: data.updatedAt
+      };
+    }
+  } catch (err) {
+    console.warn('Could not read assistant credential metadata:', err);
+  }
+  return { usernameDisplay: 'theakshatpopat', isCustom: false };
+}
+
+/**
+ * Updates assistant portal username & password digests in Firestore (Admin Audit only).
+ */
+export async function updateAssistantCredentials(
+  newUsername: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string; usernameDisplay?: string; updatedAt?: string }> {
+  const cleanUser = newUsername.trim();
+  const cleanPass = newPassword.trim();
+
+  if (!cleanUser || !cleanPass) {
+    return { success: false, error: 'Both assistant username and password are required.' };
+  }
+  if (cleanUser.length < 3) {
+    return { success: false, error: 'Assistant username must be at least 3 characters.' };
+  }
+  if (cleanPass.length < 4) {
+    return { success: false, error: 'Assistant password must be at least 4 characters.' };
+  }
+  if (!db) {
+    return { success: false, error: 'Database connection unavailable.' };
+  }
+
+  try {
+    const claimed = await ensureFirestoreAdminClaim();
+    if (!claimed) {
+      return { success: false, error: 'Admin clearance claim required before updating credentials.' };
+    }
+
+    const [usernameHash, passwordHash] = await Promise.all([
+      deriveKdfHex(cleanUser.toLowerCase()),
+      deriveKdfHex(cleanPass)
+    ]);
+
+    const updatedAt = new Date().toISOString();
+    await setDoc(
+      doc(db, 'admin_config', 'assistant_credentials'),
+      {
+        type: 'assistant_credentials',
+        usernameDisplay: cleanUser,
+        usernameHash,
+        passwordHash,
+        updatedAt
+      },
+      { merge: true }
+    );
+
+    return { success: true, usernameDisplay: cleanUser, updatedAt };
+  } catch (err: any) {
+    console.error('Failed to update assistant credentials:', err);
+    return { success: false, error: err?.message || 'Failed to update assistant credentials.' };
+  }
+}
+
+/**
+ * Resets custom assistant credentials back to default system digests (Admin Audit only).
+ */
+export async function resetAssistantCredentials(): Promise<boolean> {
+  if (!db) return false;
+  try {
+    await ensureFirestoreAdminClaim();
+    await deleteDoc(doc(db, 'admin_config', 'assistant_credentials'));
+    return true;
+  } catch (err) {
+    console.error('Failed to reset assistant credentials:', err);
     return false;
   }
 }

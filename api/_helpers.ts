@@ -71,6 +71,11 @@ const AUTHORIZED_PASS_DIGESTS: readonly string[] = [
   'de78d95003cd707d532fa842148463de6b14f76bf7e85e7a178fd5eba89f8874',
 ];
 
+export const DEFAULT_ASSISTANT_USER_DIGEST =
+  '737a5cc65c6d4ee7bf6ce378815cef6c8faff462b8e2f4a3492d7a3c1bcd2fb6';
+export const DEFAULT_ASSISTANT_PASS_DIGEST =
+  'c7b202f04099de3e326c694ef90f6ea12a8645710b42dc50b41551e2bc96591c';
+
 function deriveDigestBuffer(input: string): Buffer {
   return crypto.pbkdf2Sync(input, KDF_SALT, 10000, 32, 'sha256');
 }
@@ -78,6 +83,7 @@ function deriveDigestBuffer(input: string): Buffer {
 function timingSafeMatchDigest(candidateBuf: Buffer, hexDigests: readonly string[]): boolean {
   let matched = false;
   for (const hex of hexDigests) {
+    if (!hex || typeof hex !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hex)) continue;
     const targetBuf = Buffer.from(hex, 'hex');
     if (
       targetBuf.length === candidateBuf.length &&
@@ -124,6 +130,34 @@ export function verifyAdminCredentials(user: any, pass: any): boolean {
   const isPassValid =
     timingSafeMatchDigest(passDigestExact, passDigestsToCheck) ||
     timingSafeMatchDigest(passDigestLower, passDigestsToCheck);
+
+  return isUserValid && isPassValid;
+}
+
+export function verifyAssistantCredentials(
+  user: any,
+  pass: any,
+  custom?: { usernameHash?: string; passwordHash?: string } | null
+): boolean {
+  if (!user || !pass) return false;
+  const cleanUser = String(user).trim().toLowerCase();
+  const cleanPass = String(pass).trim();
+  if (!cleanUser || !cleanPass) return false;
+
+  const userDigest = deriveDigestBuffer(cleanUser);
+  const passDigestExact = deriveDigestBuffer(cleanPass);
+
+  const expectedUserHash =
+    custom?.usernameHash && typeof custom.usernameHash === 'string'
+      ? custom.usernameHash
+      : DEFAULT_ASSISTANT_USER_DIGEST;
+  const expectedPassHash =
+    custom?.passwordHash && typeof custom.passwordHash === 'string'
+      ? custom.passwordHash
+      : DEFAULT_ASSISTANT_PASS_DIGEST;
+
+  const isUserValid = timingSafeMatchDigest(userDigest, [expectedUserHash]);
+  const isPassValid = timingSafeMatchDigest(passDigestExact, [expectedPassHash]);
 
   return isUserValid && isPassValid;
 }

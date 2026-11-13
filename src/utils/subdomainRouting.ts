@@ -73,6 +73,15 @@ export function isCustomDomainEnv(
   return extractRootDomain(hostname) !== null;
 }
 
+export function isPortalSubdomainHost(
+  hostname: string = typeof window !== 'undefined' ? window.location.hostname : ''
+): boolean {
+  const host = hostname.toLowerCase().trim().split(':')[0];
+  return fnv1a(host) === PORTAL_HOST_HASH;
+}
+
+export const ASSISTANT_PORTAL_SEGMENT = '/@ssist@nt/nup@nel';
+
 export function resolveEffectivePath(
   hostname: string = typeof window !== 'undefined' ? window.location.hostname : '',
   pathname: string = typeof window !== 'undefined' ? window.location.pathname : '/',
@@ -114,6 +123,16 @@ export function getTargetNavigationUrl(
   const [path, queryStr] = cleanRoute.split('?');
   const search = queryStr ? '?' + queryStr : '';
 
+  // Keep assistant portal routes SPA-relative on the current origin so in-memory session survives navigation
+  if (path.includes(ASSISTANT_PORTAL_SEGMENT)) {
+    if (isPortalSubdomainHost(hostname)) {
+      const stripped = path.startsWith('/admin') ? path.slice('/admin'.length) || '/' : path;
+      return `${stripped}${search}`;
+    }
+    const normalized = path.startsWith('/admin') ? path : `/admin${path}`;
+    return `${normalized}${search}`;
+  }
+
   if (rootDomain) {
     if (path === '/' || path === '') {
       return `https://${rootDomain}${search}`;
@@ -140,6 +159,23 @@ export function getTargetNavigationUrl(
   return `${path}${search}`;
 }
 
+export function navigateAssistantRoute(
+  subPath: '' | '/report' | '/community-reports' | '/communities' = '',
+  setCurrentPath?: (path: string) => void
+): void {
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const visiblePath = isPortalSubdomainHost(hostname)
+    ? `${ASSISTANT_PORTAL_SEGMENT}${subPath}`
+    : `/admin${ASSISTANT_PORTAL_SEGMENT}${subPath}`;
+
+  window.history.pushState({}, '', visiblePath);
+  if (setCurrentPath) {
+    setCurrentPath(`/admin${ASSISTANT_PORTAL_SEGMENT}${subPath}`);
+  } else {
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+}
+
 export function navigateToDomainRoute(
   targetRoute: string,
   setCurrentPath?: (path: string) => void
@@ -154,7 +190,7 @@ export function navigateToDomainRoute(
   } else {
     window.history.pushState({}, '', targetUrl);
     if (setCurrentPath) {
-      setCurrentPath(targetUrl);
+      setCurrentPath(resolveEffectivePath(hostname, targetUrl.split('?')[0], targetUrl.includes('?') ? '?' + targetUrl.split('?')[1] : ''));
     } else {
       window.dispatchEvent(new PopStateEvent('popstate'));
     }

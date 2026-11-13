@@ -10,6 +10,9 @@ import {
   updateAdminLimit, 
   revokeAdminDevice, 
   getAdminDeviceId, 
+  getAssistantCredentialsMeta,
+  updateAssistantCredentials,
+  resetAssistantCredentials,
   AdminDevice 
 } from '../../utils/adminAuth';
 import { getDeviceImei } from '../../utils/ip';
@@ -27,7 +30,12 @@ import {
   RefreshCw,
   CheckCircle2,
   Sliders,
-  ExternalLink
+  ExternalLink,
+  KeyRound,
+  Eye,
+  EyeOff,
+  UserCheck,
+  RotateCcw
 } from 'lucide-react';
 
 export const AdminDeviceManager: React.FC = () => {
@@ -43,13 +51,24 @@ export const AdminDeviceManager: React.FC = () => {
   const [actionError, setActionError] = useState<string | null>(null);
   const [deviceToRevoke, setDeviceToRevoke] = useState<AdminDevice | null>(null);
 
+  // Assistant portal credentials management
+  const [assistantUsernameDisplay, setAssistantUsernameDisplay] = useState('theakshatpopat');
+  const [assistantIsCustom, setAssistantIsCustom] = useState(false);
+  const [assistantUpdatedAt, setAssistantUpdatedAt] = useState<string | undefined>(undefined);
+  const [assistantUsernameInput, setAssistantUsernameInput] = useState('theakshatpopat');
+  const [assistantPasswordInput, setAssistantPasswordInput] = useState('');
+  const [showAssistantPassword, setShowAssistantPassword] = useState(false);
+  const [savingAssistantCreds, setSavingAssistantCreds] = useState(false);
+  const [assistantFeedback, setAssistantFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   const fetchConfig = async () => {
     try {
       setLoading(true);
-      const [currAdminId, currImei, config] = await Promise.all([
+      const [currAdminId, currImei, config, assistantMeta] = await Promise.all([
         getAdminDeviceId(),
         getDeviceImei(),
-        getAdminConfig()
+        getAdminConfig(),
+        getAssistantCredentialsMeta()
       ]);
 
       setCurrentDeviceId(currAdminId);
@@ -57,6 +76,11 @@ export const AdminDeviceManager: React.FC = () => {
       setMaxAdmins(config.maxAdmins);
       setNewLimitInput(config.maxAdmins);
       setRegisteredDevices(config.registeredDevices);
+
+      setAssistantUsernameDisplay(assistantMeta.usernameDisplay);
+      setAssistantUsernameInput(assistantMeta.usernameDisplay);
+      setAssistantIsCustom(assistantMeta.isCustom);
+      setAssistantUpdatedAt(assistantMeta.updatedAt);
     } catch (err) {
       console.error('Failed to load admin device configuration:', err);
     } finally {
@@ -67,6 +91,66 @@ export const AdminDeviceManager: React.FC = () => {
   useEffect(() => {
     fetchConfig();
   }, []);
+
+  const handleSaveAssistantCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAssistantFeedback(null);
+    setSavingAssistantCreds(true);
+
+    try {
+      const res = await updateAssistantCredentials(assistantUsernameInput, assistantPasswordInput);
+      if (res.success) {
+        setAssistantUsernameDisplay(res.usernameDisplay || assistantUsernameInput.trim());
+        setAssistantIsCustom(true);
+        setAssistantUpdatedAt(res.updatedAt);
+        setAssistantPasswordInput('');
+        setAssistantFeedback({
+          type: 'success',
+          message: `Assistant portal credentials updated for "${res.usernameDisplay}". Takes effect immediately on next login.`
+        });
+        setTimeout(() => setAssistantFeedback(null), 5000);
+      } else {
+        setAssistantFeedback({
+          type: 'error',
+          message: res.error || 'Failed to update assistant credentials.'
+        });
+      }
+    } catch (err: any) {
+      setAssistantFeedback({
+        type: 'error',
+        message: err?.message || 'Error updating assistant credentials.'
+      });
+    } finally {
+      setSavingAssistantCreds(false);
+    }
+  };
+
+  const handleResetAssistantCredentials = async () => {
+    setAssistantFeedback(null);
+    setSavingAssistantCreds(true);
+    try {
+      const ok = await resetAssistantCredentials();
+      if (ok) {
+        setAssistantUsernameDisplay('theakshatpopat');
+        setAssistantUsernameInput('theakshatpopat');
+        setAssistantIsCustom(false);
+        setAssistantUpdatedAt(undefined);
+        setAssistantPasswordInput('');
+        setAssistantFeedback({
+          type: 'success',
+          message: 'Assistant portal credentials restored to default configuration.'
+        });
+        setTimeout(() => setAssistantFeedback(null), 5000);
+      } else {
+        setAssistantFeedback({
+          type: 'error',
+          message: 'Failed to restore default assistant credentials.'
+        });
+      }
+    } finally {
+      setSavingAssistantCreds(false);
+    }
+  };
 
   const handleUpdateLimit = async () => {
     if (newLimitInput < registeredDevices.length) {
@@ -307,6 +391,140 @@ export const AdminDeviceManager: React.FC = () => {
           </div>
         </div>
 
+      </div>
+
+      {/* Assistant Portal Credentials Management */}
+      <div className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-4 md:p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-850 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <KeyRound className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black tracking-widest text-zinc-100 uppercase flex items-center gap-2 flex-wrap">
+                Assistant Portal Credentials
+                <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  ONE-TIME SESSION
+                </span>
+              </h3>
+              <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                Portal Route: <span className="text-zinc-300">/@ssist@nt/nup@nel</span> • Ephemeral login only (no Admin ID created)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-[10px] font-mono">
+            <span className="text-zinc-500 uppercase">Active User:</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-emerald-400 font-bold select-all">
+              {assistantUsernameDisplay}
+            </span>
+            <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold border ${
+              assistantIsCustom
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                : 'bg-zinc-950 text-zinc-400 border-zinc-800'
+            }`}>
+              {assistantIsCustom ? 'CUSTOM' : 'DEFAULT'}
+            </span>
+          </div>
+        </div>
+
+        {assistantFeedback && (
+          <div className={`text-xs p-3 rounded-lg flex items-center gap-2 border ${
+            assistantFeedback.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+              : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+          }`}>
+            {assistantFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            )}
+            <span>{assistantFeedback.message}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveAssistantCredentials} className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+          <div className="space-y-1">
+            <label className="text-[9px] uppercase text-zinc-400 block font-bold font-mono tracking-wider">
+              Assistant Username
+            </label>
+            <div className="relative">
+              <UserCheck className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={assistantUsernameInput}
+                onChange={(e) => setAssistantUsernameInput(e.target.value)}
+                required
+                placeholder="Enter assistant username..."
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500/40 rounded-lg pl-8 pr-3 py-2 text-xs text-zinc-200 focus:outline-none placeholder-zinc-600 font-mono transition-colors"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] uppercase text-zinc-400 block font-bold font-mono tracking-wider">
+              New Assistant Password
+            </label>
+            <div className="relative">
+              <Lock className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-2.5" />
+              <input
+                type={showAssistantPassword ? 'text' : 'password'}
+                value={assistantPasswordInput}
+                onChange={(e) => setAssistantPasswordInput(e.target.value)}
+                required
+                placeholder="Enter new assistant password..."
+                className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500/40 rounded-lg pl-8 pr-9 py-2 text-xs text-zinc-200 focus:outline-none placeholder-zinc-600 font-mono transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAssistantPassword(!showAssistantPassword)}
+                className="absolute right-2.5 top-2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                title={showAssistantPassword ? 'Hide password' : 'Show password'}
+              >
+                {showAssistantPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <span className="text-[10px] text-zinc-500 font-mono">
+              {assistantUpdatedAt
+                ? `Last rotated: ${new Date(assistantUpdatedAt).toLocaleString()}`
+                : 'Using initial default assistant credentials until updated.'}
+            </span>
+
+            <div className="flex items-center gap-2">
+              {assistantIsCustom && (
+                <button
+                  type="button"
+                  onClick={handleResetAssistantCredentials}
+                  disabled={savingAssistantCreds}
+                  className="px-3 py-2 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 text-[10px] font-bold font-mono uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Default</span>
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={savingAssistantCreds}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-black uppercase tracking-wider rounded-lg transition-all disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/20"
+              >
+                {savingAssistantCreds ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-zinc-950/20 border-t-zinc-950 rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Update Assistant Credentials</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
 
       {/* Registered Admin Hardware Identifiers List */}

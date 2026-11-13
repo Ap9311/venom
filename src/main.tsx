@@ -22,9 +22,22 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Register Service Worker for PWA support
+// Register Service Worker for PWA support in production; clean up stale dev SWs/caches in development
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    const isDev = Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV);
+    if (isDev) {
+      navigator.serviceWorker.getRegistrations()
+        .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+        .catch(() => {});
+      if ('caches' in window) {
+        caches.keys()
+          .then((names) => Promise.all(names.map((name) => caches.delete(name))))
+          .catch(() => {});
+      }
+      return;
+    }
+
     navigator.serviceWorker.register('/sw.js')
       .then((reg) => console.log('Service Worker registered successfully:', reg.scope))
       .catch((err) => console.error('Service Worker registration failed:', err));
