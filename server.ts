@@ -586,6 +586,18 @@ async function startServer() {
     res.json({ ip });
   });
 
+  // Serve ads.txt directly as plain text so it never falls back to SPA HTML
+  app.get('/ads.txt', (_req, res) => {
+    const publicAdsPath = path.join(process.cwd(), 'public', 'ads.txt');
+    const distAdsPath = path.join(process.cwd(), 'dist', 'ads.txt');
+    const filePath = fs.existsSync(publicAdsPath) ? publicAdsPath : distAdsPath;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+    }
+    return res.send('google.com, pub-1100709136611258, DIRECT, f08c47fec0942fa0\n');
+  });
+
   // Redirect root favicon requests to the custom favicon to guarantee tab display
   app.get(['/favicon.ico', '/favicon.png'], (req, res) => {
     res.redirect('https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png');

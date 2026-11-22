@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const CACHE_NAME = 'nonum-obsidian-cache-v2';
+const CACHE_NAME = 'nonum-obsidian-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -47,8 +47,9 @@ self.addEventListener('fetch', (event) => {
   // Skip Chrome extensions and non-HTTP/HTTPS sources
   if (!url.protocol.startsWith('http')) return;
 
-  // Never intercept Vite dev modules, unbundled source files, API endpoints, or versioned dev chunks
+  // Never intercept ads.txt, Vite dev modules, unbundled source files, API endpoints, or versioned dev chunks
   if (
+    url.pathname === '/ads.txt' ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/src/') ||
     url.pathname.startsWith('/node_modules/') ||
