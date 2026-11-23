@@ -11,7 +11,7 @@ import {
   saveAssistantCredentialsServer,
   resetAssistantCredentialsServer,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * GET / POST /api/admin-assistant-creds

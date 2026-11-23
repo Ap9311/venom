@@ -12,7 +12,7 @@ import {
   revokeClientFirestoreClaim,
   isValidAdminDeviceIdFormat,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * POST /api/admin-revoke

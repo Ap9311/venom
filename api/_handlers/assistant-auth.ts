@@ -14,7 +14,7 @@ import {
   signSessionToken,
   syncClientFirestoreClaim,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * POST /api/assistant-auth

@@ -15,7 +15,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
-import { db, auth } from '../src/firebase';
+import { db, auth } from '../src/firebase.js';
 
 export type SessionRole = 'admin' | 'assistant';
 

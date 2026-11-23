@@ -12,7 +12,7 @@ import {
   isRegisteredActiveAdminDevice,
   syncClientFirestoreClaim,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * POST /api/admin-verify

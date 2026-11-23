@@ -9,7 +9,7 @@ import {
   getConfiguredAssistantPortalPath,
   safeStringEqual,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 const ALLOWED_ASSISTANT_SUBPATHS = new Set<string>([
   '',

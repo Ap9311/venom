@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { setCorsHeaders, requireFullAdmin, getClientIp } from './_helpers';
+import { setCorsHeaders, requireFullAdmin, getClientIp } from '../_helpers.js';
 
 /**
  * GET /api/get-ip

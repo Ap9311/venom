@@ -11,20 +11,20 @@ import { createServer as createViteServer } from 'vite';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from './src/firebase';
 
-import adminAuthHandler from './api/admin-auth';
-import adminVerifyHandler from './api/admin-verify';
-import adminTokenHandler from './api/admin-token';
-import adminRegisterHandler from './api/admin-register';
-import adminRevokeHandler from './api/admin-revoke';
-import adminUpdateLimitHandler from './api/admin-update-limit';
-import adminGateHandler from './api/admin-gate';
-import adminAssistantCredsHandler from './api/admin-assistant-creds';
-import assistantAuthHandler from './api/assistant-auth';
-import portalResolveHandler from './api/portal-resolve';
-import checkBlockHandler from './api/check-block';
-import communityPinHandler from './api/community-pin';
-import getIpHandler from './api/get-ip';
-import adminManifestHandler from './api/admin-manifest';
+import adminAuthHandler from './api/_handlers/admin-auth';
+import adminVerifyHandler from './api/_handlers/admin-verify';
+import adminTokenHandler from './api/_handlers/admin-token';
+import adminRegisterHandler from './api/_handlers/admin-register';
+import adminRevokeHandler from './api/_handlers/admin-revoke';
+import adminUpdateLimitHandler from './api/_handlers/admin-update-limit';
+import adminGateHandler from './api/_handlers/admin-gate';
+import adminAssistantCredsHandler from './api/_handlers/admin-assistant-creds';
+import assistantAuthHandler from './api/_handlers/assistant-auth';
+import portalResolveHandler from './api/_handlers/portal-resolve';
+import checkBlockHandler from './api/_handlers/check-block';
+import communityPinHandler from './api/_handlers/community-pin';
+import getIpHandler from './api/_handlers/get-ip';
+import adminManifestHandler from './api/_handlers/admin-manifest';
 
 process.on('unhandledRejection', (reason) => {
   console.warn('Unhandled Rejection caught in server:', reason);

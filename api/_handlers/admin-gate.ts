@@ -14,7 +14,7 @@ import {
   clearAdminCookies,
   revokeClientFirestoreClaim,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * GET / POST /api/admin-gate

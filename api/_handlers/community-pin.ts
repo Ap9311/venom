@@ -4,7 +4,7 @@
  */
 
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../src/firebase';
+import { db } from '../../src/firebase.js';
 import {
   setCorsHeaders,
   verifyCsrfOrigin,
@@ -15,7 +15,7 @@ import {
   verifyCommunityPinServer,
   requireFullAdmin,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * POST /api/community-pin

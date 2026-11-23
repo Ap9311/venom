@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { setCorsHeaders } from './_helpers.js';
+import { setCorsHeaders } from '../_helpers.js';
 
 export default function handler(req: IncomingMessage, res: ServerResponse) {
   setCorsHeaders(res, req);

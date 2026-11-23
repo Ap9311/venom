@@ -4,14 +4,14 @@
  */
 
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../src/firebase';
+import { db } from '../../src/firebase.js';
 import {
   setCorsHeaders,
   getClientIp,
   hashIpForServer,
   isOwnerIp,
   ensureServerFirestoreAuth
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * GET /api/check-block

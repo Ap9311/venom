@@ -6,7 +6,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeFirestore, getFirestore, doc, getDocFromServer, setLogLevel } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getSecureConfig } from './utils/vault';
+import { getSecureConfig } from './utils/vault.js';
 
 const firebaseConfig = getSecureConfig();
 

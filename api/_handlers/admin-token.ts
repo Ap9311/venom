@@ -18,7 +18,7 @@ import {
   checkRateLimit,
   recordRateLimitFailure,
   sanitizePayload
-} from './_helpers';
+} from '../_helpers.js';
 
 /**
  * POST /api/admin-token

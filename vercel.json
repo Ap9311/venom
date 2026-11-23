@@ -1,6 +1,4 @@
 {
-  "installCommand": "unset npm_config_cache_dir NPM_CONFIG_CACHE_DIR && npm install",
-  "buildCommand": "unset npm_config_cache_dir NPM_CONFIG_CACHE_DIR && npm run build",
   "redirects": [
     {
       "source": "/:path*",
@@ -124,14 +122,14 @@
     },
     {
       "source": "/admin-manifest.json",
-      "destination": "/api/admin-manifest"
+      "destination": "/api/index?__route=admin-manifest"
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api/$1"
+      "destination": "/api/index?__route=$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
