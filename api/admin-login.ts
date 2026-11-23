@@ -1,2 +1,8 @@
-import handler from './admin-auth.js';
-export default handler;
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import adminAuthHandler from './admin-auth';
+
+export default adminAuthHandler;

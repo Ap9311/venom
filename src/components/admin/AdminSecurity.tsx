@@ -8,7 +8,7 @@ import { db } from '../../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, query } from 'firebase/firestore';
 import { ShieldAlert, Unlock, RefreshCw, Clock, Ban, Trash2 } from 'lucide-react';
 import { ensureFirestoreAdminClaim } from '../../utils/adminAuth';
-import { getClientIp } from '../../utils/ip';
+import { getAdminDiagnosticIp } from '../../utils/ip';
 
 export const AdminSecurity: React.FC = () => {
   const [blockedIps, setBlockedIps] = useState<any[]>([]);
@@ -22,10 +22,10 @@ export const AdminSecurity: React.FC = () => {
   const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
   const [adminIp, setAdminIp] = useState<string>('');
 
-  // Resolve current administrator's IP address on load
+  // Resolve current administrator's IP address on load (authenticated diagnostic endpoint)
   useEffect(() => {
     const resolveIp = async () => {
-      const resolved = await getClientIp();
+      const resolved = await getAdminDiagnosticIp();
       setAdminIp(resolved);
     };
     resolveIp();
@@ -83,8 +83,8 @@ export const AdminSecurity: React.FC = () => {
       return;
     }
 
-    if (cleanIp === '150.129.200.97') {
-      setErrorFeedback('Security system error: IP address 150.129.200.97 is white-listed and cannot be blocked under any circumstances.');
+    if (adminIp && cleanIp === adminIp) {
+      setErrorFeedback('Security protection: You cannot block your own active administrator IP address.');
       return;
     }
 

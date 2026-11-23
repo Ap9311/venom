@@ -1,121 +1,86 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import fs from 'fs';
-import path from 'path';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import {
   setCorsHeaders,
-  parseJsonBody,
-  verifyAssistantCredentials,
-  ADMIN_SECRET_KEY
-} from './_helpers.js';
+  verifyCsrfOrigin,
+  getAdminSecretKey,
+  verifyAssistantCredentialsServer,
+  checkRateLimit,
+  recordRateLimitFailure,
+  clearRateLimit,
+  signSessionToken,
+  syncClientFirestoreClaim,
+  sanitizePayload
+} from './_helpers';
 
-let cachedDb: any = null;
-let cachedAuth: any = null;
-
-function getServerFirebase() {
-  if (cachedDb && cachedAuth) {
-    return { db: cachedDb, auth: cachedAuth };
+/**
+ * POST /api/assistant-auth
+ * Ephemeral one-time assistant portal authentication.
+ * - Enforces per-IP rate limiting (5 failures -> 15 min lockout).
+ * - Issues a SEPARATE limited 'assistant' JWT (2h expiry, never full admin).
+ * - Sets NO cookies and creates NO Admin Device IDs.
+ */
+export default async function handler(req: any, res: any) {
+  setCorsHeaders(res, req);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
+  if (!verifyCsrfOrigin(req)) {
+    return res.status(403).json({ success: false, error: 'Origin not allowed.' });
+  }
+  if (!getAdminSecretKey()) {
+    return res.status(500).json({ success: false, error: 'Server authentication is not configured.' });
   }
 
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (!fs.existsSync(configPath)) {
-    return { db: null, auth: null };
+  const rl = await checkRateLimit(req, 'assistant_auth');
+  if (rl.limited) {
+    res.setHeader('Retry-After', String(rl.retryAfterSec));
+    return res.status(429).json({
+      success: false,
+      error: 'Too many failed login attempts. Please try again in 15 minutes.'
+    });
   }
 
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  const app = getApps().length > 0 ? getApp() : initializeApp(config);
-  cachedDb = getFirestore(app, config.firestoreDatabaseId || '(default)');
-  cachedAuth = getAuth(app);
-  return { db: cachedDb, auth: cachedAuth };
-}
+  const body = sanitizePayload(req.body || {});
+  const { username, password, firebaseUid } = body;
 
-async function fetchCustomAssistantCredentials(): Promise<{
-  usernameHash?: string;
-  passwordHash?: string;
-} | null> {
-  try {
-    const { db, auth } = getServerFirebase();
-    if (!db || !auth) return null;
-
-    if (!auth.currentUser) {
-      await signInAnonymously(auth);
-    }
-
-    if (auth.currentUser) {
-      await setDoc(
-        doc(db, 'admins', auth.currentUser.uid),
-        {
-          isAdmin: true,
-          secretKey: ADMIN_SECRET_KEY,
-          registeredAt: new Date().toISOString()
-        },
-        { merge: true }
-      );
-    }
-
-    const snap = await getDoc(doc(db, 'admin_config', 'assistant_credentials'));
-    if (snap.exists()) {
-      const data = snap.data() as any;
-      if (data?.usernameHash && data?.passwordHash) {
-        return {
-          usernameHash: data.usernameHash,
-          passwordHash: data.passwordHash
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('Assistant credential Firestore lookup fallback:', err);
+  const check = await verifyAssistantCredentialsServer(username, password);
+  if (!check.configured) {
+    return res.status(503).json({
+      success: false,
+      error: 'Assistant credentials are not configured on the server.'
+    });
   }
-  return null;
-}
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  try {
-    setCorsHeaders(res, req);
-
-    if (req.method === 'OPTIONS') {
-      res.statusCode = 200;
-      return res.end();
-    }
-
-    if (req.method !== 'POST') {
-      res.statusCode = 405;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ success: false, error: 'Method Not Allowed' }));
-    }
-
-    const body = await parseJsonBody(req);
-    const { username, password } = body || {};
-
-    const customCreds = await fetchCustomAssistantCredentials();
-
-    if (verifyAssistantCredentials(username, password, customCreds)) {
-      // Ephemeral one-time assistant session: NEVER set persistent admin cookies or register admin device IDs
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(
-        JSON.stringify({
-          success: true,
-          token: ADMIN_SECRET_KEY,
-          role: 'assistant',
-          message: 'Assistant session verified.'
-        })
-      );
-    }
-
-    res.statusCode = 401;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(
-      JSON.stringify({
-        success: false,
-        error: 'Invalid Assistant credentials.'
-      })
-    );
-  } catch (err: any) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ success: false, error: err?.message || 'Server Error' }));
+  if (!check.valid) {
+    await recordRateLimitFailure(req, 'assistant_auth');
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid Assistant credentials.'
+    });
   }
+
+  await clearRateLimit(req, 'assistant_auth');
+
+  // Issue limited assistant-scoped token (NEVER full admin)
+  const signed = signSessionToken('assistant', 'assistant');
+  if (!signed) {
+    return res.status(500).json({ success: false, error: 'Token signing unavailable.' });
+  }
+
+  if (typeof firebaseUid === 'string' && firebaseUid) {
+    await syncClientFirestoreClaim(firebaseUid, 'assistant', signed.expiresAt);
+  }
+
+  return res.status(200).json({
+    success: true,
+    token: signed.token,
+    role: 'assistant',
+    expiresAt: signed.expiresAt,
+    message: 'Assistant session verified.'
+  });
 }

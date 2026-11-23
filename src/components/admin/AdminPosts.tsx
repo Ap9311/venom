@@ -31,17 +31,19 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
 
   const currentList = viewTab === 'active' ? activePostsList : trashPostsList;
 
-  // Filter posts based on search term (ID, Title, Category, Content, or IP)
+  // Filter posts based on search term (ID, Title, Category, Content, or Author UID)
   const filteredAdminPosts = currentList.filter((post) => {
     const term = adminSearchTerm.trim().toLowerCase();
     if (!term) return true;
+    const legacyIp = (post as any).postedFromIp as string | undefined;
     
     return (
       post.id?.toLowerCase().includes(term) ||
       post.title?.toLowerCase().includes(term) ||
       post.content?.toLowerCase().includes(term) ||
       post.category?.toLowerCase().includes(term) ||
-      post.postedFromIp?.toLowerCase().includes(term)
+      post.ownerUid?.toLowerCase().includes(term) ||
+      legacyIp?.toLowerCase().includes(term)
     );
   });
 
@@ -156,7 +158,7 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
               type="text"
               value={adminSearchTerm}
               onChange={(e) => handleInputWithCursor(e, setAdminSearchTerm)}
-              placeholder="Search IP, Post ID, keywords..."
+              placeholder="Search Post ID, UID, keywords..."
               className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none placeholder-zinc-650 transition-colors"
             />
           </div>
@@ -186,32 +188,8 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
           </div>
         ) : (
           filteredAdminPosts.map((post) => {
-            const resolvedImei = post.postedFromImei || (() => {
-              const ip = post.postedFromIp || '127.0.0.1';
-              let hash = 0;
-              for (let i = 0; i < ip.length; i++) {
-                hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-              }
-              let digits = '35';
-              for (let i = 0; i < 13; i++) {
-                digits += Math.abs((hash + i * 19) % 10).toString();
-              }
-              return digits;
-            })();
-
-            const resolvedSerial = post.postedFromSerial || (() => {
-              const imeiStr = resolvedImei || '359182371283718';
-              let hash = 0;
-              for (let i = 0; i < imeiStr.length; i++) {
-                hash = imeiStr.charCodeAt(i) + ((hash << 5) - hash);
-              }
-              const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-              let serial = 'VSN';
-              for (let i = 0; i < 10; i++) {
-                serial += chars.charAt(Math.abs((hash + i * 23) % chars.length));
-              }
-              return serial;
-            })();
+            const legacyIp = (post as any).postedFromIp as string | undefined;
+            const legacyImei = (post as any).postedFromImei as string | undefined;
 
             return (
               <div 
@@ -278,38 +256,32 @@ export const AdminPosts: React.FC<AdminPostsProps> = ({ posts, onStartEdit, onBl
                     </div>
                   </div>
 
-                  {/* Device Tracking & Safe Network Signatures */}
+                  {/* Author Signature & Moderation Actions */}
                   <div className="pt-2 border-t border-zinc-900/30 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                       <span className="text-emerald-500 font-bold bg-emerald-950/15 border border-emerald-500/20 px-2 py-0.5 rounded">
-                        IP: {post.postedFromIp || '127.0.0.1'}
+                        ANON UID: {post.ownerUid || 'Anonymous'}
                       </span>
-                      {(!post.postedFromDeviceType && post.postedFromImei && !post.postedFromSerial) || post.postedFromDeviceType === 'MOBILE' ? (
-                        <span className="text-rose-400 font-bold bg-rose-950/20 border border-rose-500/25 px-2 py-0.5 rounded">
-                          IMEI: {resolvedImei}
-                        </span>
-                      ) : (
-                        <span className="text-amber-400 font-bold bg-amber-950/20 border border-amber-500/25 px-2 py-0.5 rounded">
-                          S/N: {resolvedSerial}
+                      {legacyIp && (
+                        <span className="text-zinc-400 bg-zinc-950 border border-zinc-900 px-2 py-0.5 rounded">
+                          Legacy IP: {legacyIp}
                         </span>
                       )}
-                      <span className="text-zinc-400 bg-zinc-950 border border-zinc-900 px-2 py-0.5 rounded truncate max-w-[280px]" title={post.postedFromDevice}>
-                        {post.postedFromDevice || 'Unknown Operating System'}
-                      </span>
                     </div>
 
                     {/* Action links */}
                     <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                      {post.postedFromIp && onBlockIpClick && (
-                        <button 
-                          onClick={() => onBlockIpClick(post.postedFromIp!, resolvedImei)}
-                          className="text-[9px] text-rose-400 hover:text-rose-300 hover:underline cursor-pointer flex items-center gap-0.5 uppercase tracking-wide font-bold"
-                        >
-                          [Suspend IP & Device]
-                        </button>
+                      {legacyIp && onBlockIpClick && (
+                        <>
+                          <button 
+                            onClick={() => onBlockIpClick(legacyIp, legacyImei)}
+                            className="text-[9px] text-rose-400 hover:text-rose-300 hover:underline cursor-pointer flex items-center gap-0.5 uppercase tracking-wide font-bold"
+                          >
+                            [Suspend Legacy IP]
+                          </button>
+                          <span className="text-zinc-800 font-bold">•</span>
+                        </>
                       )}
-                      
-                      <span className="text-zinc-800 font-bold">•</span>
                       
                       <button
                         onClick={() => {

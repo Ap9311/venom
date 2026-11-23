@@ -7,7 +7,8 @@ import {
   ensureFirestoreAdminClaim,
   checkIsAdminDevice,
   verifyAdminCredentials,
-  verifyAssistantCredentials
+  verifyAssistantCredentials,
+  logoutAdminSession
 } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Unlock, Trash2, Check, Clock, RefreshCw, Search, Users, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -148,7 +149,7 @@ export default function AdminCommunityReports({
       onAssistantLogout?.();
       return;
     }
-    sessionStorage.removeItem('nonum_admin_auth');
+    void logoutAdminSession();
   };
 
   // DISMISS ALL COMPLAINTS against a community
@@ -245,34 +246,6 @@ export default function AdminCommunityReports({
     } finally {
       setActioningId(null);
     }
-  };
-
-  // Formulate deterministic Serial or IMEI if missing
-  const getDeterministicSerial = (idString: string, prefix: string = 'VSN') => {
-    if (!idString) return 'UNKNOWN';
-    let hash = 0;
-    for (let i = 0; i < idString.length; i++) {
-      hash = idString.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let serial = prefix;
-    for (let i = 0; i < 10; i++) {
-      serial += chars.charAt(Math.abs((hash + i * 23) % chars.length));
-    }
-    return serial;
-  };
-
-  const getDeterministicImei = (idString: string) => {
-    if (!idString) return 'UNKNOWN';
-    let hash = 0;
-    for (let i = 0; i < idString.length; i++) {
-      hash = idString.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    let digits = '35';
-    for (let i = 0; i < 13; i++) {
-      digits += Math.abs((hash + i * 19) % 10).toString();
-    }
-    return digits;
   };
 
   // Format time remaining for temporary bans
@@ -468,9 +441,6 @@ export default function AdminCommunityReports({
                   <div className="space-y-6">
                     {reportedCommunitiesList.map((comm) => {
                       const commReports = reports.filter(r => r.communityId === comm.id);
-                      const creatorIp = comm.createdByIp || '127.0.0.1';
-                      const creatorImei = comm.createdByImei || getDeterministicImei(comm.id);
-                      const creatorSerial = comm.createdBySerial || getDeterministicSerial(comm.id, 'COMM-CREATOR');
 
                       return (
                         <div 
@@ -500,10 +470,9 @@ export default function AdminCommunityReports({
 
                             {/* Creator details */}
                             <div className="bg-[#0c0c0c] border border-zinc-900 p-2.5 rounded-lg text-[9px] text-zinc-500 space-y-1 font-mono shrink-0">
-                              <span className="text-[8px] text-zinc-400 font-bold uppercase tracking-wider block">CREATOR FOOTPRINT:</span>
-                              <div>IP: <strong className="text-zinc-300 font-sans">{creatorIp}</strong></div>
-                              <div>IMEI: <strong className="text-rose-400">{creatorImei}</strong></div>
-                              <div>S/N: <strong className="text-amber-400">{creatorSerial}</strong></div>
+                              <span className="text-[8px] text-zinc-400 font-bold uppercase tracking-wider block">CREATOR IDENTITY:</span>
+                              <div>ANON UID: <strong className="text-zinc-300">{comm.ownerUid || 'Anonymous'}</strong></div>
+                              {comm.createdByIp && <div>LEGACY IP: <strong className="text-zinc-400 font-sans">{comm.createdByIp}</strong></div>}
                             </div>
                           </div>
 
@@ -515,10 +484,6 @@ export default function AdminCommunityReports({
                               </span>
                               <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
                                 {commReports.map((rep) => {
-                                  const repIp = rep.ip || '127.0.0.1';
-                                  const repImei = rep.imei || getDeterministicImei(rep.id);
-                                  const repSerial = getDeterministicSerial(rep.id, 'REPORTER');
-
                                   return (
                                     <div 
                                       key={rep.id}
@@ -528,11 +493,13 @@ export default function AdminCommunityReports({
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                           <span className="text-rose-400 font-bold">REASON: {rep.reason || 'Safety Infraction'}</span>
                                           <span>•</span>
-                                          <span>REPORTER IP: <strong className="text-zinc-400">{repIp}</strong></span>
-                                          <span>•</span>
-                                          <span>REPORTER IMEI: <strong className="text-rose-500">{repImei}</strong></span>
-                                          <span>•</span>
-                                          <span>REPORTER S/N: <strong className="text-amber-500">{repSerial}</strong></span>
+                                          <span>REPORTER UID: <strong className="text-zinc-400">{rep.reporterUid || 'Anonymous'}</strong></span>
+                                          {rep.ip && (
+                                            <>
+                                              <span>•</span>
+                                              <span>LEGACY IP: <strong className="text-zinc-500">{rep.ip}</strong></span>
+                                            </>
+                                          )}
                                         </div>
                                         <span>{rep.createdAt ? new Date(rep.createdAt).toLocaleString() : 'N/A'}</span>
                                       </div>
@@ -625,10 +592,6 @@ export default function AdminCommunityReports({
                 ) : (
                   <div className="grid grid-cols-1 gap-3">
                     {blockedCommunitiesList.map((comm) => {
-                      const creatorIp = comm.createdByIp || '127.0.0.1';
-                      const creatorImei = comm.createdByImei || getDeterministicImei(comm.id);
-                      const creatorSerial = comm.createdBySerial || getDeterministicSerial(comm.id, 'COMM-CREATOR');
-
                       return (
                         <div 
                           key={comm.id}
@@ -659,7 +622,7 @@ export default function AdminCommunityReports({
                               </span>
                               <span className="text-zinc-800">|</span>
                               <span className="text-[9px] text-zinc-500 uppercase">
-                                CREATOR IMEI: <strong className="text-zinc-400">{creatorImei}</strong>
+                                CREATOR UID: <strong className="text-zinc-400">{comm.ownerUid || 'Anonymous'}</strong>
                               </span>
                             </div>
                           </div>

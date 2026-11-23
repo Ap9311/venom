@@ -12,14 +12,16 @@ import {
   deleteDoc,
   query, 
   orderBy, 
+  getDocs,
   onSnapshot, 
   increment, 
   serverTimestamp,
   arrayUnion
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
-import { getDeviceImei, getClientIp, getAllDeviceImeis } from '../utils/ip';
+import { getAnonymousUserId } from '../utils/ip';
 import { 
   isCommentLiked, 
   toggleCommentLikeStore, 
@@ -62,34 +64,80 @@ export default function ChatCommentsPane({
   isDrawerMode = false,
 }: ChatCommentsPaneProps) {
   const [comments, setComments] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(true);
   const [newCommentText, setNewCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  // Real-time listener for chat comments
-  useEffect(() => {
-    const commentsRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments');
-    const q = query(commentsRef, orderBy('createdAt', 'desc'));
+  const toMillis = (ts: any): number => {
+    if (!ts) return Date.now();
+    if (typeof ts?.toMillis === 'function') return ts.toMillis();
+    if (typeof ts?.seconds === 'number') return ts.seconds * 1000;
+    const parsed = new Date(ts).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedComments = snapshot.docs.map((docSnap) => ({
+  // Real-time listener for chat comments with auth-ready retry & fallback
+  useEffect(() => {
+    let active = true;
+    let unsubSnap: (() => void) | null = null;
+    setLoadingComments(true);
+
+    const applyList = (docs: any[]) => {
+      if (!active) return;
+      const fetchedComments = docs
+        .map((docSnap) => ({
           id: docSnap.id,
           ...docSnap.data(),
         })) as Comment[];
-        
-        const deduped = deduplicateById(fetchedComments);
-        setComments(deduped);
-        if (onCommentsCountChange) {
-          onCommentsCountChange(deduped.length);
-        }
-      },
-      (error) => {
-        console.warn('Chat comments query fallback notice:', error);
+      fetchedComments.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+      const deduped = deduplicateById(fetchedComments);
+      setComments(deduped);
+      setLoadingComments(false);
+      if (onCommentsCountChange) {
+        onCommentsCountChange(deduped.length);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    const attachListener = () => {
+      if (unsubSnap) {
+        unsubSnap();
+        unsubSnap = null;
+      }
+      const commentsRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments');
+      const q = query(commentsRef, orderBy('createdAt', 'desc'));
+      unsubSnap = onSnapshot(
+        q,
+        (snapshot) => {
+          applyList(snapshot.docs);
+        },
+        async (error) => {
+          console.warn('Chat comments ordered listener fallback:', error);
+          try {
+            const snap = await getDocs(commentsRef);
+            applyList(snap.docs);
+          } catch (fallbackErr) {
+            console.warn('Chat comments fallback fetch error:', fallbackErr);
+            if (active) setLoadingComments(false);
+          }
+        }
+      );
+    };
+
+    attachListener();
+
+    const unsubAuth = auth
+      ? onAuthStateChanged(auth, (user) => {
+          if (active && user) {
+            attachListener();
+          }
+        })
+      : () => {};
+
+    return () => {
+      active = false;
+      if (unsubSnap) unsubSnap();
+      unsubAuth();
+    };
   }, [communityId, chatId]);
 
   const handlePostComment = async (e: React.FormEvent) => {
@@ -105,6 +153,7 @@ export default function ChatCommentsPane({
     setNewCommentText('');
 
     try {
+      const uid = await getAnonymousUserId();
       const commentsRef = collection(db, 'communities', communityId, 'chats', chatId, 'comments');
       const customCommentRef = doc(commentsRef);
       const newCommentId = customCommentRef.id;
@@ -112,6 +161,7 @@ export default function ChatCommentsPane({
       await setDoc(customCommentRef, {
         id: newCommentId,
         content: text,
+        ownerUid: uid,
         likesCount: 0,
         repliesCount: 0,
         repliesList: [],
@@ -148,7 +198,11 @@ export default function ChatCommentsPane({
       <div className="flex flex-col h-full font-sans bg-zinc-950 overflow-hidden">
         {/* Comments List (Fills remaining height) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {uniqueComments.length === 0 ? (
+          {loadingComments && uniqueComments.length === 0 ? (
+            <div className="text-center py-12 text-xs text-zinc-500 font-sans">
+              Loading comments...
+            </div>
+          ) : uniqueComments.length === 0 ? (
             <div className="text-center py-12 text-xs text-zinc-500 flex flex-col items-center justify-center gap-2 font-mono">
               <ShieldAlert className="w-6 h-6 text-zinc-600 animate-pulse" />
               <span className="text-zinc-300 font-sans font-medium text-sm">No comments yet</span>
@@ -216,7 +270,11 @@ export default function ChatCommentsPane({
 
       {/* Comments List */}
       <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
-        {uniqueComments.length === 0 ? (
+        {loadingComments && uniqueComments.length === 0 ? (
+          <div className="text-center py-6 text-xs text-zinc-500 font-sans">
+            Loading comments...
+          </div>
+        ) : uniqueComments.length === 0 ? (
           <div className="text-center py-6 text-xs text-zinc-600 flex flex-col items-center gap-2 font-mono">
             <ShieldAlert className="w-5 h-5 text-zinc-700 animate-pulse" />
             <span>No comments yet. Share your thoughts above!</span>
@@ -334,8 +392,8 @@ function ChatCommentItem({
         likesCount: increment(liked ? 1 : -1),
       });
 
-      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
-      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_comment_like`);
+      const uid = await getAnonymousUserId();
+      const interactionRef = doc(db, 'interactions', `${key}_${uid}_comment_like`);
       if (liked) {
         setDoc(interactionRef, {
           type: 'like_comment',
@@ -343,17 +401,11 @@ function ChatCommentItem({
           communityId,
           chatId,
           commentId: comment.id,
-          imei: deviceImei,
-          ip: userIp,
+          uid,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       } else {
         deleteDoc(interactionRef).catch(console.error);
-        for (const alias of getAllDeviceImeis()) {
-          if (alias !== deviceImei) {
-            deleteDoc(doc(db, 'interactions', `${key}_${alias}_comment_like`)).catch(() => {});
-          }
-        }
       }
     } catch (error) {
       toggleCommentLikeStore(key);
@@ -374,6 +426,7 @@ function ChatCommentItem({
     setReplies(deduplicateById(updated));
 
     try {
+      const uid = await getAnonymousUserId();
       const commentRef = doc(db, 'communities', communityId, 'chats', chatId, 'comments', comment.id);
       await updateDoc(commentRef, {
         repliesList: updated
@@ -386,8 +439,7 @@ function ChatCommentItem({
         });
       } catch (subErr) {}
 
-      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
-      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_reply_like`);
+      const interactionRef = doc(db, 'interactions', `${key}_${uid}_reply_like`);
       if (liked) {
         setDoc(interactionRef, {
           type: 'like_reply',
@@ -396,17 +448,11 @@ function ChatCommentItem({
           chatId,
           commentId: comment.id,
           replyId,
-          imei: deviceImei,
-          ip: userIp,
+          uid,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       } else {
         deleteDoc(interactionRef).catch(console.error);
-        for (const alias of getAllDeviceImeis()) {
-          if (alias !== deviceImei) {
-            deleteDoc(doc(db, 'interactions', `${key}_${alias}_reply_like`)).catch(() => {});
-          }
-        }
       }
     } catch (error) {
       toggleReplyLikeStore(key);
@@ -426,9 +472,11 @@ function ChatCommentItem({
     setReplyText('');
 
     try {
+      const uid = await getAnonymousUserId();
       const newReplyObj = {
         id: 'reply_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         content: text,
+        ownerUid: uid,
         likesCount: 0,
         createdAt: new Date().toISOString()
       };

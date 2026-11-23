@@ -128,7 +128,7 @@ export const InstallPwaModal: React.FC<InstallPwaModalProps> = ({
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-xl bg-zinc-900 border ${isAdmin ? 'border-rose-500/20' : 'border-emerald-500/20'} flex items-center justify-center shrink-0 p-1 relative overflow-hidden`}>
                   <img 
-                    src={isAdmin ? "https://iili.io/nWbQlNj.png" : "https://iili.io/nWbyrQa.md.png"} 
+                    src={isAdmin ? "/nonum-admin-logo.svg" : "/nonum-logo.svg"} 
                     alt={appName} 
                     className="w-full h-full object-contain rounded-md select-none"
                   />

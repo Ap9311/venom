@@ -2,12 +2,13 @@ import { navigateToDomainRoute, navigateAssistantRoute } from '../../utils/subdo
 import React, { useState, useEffect } from 'react';
 import { collection, doc, deleteDoc, updateDoc, setDoc, getDoc, onSnapshot, query, orderBy, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { getClientIp } from '../../utils/ip';
+import { getAdminDiagnosticIp } from '../../utils/ip';
 import {
   ensureFirestoreAdminClaim,
   checkIsAdminDevice,
   verifyAdminCredentials,
-  verifyAssistantCredentials
+  verifyAssistantCredentials,
+  logoutAdminSession
 } from '../../utils/adminAuth';
 import { ShieldAlert, Lock, Key, ChevronLeft, RefreshCw, Trash2, Check, Unlock, Clock, Plus, Minus, Server, HelpCircle, ExternalLink, Search, Eye, AlertCircle, CheckCircle, AlertTriangle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -61,8 +62,7 @@ function ReportPostGroupView({
             commentsCount: 0,
             createdAt: firstRep.createdAt,
             encryptedHash: 'RECONSTRUCTED-FROM-REPORT',
-            postedFromIp: firstRep.postedFromIp || '127.0.0.1',
-            postedFromImei: firstRep.postedFromImei || ''
+            ownerUid: firstRep.authorUid || undefined
           } as Post);
         }
       } catch (err) {
@@ -91,11 +91,8 @@ function ReportPostGroupView({
 
   if (!post) return null;
 
-  const resolvePostImei = (p: any) => {
-    return (p.postedFromImei && !p.postedFromImei.startsWith('VSN') && p.postedFromImei.length >= 10) 
-      ? p.postedFromImei 
-      : undefined;
-  };
+  const legacyPostIp = (post as any).postedFromIp as string | undefined;
+  const legacyPostImei = (post as any).postedFromImei as string | undefined;
 
   return (
     <div className="border border-zinc-900 bg-[#060606] rounded-xl p-4 space-y-4 shadow-xl hover:border-zinc-850 transition-all">
@@ -111,50 +108,12 @@ function ReportPostGroupView({
           </span>
         </div>
         <div className="text-zinc-600 font-mono text-[9px] flex flex-wrap items-center gap-2">
-          <span>AUTHOR SIGNATURE IP: <strong className="text-zinc-300 font-sans">{post.postedFromIp || 'UNKNOWN'}</strong></span>
-          <span>•</span>
-          {(!post.postedFromDeviceType && post.postedFromImei && !post.postedFromSerial) || post.postedFromDeviceType === 'MOBILE' ? (
-            <span>AUTHOR IMEI: <strong className="text-rose-400 font-mono">
-              {post.postedFromImei || (() => {
-                const ip = post.postedFromIp || '127.0.0.1';
-                let hash = 0;
-                for (let i = 0; i < ip.length; i++) {
-                  hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                let digits = '35';
-                for (let i = 0; i < 13; i++) {
-                  digits += Math.abs((hash + i * 19) % 10).toString();
-                }
-                return digits;
-              })()}
-            </strong></span>
-          ) : (
-            <span>AUTHOR S/N: <strong className="text-amber-400 font-mono">
-              {post.postedFromSerial || (() => {
-                const imeiStr = post.postedFromImei || (() => {
-                  const ip = post.postedFromIp || '127.0.0.1';
-                  let hash = 0;
-                  for (let i = 0; i < ip.length; i++) {
-                    hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-                  }
-                  let digits = '35';
-                  for (let i = 0; i < 13; i++) {
-                    digits += Math.abs((hash + i * 19) % 10).toString();
-                  }
-                  return digits;
-                })();
-                let hash = 0;
-                for (let i = 0; i < imeiStr.length; i++) {
-                  hash = imeiStr.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                let serial = 'VSN';
-                for (let i = 0; i < 10; i++) {
-                  serial += chars.charAt(Math.abs((hash + i * 23) % chars.length));
-                }
-                return serial;
-              })()}
-            </strong></span>
+          <span>AUTHOR UID: <strong className="text-zinc-300 font-mono">{post.ownerUid || 'Anonymous'}</strong></span>
+          {legacyPostIp && (
+            <>
+              <span>•</span>
+              <span>LEGACY IP: <strong className="text-zinc-400 font-sans">{legacyPostIp}</strong></span>
+            </>
           )}
         </div>
       </div>
@@ -185,49 +144,13 @@ function ReportPostGroupView({
                     REASON: {rep.reason || 'General'}
                   </span>
                   <span>•</span>
-                  <span>REPORTER IP: <strong className="text-zinc-300 font-sans">{rep.reporterIp}</strong></span>
-                  <span>•</span>
-                  <span>REPORTER IMEI: <strong className="text-rose-400 font-mono">
-                    {rep.reporterImei || (() => {
-                      const ip = rep.reporterIp || '127.0.0.1';
-                      let hash = 0;
-                      for (let i = 0; i < ip.length; i++) {
-                        hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-                      }
-                      let digits = '35';
-                      for (let i = 0; i < 13; i++) {
-                        digits += Math.abs((hash + i * 19) % 10).toString();
-                      }
-                      return digits;
-                    })()}
-                  </strong></span>
-                  <span>•</span>
-                  <span>REPORTER S/N: <strong className="text-amber-400 font-mono">
-                    {rep.reporterSerial || (() => {
-                      const imeiStr = rep.reporterImei || (() => {
-                        const ip = rep.reporterIp || '127.0.0.1';
-                        let hash = 0;
-                        for (let i = 0; i < ip.length; i++) {
-                          hash = ip.charCodeAt(i) + ((hash << 5) - hash);
-                        }
-                        let digits = '35';
-                        for (let i = 0; i < 13; i++) {
-                          digits += Math.abs((hash + i * 19) % 10).toString();
-                        }
-                        return digits;
-                      })();
-                      let hash = 0;
-                      for (let i = 0; i < imeiStr.length; i++) {
-                        hash = imeiStr.charCodeAt(i) + ((hash << 5) - hash);
-                      }
-                      const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-                      let serial = 'VSN';
-                      for (let i = 0; i < 10; i++) {
-                        serial += chars.charAt(Math.abs((hash + i * 23) % chars.length));
-                      }
-                      return serial;
-                    })()}
-                  </strong></span>
+                  <span>REPORTER UID: <strong className="text-zinc-300 font-mono">{rep.reporterUid || 'Anonymous'}</strong></span>
+                  {rep.reporterIp && (
+                    <>
+                      <span>•</span>
+                      <span>LEGACY IP: <strong className="text-zinc-400 font-sans">{rep.reporterIp}</strong></span>
+                    </>
+                  )}
                 </div>
                 <span>{new Date(rep.createdAt || 0).toLocaleString()}</span>
               </div>
@@ -257,8 +180,8 @@ function ReportPostGroupView({
       {/* Global Actions on this reported post group */}
       <div className="bg-zinc-950/40 border border-zinc-900 rounded-lg p-3 flex flex-wrap items-center justify-between gap-4">
         
-        {/* Quick Ban Config */}
-        {post.postedFromIp && (
+        {/* Quick Ban Config (for legacy records with IP) */}
+        {legacyPostIp && (
           <div className="flex items-center gap-2.5 flex-wrap">
             <div className="flex items-center gap-1.5 border border-zinc-900 bg-black/40 p-1.5 rounded text-[10px]">
               <span className="text-zinc-500 font-bold uppercase text-[8px] tracking-wider pl-1">BAN AUTHOR IP:</span>
@@ -285,13 +208,13 @@ function ReportPostGroupView({
             
             <button
               onClick={() => onBlockIp(
-                post.postedFromIp!, 
+                legacyPostIp, 
                 authorBanType, 
                 authorBanDays, 
                 authorBanReason,
                 { id: post.id, title: post.title, content: post.content, imageUrl: post.imageUrl },
                 reports[0] ? { reason: reports[0].reason, opinion: reports[0].opinion } : undefined,
-                resolvePostImei(post)
+                legacyPostImei
               )}
               className="px-3 py-2 bg-rose-950/15 hover:bg-rose-950/30 border border-rose-500/20 hover:border-rose-500 text-rose-400 text-[10px] font-bold rounded transition-all cursor-pointer flex items-center gap-1 uppercase"
             >
@@ -381,7 +304,7 @@ export default function AdminReports({
   // Check login session on load
   useEffect(() => {
     let isMounted = true;
-    getClientIp().then(ip => {
+    getAdminDiagnosticIp().then(ip => {
       if (isMounted) setAdminIp(ip);
     }).catch(console.error);
 
@@ -492,7 +415,7 @@ export default function AdminReports({
       onAssistantLogout?.();
       return;
     }
-    sessionStorage.removeItem('nonum_admin_auth');
+    void logoutAdminSession();
   };
 
   // DISMISS / DELETE A SINGLE REPORT (Keep the post)
@@ -622,8 +545,8 @@ export default function AdminReports({
     const cleanIp = ip.trim();
     if (!cleanIp) return;
 
-    if (cleanIp === '150.129.200.97' || (adminIp && cleanIp === adminIp)) {
-      alert(`Action Aborted: This IP address (${cleanIp}) matches your personal or active administrator connection. You cannot block yourself.`);
+    if (adminIp && cleanIp === adminIp) {
+      alert(`Action Aborted: This IP address (${cleanIp}) matches your active administrator connection. You cannot block yourself.`);
       return;
     }
 
@@ -859,9 +782,7 @@ export default function AdminReports({
     setSubmitError(null);
 
     try {
-      // Use system/admin reporter tag or fallback to a dedicated identifier
-      const reporterIp = 'ADMIN_CONSOLE';
-      const result = await submitPostReport(verifiedPost.id, selectedReason, opinion, reporterIp);
+      const result = await submitPostReport(verifiedPost.id, selectedReason, opinion, true);
       setSubmitResult(result);
     } catch (err: any) {
       console.error('Admin report submission failed:', err);

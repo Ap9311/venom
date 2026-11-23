@@ -44,7 +44,7 @@ import {
 } from '../utils/storage';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, updateDoc, increment, setDoc, deleteDoc, getDoc, runTransaction, collection, query, where, getDocs } from 'firebase/firestore';
-import { getClientIp, getDeviceImei, getLegacyDeviceImei, getAllDeviceImeis } from '../utils/ip';
+import { getAnonymousUserId } from '../utils/ip';
 import { copyToClipboard } from '../utils/clipboard';
 import { formatTimeAgo, formatShortCount } from '../utils/time';
 import CommentsPane from './CommentsPane';
@@ -159,39 +159,14 @@ export default function NonumCard({
     const syncInteractions = async () => {
       try {
         if (!db || !post?.id) return;
-        const deviceImei = await getDeviceImei();
-        if (!deviceImei) return;
-        const allImeis = Array.from(new Set([
-          deviceImei,
-          ...(getLegacyDeviceImei() ? [getLegacyDeviceImei()!] : []),
-          ...getAllDeviceImeis()
-        ])).filter(Boolean);
-
-        const findAndMigrateDoc = async (suffix: 'like' | 'vote' | 'poll' | 'reaction') => {
-          const primaryRef = doc(db, 'interactions', `${post.id}_${deviceImei}_${suffix}`);
-          const primarySnap = await getDoc(primaryRef);
-          if (primarySnap.exists()) return primarySnap;
-
-          for (const aliasImei of allImeis) {
-            if (aliasImei === deviceImei) continue;
-            const aliasRef = doc(db, 'interactions', `${post.id}_${aliasImei}_${suffix}`);
-            const aliasSnap = await getDoc(aliasRef);
-            if (aliasSnap.exists()) {
-              await setDoc(primaryRef, {
-                ...aliasSnap.data(),
-                imei: deviceImei
-              }, { merge: true }).catch(() => {});
-              return aliasSnap;
-            }
-          }
-          return primarySnap;
-        };
+        const uid = await getAnonymousUserId();
+        if (!uid) return;
 
         const [likeSnap, voteSnap, pollSnap, reactionSnap] = await Promise.all([
-          findAndMigrateDoc('like'),
-          findAndMigrateDoc('vote'),
-          findAndMigrateDoc('poll'),
-          findAndMigrateDoc('reaction')
+          getDoc(doc(db, 'interactions', `${post.id}_${uid}_like`)),
+          getDoc(doc(db, 'interactions', `${post.id}_${uid}_vote`)),
+          getDoc(doc(db, 'interactions', `${post.id}_${uid}_poll`)),
+          getDoc(doc(db, 'interactions', `${post.id}_${uid}_reaction`))
         ]);
 
         if (!active) return;
@@ -267,10 +242,8 @@ export default function NonumCard({
     setIsLiking(true);
 
     try {
-      const userIp = await getClientIp();
-      const deviceImei = await getDeviceImei();
-      const allImeis = Array.from(new Set([deviceImei, ...getAllDeviceImeis()])).filter(Boolean);
-      const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_like`);
+      const uid = await getAnonymousUserId();
+      const interactionRef = doc(db, 'interactions', `${post.id}_${uid}_like`);
       const postRef = doc(db, 'posts', post.id);
       const wasLikedInStore = isPostLiked(post.id);
 
@@ -283,7 +256,6 @@ export default function NonumCard({
         const existingLikes = currentPostData.likesCount || 0;
 
         if (likeSnap.exists() || wasLikedInStore) {
-          // Unlike (and clean up any cross-browser alias like documents after transaction)
           if (likeSnap.exists()) {
             transaction.delete(interactionRef);
           }
@@ -301,10 +273,8 @@ export default function NonumCard({
             onPostUpdate({ likesCount: newLikes });
           }
         } else {
-          // Like
           transaction.set(interactionRef, {
-            ip: userIp,
-            imei: deviceImei,
+            uid,
             postId: post.id,
             type: 'like',
             createdAt: new Date().toISOString()
@@ -324,23 +294,6 @@ export default function NonumCard({
         }
       });
 
-      // If unliked, also remove any alias IMEI or IP-matched like documents for this post so all browsers stay in sync
-      if (wasLikedInStore) {
-        for (const aliasImei of allImeis) {
-          if (aliasImei !== deviceImei) {
-            deleteDoc(doc(db, 'interactions', `${post.id}_${aliasImei}_like`)).catch(() => {});
-          }
-        }
-        if (userIp && userIp !== '127.0.0.1') {
-          getDocs(query(collection(db, 'interactions'), where('postId', '==', post.id), where('ip', '==', userIp))).then((snap) => {
-            snap.forEach((d) => {
-              if (d.data()?.type === 'like') {
-                deleteDoc(d.ref).catch(() => {});
-              }
-            });
-          }).catch(() => {});
-        }
-      }
       setDummyTrigger((prev) => prev + 1);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `posts/${post.id}`);
@@ -359,9 +312,8 @@ export default function NonumCard({
     setIsVoting(true);
 
     try {
-      const userIp = await getClientIp();
-      const deviceImei = await getDeviceImei();
-      const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_vote`);
+      const uid = await getAnonymousUserId();
+      const interactionRef = doc(db, 'interactions', `${post.id}_${uid}_vote`);
       const postRef = doc(db, 'posts', post.id);
 
       await runTransaction(db, async (transaction) => {
@@ -377,7 +329,6 @@ export default function NonumCard({
           const oldVoteDirection = voteSnap.data().direction;
           
           if (oldVoteDirection === direction) {
-            // Cancel existing vote
             transaction.delete(interactionRef);
             if (direction === 'up') {
               currentUp = Math.max(0, currentUp - 1);
@@ -385,15 +336,12 @@ export default function NonumCard({
               currentDown = Math.max(0, currentDown - 1);
             }
             
-            // Reconcile local storage
             const state = getInteractionState();
             delete state.votedPosts[post.id];
             saveInteractionState(state);
           } else {
-            // Switch vote direction
             transaction.set(interactionRef, {
-              ip: userIp,
-              imei: deviceImei,
+              uid,
               postId: post.id,
               type: 'vote',
               direction,
@@ -408,16 +356,13 @@ export default function NonumCard({
               currentUp = Math.max(0, currentUp - 1);
             }
 
-            // Reconcile local storage
             const state = getInteractionState();
             state.votedPosts[post.id] = direction;
             saveInteractionState(state);
           }
         } else {
-          // Brand new vote
           transaction.set(interactionRef, {
-            ip: userIp,
-            imei: deviceImei,
+            uid,
             postId: post.id,
             type: 'vote',
             direction,
@@ -467,9 +412,8 @@ export default function NonumCard({
     setPollVotedOptionStore(post.id, optionIndex);
 
     try {
-      const userIp = await getClientIp();
-      const deviceImei = await getDeviceImei();
-      const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_poll`);
+      const uid = await getAnonymousUserId();
+      const interactionRef = doc(db, 'interactions', `${post.id}_${uid}_poll`);
       const postRef = doc(db, 'posts', post.id);
 
       await runTransaction(db, async (transaction) => {
@@ -482,8 +426,7 @@ export default function NonumCard({
 
         if (!pollSnap.exists()) {
           transaction.set(interactionRef, {
-            ip: userIp,
-            imei: deviceImei,
+            uid,
             postId: post.id,
             type: 'poll',
             optionIndex,
@@ -525,7 +468,7 @@ export default function NonumCard({
 
   const imageUrl = post.imageUrl 
     ? `${window.location.origin}/api/post-image/${post.encryptedHash}`
-    : 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
+    : `${window.location.origin}/nonum-logo.svg`;
 
   // Format a simple, friendly share message matching user request
   const dispatchText = `Read this anonymous post on Nonum: ${shareUrl}`;
@@ -728,9 +671,8 @@ export default function NonumCard({
     setIsReactingState(true);
 
     try {
-      const userIp = await getClientIp();
-      const deviceImei = await getDeviceImei();
-      const interactionRef = doc(db, 'interactions', `${post.id}_${deviceImei}_reaction`);
+      const uid = await getAnonymousUserId();
+      const interactionRef = doc(db, 'interactions', `${post.id}_${uid}_reaction`);
       const postRef = doc(db, 'posts', post.id);
 
       await runTransaction(db, async (transaction) => {
@@ -745,18 +687,14 @@ export default function NonumCard({
           const oldReactionKey = reactionSnap.data().reactionKey;
 
           if (oldReactionKey === reactionKey) {
-            // Cancel reaction
             transaction.delete(interactionRef);
             currentReactions[reactionKey] = Math.max(0, (currentReactions[reactionKey] || 0) - 1);
 
-            // Reconcile local storage & state
             setActiveReaction(null);
             setPostReactionStore(post.id, null);
           } else {
-            // Switch reaction
             transaction.set(interactionRef, {
-              ip: userIp,
-              imei: deviceImei,
+              uid,
               postId: post.id,
               type: 'reaction',
               reactionKey,
@@ -766,19 +704,15 @@ export default function NonumCard({
             currentReactions[oldReactionKey] = Math.max(0, (currentReactions[oldReactionKey] || 0) - 1);
             currentReactions[reactionKey] = (currentReactions[reactionKey] || 0) + 1;
 
-            // Trigger floating emojis optimistically
             const emoji = REACTIONS.find(r => r.key === reactionKey)?.emoji || '❤️';
             spawnFloatingEmojis(emoji);
 
-            // Reconcile local storage & state
             setActiveReaction(reactionKey);
             setPostReactionStore(post.id, reactionKey);
           }
         } else {
-          // Brand new reaction
           transaction.set(interactionRef, {
-            ip: userIp,
-            imei: deviceImei,
+            uid,
             postId: post.id,
             type: 'reaction',
             reactionKey,

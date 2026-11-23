@@ -4,195 +4,178 @@
  */
 
 /**
- * Cryptographic hash-keyed hostname routing utility.
- * Resolves and navigates routes without exposing subdomain literals or route tables in client bundles.
+ * Runtime-resolved assistant portal base segment (never hardcoded in client JS).
+ * Populated strictly in-memory for the active tab after server confirmation
+ * via POST /api/portal-resolve.
  */
+let runtimeAssistantSegment = '';
 
-const ROOT_DOMAIN_HASH = 3915231439;
-const PORTAL_HOST_HASH = 3962433480;
-const ALT_REPORT_SEG_HASH = 996030633;
-
-const HOST_ROUTE_TABLE: ReadonlyArray<{ h: number; c: readonly number[] }> = [
-  { h: 353102514, c: [95, 121, 58, 27, 130, 96] },
-  { h: 922364747, c: [140, 21, 185, 159, 185, 130, 34, 213, 237, 133, 57, 245, 136] },
-  { h: 2265726711, c: [3, 43, 53, 223, 33, 121, 250, 218, 191, 228, 25, 47, 114] },
-  { h: 1940465061, c: [5, 206, 91, 161, 7, 179, 6, 111, 46, 198, 223, 90, 101, 146, 22, 200, 180, 24] },
-  { h: 1714049345, c: [12, 253, 253, 4, 134, 220, 12, 3, 62, 87, 21, 255, 57, 189, 100, 205, 2, 132] },
-  { h: 842171639, c: [207, 79, 55, 142, 207, 239, 0, 176, 230, 160, 167, 248, 167, 217, 27, 216, 233, 36, 171, 185, 114, 0, 166, 128] },
-  { h: 3029438844, c: [13, 56, 200, 179, 143, 124, 31, 101, 131, 147, 77, 127, 169, 3, 130, 9, 219, 159, 60, 34, 77, 204, 117, 130] },
-  { h: 816410003, c: [146, 32, 89, 173, 141, 89, 152, 54, 141, 101, 226, 128, 251, 190, 241, 247, 50, 32, 37, 220, 30, 38, 167, 213] },
-  { h: 3832374351, c: [211, 89, 163, 82, 236, 74, 201, 230, 86, 180, 188, 117] },
-  { h: 3272197591, c: [128, 106, 68, 106, 245, 217, 92, 240, 115, 251, 202, 100] },
-];
-
-const ROUTE_SUB_TABLE: ReadonlyArray<{ h: number; c: readonly number[] }> = [
-  { h: 1459592875, c: [34, 43, 252, 54, 219] },
-  { h: 1298873321, c: [163, 192, 169, 20, 136, 202, 84, 161, 168, 174, 96, 233, 108, 84, 145, 188, 189, 238, 93, 94, 234, 16, 67] },
-  { h: 130105928, c: [135, 78, 24, 193, 163, 198, 250, 205, 235, 194, 74, 210, 193, 51, 96, 153, 86, 202, 67, 31, 230, 93, 38] },
-  { h: 1084063412, c: [81, 44, 122, 158, 64, 165, 88, 0, 193, 255, 198, 126, 33] },
-  { h: 328367219, c: [69, 150, 14, 139, 33, 35, 251, 149, 17, 62, 111, 78, 36, 96, 193, 175, 152] },
-  { h: 4217888209, c: [19, 182, 58, 50, 131, 100, 69, 17, 37, 79, 75] },
-  { h: 3768445629, c: [64, 50, 120, 208, 171] },
-];
-
-function fnv1a(str: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
+export function setRuntimeAssistantBaseSegment(segment: string): void {
+  runtimeAssistantSegment = segment ? segment.replace(/\/+$/, '') : '';
 }
 
-function decryptBytes(bytes: readonly number[], key: string): string {
-  if (!key) return '';
-  let state = fnv1a(key) || 1;
-  const chars: number[] = [];
-  for (let i = 0; i < bytes.length; i++) {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    state = state >>> 0;
-    const mask = (state ^ key.charCodeAt(i % key.length)) & 0xff;
-    chars.push(bytes[i] ^ mask);
-  }
-  return String.fromCharCode(...chars);
+export function getRuntimeAssistantBaseSegment(): string {
+  return runtimeAssistantSegment;
 }
 
-function extractRootDomain(hostname: string): string | null {
-  const host = hostname.toLowerCase().trim().split(':')[0];
-  const parts = host.split('.');
-  if (parts.length < 2) return null;
-  const candidate = parts.slice(-2).join('.');
-  return fnv1a(candidate) === ROOT_DOMAIN_HASH ? candidate : null;
-}
-
-export function isCustomDomainEnv(
-  hostname: string = typeof window !== 'undefined' ? window.location.hostname : ''
-): boolean {
-  return extractRootDomain(hostname) !== null;
-}
-
-export function isPortalSubdomainHost(
-  hostname: string = typeof window !== 'undefined' ? window.location.hostname : ''
-): boolean {
-  const host = hostname.toLowerCase().trim().split(':')[0];
-  return fnv1a(host) === PORTAL_HOST_HASH;
-}
-
-export const ASSISTANT_PORTAL_SEGMENT = '/@ssist@nt/nup@nel';
-
+/**
+ * Resolves the effective application route based on subdomain and pathname.
+ */
 export function resolveEffectivePath(
-  hostname: string = typeof window !== 'undefined' ? window.location.hostname : '',
-  pathname: string = typeof window !== 'undefined' ? window.location.pathname : '/',
-  search: string = typeof window !== 'undefined' ? window.location.search : ''
+  hostname: string = window.location.hostname,
+  pathname: string = window.location.pathname,
+  search: string = window.location.search
 ): string {
-  const host = hostname.toLowerCase().trim().split(':')[0];
-  const hostHash = fnv1a(host);
+  const host = hostname.toLowerCase();
+  const fullPath = `${pathname}${search}`;
 
-  const matched = HOST_ROUTE_TABLE.find((entry) => entry.h === hostHash);
-  if (matched) {
-    return decryptBytes(matched.c, host) + search;
+  if (host.startsWith('admin.')) {
+    if (pathname === '/' || pathname === '') return `/admin${search}`;
+    if (pathname.startsWith('/admin')) return fullPath;
+    return `/admin${pathname}${search}`;
   }
 
-  if (hostHash === PORTAL_HOST_HASH) {
-    const basePrefix = decryptBytes([44, 183, 129, 16, 111, 84], host);
-    if (pathname === '/' || pathname === '' || pathname === basePrefix) {
-      return basePrefix + search;
-    }
-    const firstSeg = pathname.split('/')[1] || '';
-    if (fnv1a(firstSeg) === ALT_REPORT_SEG_HASH) {
-      return decryptBytes(
-        [44, 183, 129, 16, 111, 84, 17, 171, 3, 156, 37, 33, 20, 198, 213, 251, 40, 30, 220, 97, 166, 28, 193, 89],
-        host
-      ) + search;
-    }
-    return (pathname.startsWith(basePrefix) ? pathname : basePrefix + pathname) + search;
+  if (host.startsWith('communities.')) {
+    if (pathname === '/' || pathname === '') return `/communities${search}`;
+    if (pathname.startsWith('/communities')) return fullPath;
+    return `/communities${pathname}${search}`;
   }
 
-  const normalizedPath = pathname === '' ? '/' : pathname;
-  return normalizedPath + search;
+  if (host.startsWith('guidelines.')) {
+    if (pathname === '/' || pathname === '') return `/guidelines${search}`;
+    if (pathname.startsWith('/guidelines')) return fullPath;
+    return `/guidelines${pathname}${search}`;
+  }
+
+  if (host.startsWith('policies.')) {
+    if (pathname === '/' || pathname === '') return `/policies${search}`;
+    if (pathname.startsWith('/policies')) return fullPath;
+    return `/policies${pathname}${search}`;
+  }
+
+  if (host.startsWith('report.')) {
+    if (pathname === '/' || pathname === '') return `/report${search}`;
+    if (pathname.startsWith('/report')) return fullPath;
+    return `/report${pathname}${search}`;
+  }
+
+  return fullPath;
 }
 
-export function getTargetNavigationUrl(
-  targetRoute: string,
-  hostname: string = typeof window !== 'undefined' ? window.location.hostname : ''
-): string {
-  const rootDomain = extractRootDomain(hostname);
-  const cleanRoute = targetRoute.startsWith('/') ? targetRoute : '/' + targetRoute;
-  const [path, queryStr] = cleanRoute.split('?');
-  const search = queryStr ? '?' + queryStr : '';
-
-  // Keep assistant portal routes SPA-relative on the current origin so in-memory session survives navigation
-  if (path.includes(ASSISTANT_PORTAL_SEGMENT)) {
-    if (isPortalSubdomainHost(hostname)) {
-      const stripped = path.startsWith('/admin') ? path.slice('/admin'.length) || '/' : path;
-      return `${stripped}${search}`;
-    }
-    const normalized = path.startsWith('/admin') ? path : `/admin${path}`;
-    return `${normalized}${search}`;
-  }
-
-  if (rootDomain) {
-    if (path === '/' || path === '') {
-      return `https://${rootDomain}${search}`;
-    }
-
-    const segments = path.split('/').filter(Boolean);
-    const candidateKeys =
-      segments.length >= 2
-        ? [`/${segments[0]}/${segments[1]}`, `/${segments[0]}`]
-        : [`/${segments[0] || ''}`];
-
-    for (const candidate of candidateKeys) {
-      const routeHash = fnv1a(candidate);
-      const entry = ROUTE_SUB_TABLE.find((item) => item.h === routeHash);
-      if (entry) {
-        const subPrefix = decryptBytes(entry.c, `${candidate}|${rootDomain}`);
-        return `https://${subPrefix}.${rootDomain}${search}`;
-      }
-    }
-
-    return `https://${rootDomain}${path}${search}`;
-  }
-
-  return `${path}${search}`;
-}
-
+/**
+ * Navigates cleanly inside the assistant portal while keeping the URL under
+ * the server-confirmed assistant path prefix.
+ */
 export function navigateAssistantRoute(
-  subPath: '' | '/report' | '/community-reports' | '/communities' = '',
+  subPath: '' | '/report' | '/communities' | '/community-reports' | '/report-communities',
   setCurrentPath?: (path: string) => void
 ): void {
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const visiblePath = isPortalSubdomainHost(hostname)
-    ? `${ASSISTANT_PORTAL_SEGMENT}${subPath}`
-    : `/admin${ASSISTANT_PORTAL_SEGMENT}${subPath}`;
+  const host = window.location.hostname.toLowerCase();
+  const isAdminSubdomain = host.startsWith('admin.');
+  const baseSeg = runtimeAssistantSegment;
 
-  window.history.pushState({}, '', visiblePath);
+  if (!baseSeg) {
+    navigateToDomainRoute('/', setCurrentPath);
+    return;
+  }
+
+  const browserUrl = isAdminSubdomain
+    ? `${baseSeg}${subPath}`
+    : `/admin${baseSeg}${subPath}`;
+
+  window.history.pushState({}, '', browserUrl);
   if (setCurrentPath) {
-    setCurrentPath(`/admin${ASSISTANT_PORTAL_SEGMENT}${subPath}`);
+    setCurrentPath(`/admin${baseSeg}${subPath}`);
   } else {
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
 }
 
+/**
+ * Navigates to a target path, redirecting across subdomains on nonum.online
+ * or performing instant SPA history navigation on single-host deployments.
+ */
 export function navigateToDomainRoute(
-  targetRoute: string,
+  targetPath: string,
   setCurrentPath?: (path: string) => void
 ): void {
-  const hostname = window.location.hostname;
-  const targetUrl = getTargetNavigationUrl(targetRoute, hostname);
+  const host = window.location.hostname.toLowerCase();
+  const isCustomDomain = host === 'nonum.online' || host.endsWith('.nonum.online');
 
-  if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-    if (window.location.href !== targetUrl) {
-      window.location.href = targetUrl;
+  if (isCustomDomain) {
+    const [pathOnly, queryStr] = targetPath.split('?');
+    const search = queryStr ? `?${queryStr}` : '';
+
+    if (pathOnly.startsWith('/admin')) {
+      const subPath = pathOnly.replace(/^\/admin/, '') || '/';
+      if (host === 'admin.nonum.online') {
+        window.history.pushState({}, '', `${subPath}${search}`);
+        if (setCurrentPath) setCurrentPath(targetPath);
+        else window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        window.location.href = `https://admin.nonum.online${subPath === '/' ? '' : subPath}${search}`;
+      }
+      return;
     }
+
+    if (pathOnly.startsWith('/communities')) {
+      const subPath = pathOnly.replace(/^\/communities/, '') || '/';
+      if (host === 'communities.nonum.online') {
+        window.history.pushState({}, '', `${subPath}${search}`);
+        if (setCurrentPath) setCurrentPath(targetPath);
+        else window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        window.location.href = `https://communities.nonum.online${subPath === '/' ? '' : subPath}${search}`;
+      }
+      return;
+    }
+
+    if (pathOnly.startsWith('/guidelines')) {
+      const subPath = pathOnly.replace(/^\/guidelines/, '') || '/';
+      if (host === 'guidelines.nonum.online') {
+        window.history.pushState({}, '', `${subPath}${search}`);
+        if (setCurrentPath) setCurrentPath(targetPath);
+        else window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        window.location.href = `https://guidelines.nonum.online${subPath === '/' ? '' : subPath}${search}`;
+      }
+      return;
+    }
+
+    if (pathOnly.startsWith('/policies')) {
+      const subPath = pathOnly.replace(/^\/policies/, '') || '/';
+      if (host === 'policies.nonum.online') {
+        window.history.pushState({}, '', `${subPath}${search}`);
+        if (setCurrentPath) setCurrentPath(targetPath);
+        else window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        window.location.href = `https://policies.nonum.online${subPath === '/' ? '' : subPath}${search}`;
+      }
+      return;
+    }
+
+    if (pathOnly.startsWith('/report')) {
+      const subPath = pathOnly.replace(/^\/report/, '') || '/';
+      if (host === 'report.nonum.online') {
+        window.history.pushState({}, '', `${subPath}${search}`);
+        if (setCurrentPath) setCurrentPath(targetPath);
+        else window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        window.location.href = `https://report.nonum.online${subPath === '/' ? '' : subPath}${search}`;
+      }
+      return;
+    }
+
+    if (host !== 'nonum.online') {
+      window.location.href = `https://nonum.online${targetPath}`;
+      return;
+    }
+  }
+
+  window.history.pushState({}, '', targetPath);
+  if (setCurrentPath) {
+    setCurrentPath(targetPath);
   } else {
-    window.history.pushState({}, '', targetUrl);
-    if (setCurrentPath) {
-      setCurrentPath(resolveEffectivePath(hostname, targetUrl.split('?')[0], targetUrl.includes('?') ? '?' + targetUrl.split('?')[1] : ''));
-    } else {
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }
+    window.dispatchEvent(new PopStateEvent('popstate'));
   }
 }

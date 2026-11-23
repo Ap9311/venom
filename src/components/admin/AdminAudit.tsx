@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { AdminDeviceManager } from './AdminDeviceManager';
-import { checkIsAdminDevice, ensureFirestoreAdminClaim, verifyAdminCredentials } from '../../utils/adminAuth';
+import { checkIsAdminDevice, ensureFirestoreAdminClaim, verifyAdminCredentials, logoutAdminSession } from '../../utils/adminAuth';
 import { ShieldCheck, Lock, Key, ArrowLeft, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import NonumLogo from '../NonumLogo';
@@ -62,7 +62,7 @@ export const AdminAudit: React.FC<AdminAuditProps> = ({ onNavigateHome }) => {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('nonum_admin_auth');
+    void logoutAdminSession();
   };
 
   const handleNavigateAdmin = () => {

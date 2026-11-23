@@ -1,21 +1,206 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Admin Verification Collection
-    match /admins/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if request.auth != null && request.auth.uid == uid && request.resource.data.isAdmin == true;
+    // ===============================================================
+    // Assumed Data Model (Nonum Privacy-First Architecture)
+    // ===============================================================
+    // - private_config/{docId}: Server-only secrets (e.g. server_auth.key). Never readable or writable by clients.
+    // - admins/{uid}: Server-issued short-lived role bridge documents ({ isAdmin, role, serverAuthKey, expiresAt, updatedAt }).
+    // - admin_devices/{deviceId}: Registered admin devices (full admin only).
+    // - admin_config/{configId}: Global admin config & assistant credential hashes (full admin only).
+    // - community_secrets/{communityId}: Server-only scrypt PIN hashes for locked communities (full admin only).
+    // - rate_limits/{key}, blocked_ip_hashes/{ipHash}: Server-only security state (full admin only).
+    // - blockedIps/{ip}, blockedImeis/{imei}: Moderator firewall records (moderator read/write only).
+    // - posts/{postId} (+ comments, replies): Public anonymous feed; PII fields rejected; counter-only public updates.
+    // - communities/{communityId} (+ chats, comments, replies, visits): Public anonymous communities; PIN hashes & PII rejected.
+    // - interactions/{interactionId}: Scoped strictly to request.auth.uid (never admin_*).
+    // - reports/{reportId}: Signed-in create (zero PII), moderator-only read/update/delete.
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Function to check if the current user is an admin
+    function hasValidServerBridgeKey() {
+      return exists(/databases/$(database)/documents/private_config/server_auth) &&
+        request.resource.data.serverAuthKey is string &&
+        request.resource.data.serverAuthKey.size() >= 16 &&
+        request.resource.data.serverAuthKey == get(/databases/$(database)/documents/private_config/server_auth).data.key;
+    }
+
+    function hasAdminDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
     function isAdmin() {
-      return request.auth != null && 
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == true;
+      return isSignedIn() && (
+        (request.auth.token.email == "support.obsidian@gmail.com" && request.auth.token.email_verified == true) ||
+        (hasAdminDoc() &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == true &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin' &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.expiresAt is int &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.expiresAt > request.time.toMillis())
+      );
     }
 
-    // Administrator Device Registry & Configuration Collections
+    function isAssistant() {
+      return hasAdminDoc() &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'assistant' &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isAdmin == false &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.expiresAt is int &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.expiresAt > request.time.toMillis();
+    }
+
+    function isModerator() {
+      return isAdmin() || isAssistant();
+    }
+
+    function hasNoPiiFields(data) {
+      return !data.keys().hasAny([
+        'postedFromIp',
+        'postedFromImei',
+        'postedFromSerial',
+        'postedFromDevice',
+        'postedFromDeviceType',
+        'createdByIp',
+        'createdByImei',
+        'createdBySerial',
+        'createdByDeviceType',
+        'reporterIp',
+        'reporterImei',
+        'reporterSerial',
+        'authorIp',
+        'authorImei'
+      ]);
+    }
+
+    function isValidPostCreate(data) {
+      return data.type in ['text', 'image', 'poll', 'qa'] &&
+        data.title is string && data.title.size() <= 300 &&
+        data.content is string && data.content.size() <= 5000 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+        data.likesCount is int && data.likesCount == 0 &&
+        data.upvotesCount is int && data.upvotesCount == 0 &&
+        data.downvotesCount is int && data.downvotesCount == 0 &&
+        data.commentsCount is int && data.commentsCount == 0 &&
+        (!('reportsCount' in data) || (data.reportsCount is int && data.reportsCount == 0)) &&
+        (!('isDeleted' in data) || data.isDeleted == false) &&
+        (!('ownerUid' in data) || data.ownerUid == request.auth.uid);
+    }
+
+    function isValidPostPublicUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let prevReports = resource.data.get('reportsCount', 0);
+      return (
+        changed.hasOnly([
+          'likesCount',
+          'upvotesCount',
+          'downvotesCount',
+          'commentsCount',
+          'reactions',
+          'pollVotes'
+        ])
+      ) || (
+        changed.hasOnly(['reportsCount']) &&
+        request.resource.data.reportsCount is int &&
+        request.resource.data.reportsCount == prevReports + 1
+      ) || (
+        changed.hasOnly(['reportsCount', 'isDeleted']) &&
+        prevReports >= 9 &&
+        request.resource.data.reportsCount is int &&
+        request.resource.data.reportsCount == prevReports + 1 &&
+        request.resource.data.isDeleted == true
+      );
+    }
+
+    function isValidCommentOrReplyCreate(data) {
+      return data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
+        (!('likesCount' in data) || (data.likesCount is int && data.likesCount == 0)) &&
+        (!('repliesCount' in data) || (data.repliesCount is int && data.repliesCount == 0)) &&
+        (!('ownerUid' in data) || data.ownerUid == request.auth.uid);
+    }
+
+    function isValidCommunityCreate(data) {
+      return !data.keys().hasAny(['password', 'passwordHash']) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+        data.allowUserPost is bool &&
+        data.isBlocked is bool && data.isBlocked == false &&
+        data.reportsCount is int && data.reportsCount == 0 &&
+        data.viewsCount is int && data.viewsCount >= 0 && data.viewsCount <= 1 &&
+        (!('hasPin' in data) || data.hasPin is bool) &&
+        (!('ownerUid' in data) || data.ownerUid == request.auth.uid);
+    }
+
+    function isValidCommunityOwnerUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return resource.data.ownerUid is string &&
+        resource.data.ownerUid == request.auth.uid &&
+        !request.resource.data.keys().hasAny(['password', 'passwordHash']) &&
+        changed.hasOnly(['name', 'description', 'imageUrl', 'religion', 'allowUserPost', 'userLimit', 'hasPin']);
+    }
+
+    function isValidCommunityPublicUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let prevReports = resource.data.get('reportsCount', 0);
+      return changed.hasOnly(['viewsCount']) || (
+        changed.hasOnly(['reportsCount']) &&
+        request.resource.data.reportsCount is int &&
+        request.resource.data.reportsCount == prevReports + 1
+      ) || (
+        changed.hasOnly(['reportsCount', 'isBlocked', 'blockedUntil']) &&
+        prevReports >= 99 &&
+        request.resource.data.reportsCount is int &&
+        request.resource.data.reportsCount == prevReports + 1 &&
+        request.resource.data.isBlocked == true
+      );
+    }
+
+    function isValidCommunityChatCreate(data) {
+      return data.communityId is string && data.communityId.size() >= 1 && data.communityId.size() <= 128 &&
+        data.type in ['text', 'image', 'poll', 'qa'] &&
+        data.content is string && data.content.size() <= 5000 &&
+        data.likesCount is int && data.likesCount == 0 &&
+        data.commentsCount is int && data.commentsCount == 0 &&
+        (!('reportsCount' in data) || (data.reportsCount is int && data.reportsCount == 0)) &&
+        (!('ownerUid' in data) || data.ownerUid == request.auth.uid);
+    }
+
+    function isValidReportCreate(data) {
+      return data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 200 &&
+        (!('opinion' in data) || (data.opinion is string && data.opinion.size() <= 1500)) &&
+        (!('reporterUid' in data) || data.reporterUid == request.auth.uid || isModerator());
+    }
+
+    // ===============================================================
+    // Server-Only Configuration & Role Bridge
+    // ===============================================================
+
+    match /private_config/{docId} {
+      allow read, write: if false;
+    }
+
+    match /admins/{uid} {
+      allow read: if false;
+      allow create, update: if isSignedIn() &&
+        hasValidServerBridgeKey() &&
+        request.resource.data.keys().hasOnly(['isAdmin', 'role', 'serverAuthKey', 'expiresAt', 'updatedAt']) &&
+        request.resource.data.role in ['admin', 'assistant'] &&
+        request.resource.data.isAdmin is bool &&
+        ((request.resource.data.role == 'admin' && request.resource.data.isAdmin == true) ||
+         (request.resource.data.role == 'assistant' && request.resource.data.isAdmin == false)) &&
+        request.resource.data.expiresAt is int &&
+        request.resource.data.expiresAt > request.time.toMillis();
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+    }
+
+    // ===============================================================
+    // Full-Admin & Server-Only Collections (Never Assistant / Public)
+    // ===============================================================
+
     match /admin_devices/{deviceId} {
       allow read, write: if isAdmin();
     }
@@ -24,66 +209,160 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Interactions Collection (public read/create for feed & user interactions; deny public access to admin_ records)
-    match /interactions/{interactionId} {
-      allow read: if isAdmin() || (!interactionId.matches('^admin_.*'));
-      allow create, update, delete: if isAdmin() || (!interactionId.matches('^admin_.*'));
+    match /community_secrets/{communityId} {
+      allow read, write: if isAdmin();
     }
 
-    // User Reports (public creation, admin-only read and management)
-    match /reports/{reportId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+    match /rate_limits/{key} {
+      allow read, write: if isAdmin();
     }
 
-    // Blocking System (public read to enforce client checks, admin-only management)
+    match /blocked_ip_hashes/{ipHash} {
+      allow read, write: if isAdmin();
+    }
+
+    // ===============================================================
+    // Moderator Firewall & Reports (Moderator Read/Manage Only)
+    // ===============================================================
+
     match /blockedIps/{ip} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if isModerator();
     }
 
     match /blockedImeis/{imei} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if isModerator();
     }
 
-    // Public Posts and Threads
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidReportCreate(request.resource.data);
+      allow read, update, delete: if isModerator();
+    }
+
+    // ===============================================================
+    // UID-Scoped Anonymous Interactions
+    // ===============================================================
+
+    match /interactions/{interactionId} {
+      allow get: if isModerator() || (
+        isSignedIn() &&
+        !interactionId.matches('^admin_.*') &&
+        (resource == null || resource.data.uid == request.auth.uid)
+      );
+      allow list: if isModerator() || (
+        isSignedIn() &&
+        resource.data.uid == request.auth.uid
+      );
+      allow create: if isSignedIn() &&
+        !interactionId.matches('^admin_.*') &&
+        hasNoPiiFields(request.resource.data) &&
+        request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() &&
+        !interactionId.matches('^admin_.*') &&
+        hasNoPiiFields(request.resource.data) &&
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid;
+      allow delete: if isModerator() || (
+        isSignedIn() &&
+        !interactionId.matches('^admin_.*') &&
+        resource.data.uid == request.auth.uid
+      );
+    }
+
+    // ===============================================================
+    // Public Posts, Comments & Replies
+    // ===============================================================
+
     match /posts/{postId} {
-      allow read, create, update, delete: if true;
+      allow read: if true;
+      allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidPostCreate(request.resource.data);
+      allow update: if isModerator() || (isSignedIn() && hasNoPiiFields(request.resource.data) && isValidPostPublicUpdate());
+      allow delete: if isModerator();
 
       match /comments/{commentId} {
-        allow read, create, update, delete: if true;
+        allow read: if true;
+        allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidCommentOrReplyCreate(request.resource.data);
+        allow update: if isModerator() || (
+          isSignedIn() &&
+          hasNoPiiFields(request.resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'repliesCount', 'repliesList'])
+        );
+        allow delete: if isModerator();
 
         match /replies/{replyId} {
-          allow read, create, update, delete: if true;
+          allow read: if true;
+          allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidCommentOrReplyCreate(request.resource.data);
+          allow update: if isModerator() || (
+            isSignedIn() &&
+            hasNoPiiFields(request.resource.data) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
+          );
+          allow delete: if isModerator();
         }
       }
     }
 
-    // Public Communities
+    // ===============================================================
+    // Public Communities, Chats, Comments, Replies & Visits
+    // ===============================================================
+
     match /communities/{communityId} {
-      allow read, create, update, delete: if true;
+      allow read: if true;
+      allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidCommunityCreate(request.resource.data);
+      allow update: if isModerator() || (
+        isSignedIn() &&
+        hasNoPiiFields(request.resource.data) &&
+        (isValidCommunityOwnerUpdate() || isValidCommunityPublicUpdate())
+      );
+      allow delete: if isModerator();
 
       match /chats/{chatId} {
-        allow read, create, update, delete: if true;
+        allow read: if true;
+        allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidCommunityChatCreate(request.resource.data);
+        allow update: if isModerator() || (
+          isSignedIn() &&
+          hasNoPiiFields(request.resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'commentsCount', 'reactions', 'pollVotes', 'reportsCount'])
+        );
+        allow delete: if isModerator() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
 
         match /comments/{commentId} {
-          allow read, create, update, delete: if true;
+          allow read: if true;
+          allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidCommentOrReplyCreate(request.resource.data);
+          allow update: if isModerator() || (
+            isSignedIn() &&
+            hasNoPiiFields(request.resource.data) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'repliesCount', 'repliesList'])
+          );
+          allow delete: if isModerator();
 
           match /replies/{replyId} {
-            allow read, create, update, delete: if true;
+            allow read: if true;
+            allow create: if isSignedIn() && hasNoPiiFields(request.resource.data) && isValidCommentOrReplyCreate(request.resource.data);
+            allow update: if isModerator() || (
+              isSignedIn() &&
+              hasNoPiiFields(request.resource.data) &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
+            );
+            allow delete: if isModerator();
           }
         }
       }
 
-      match /visits/{ip} {
-        allow read, write: if true;
+      match /visits/{visitId} {
+        allow read: if isModerator() || (isSignedIn() && request.auth.uid == visitId);
+        allow create, update: if isSignedIn() && request.auth.uid == visitId && hasNoPiiFields(request.resource.data);
+        allow delete: if isModerator();
       }
     }
 
-    // System Connection testing
+    // System connection test document
     match /test/connection {
       allow read: if true;
+    }
+
+    // Default deny for any unspecified collection
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

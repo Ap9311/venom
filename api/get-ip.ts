@@ -1,26 +1,26 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import { setCorsHeaders } from './_helpers.js';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
+import { setCorsHeaders, requireFullAdmin, getClientIp } from './_helpers';
+
+/**
+ * GET /api/get-ip
+ * Restricted to verified administrator sessions only.
+ * Normal visitors do not call this endpoint and receive 401.
+ */
+export default async function handler(req: any, res: any) {
   setCorsHeaders(res, req);
-
-  if (req.method === 'OPTIONS') {
-    res.statusCode = 200;
-    return res.end();
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const xForwardedFor = req.headers['x-forwarded-for'];
-  let ip = '';
-  if (typeof xForwardedFor === 'string') {
-    ip = xForwardedFor.split(',')[0].trim();
-  } else if (Array.isArray(xForwardedFor)) {
-    ip = xForwardedFor[0].trim();
-  } else {
-    ip = req.socket.remoteAddress || '';
+  const authCheck = await requireFullAdmin(req);
+  if (!authCheck.ok) {
+    return res.status(authCheck.status).json({ error: 'Unauthorized' });
   }
-  if (ip === '::1' || ip === '::ffff:127.0.0.1') {
-    ip = '127.0.0.1';
-  }
-  res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify({ ip }));
+
+  return res.status(200).json({ ip: getClientIp(req) });
 }

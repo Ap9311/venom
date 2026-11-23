@@ -3,22 +3,45 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
-import { collection, query, where, getDocs, limit, doc, getDoc, setDoc } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
-import { db, auth } from './src/firebase';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from './src/firebase';
 
-process.on('unhandledRejection', (reason, promise) => {
+import adminAuthHandler from './api/admin-auth';
+import adminVerifyHandler from './api/admin-verify';
+import adminTokenHandler from './api/admin-token';
+import adminRegisterHandler from './api/admin-register';
+import adminRevokeHandler from './api/admin-revoke';
+import adminUpdateLimitHandler from './api/admin-update-limit';
+import adminGateHandler from './api/admin-gate';
+import adminAssistantCredsHandler from './api/admin-assistant-creds';
+import assistantAuthHandler from './api/assistant-auth';
+import portalResolveHandler from './api/portal-resolve';
+import checkBlockHandler from './api/check-block';
+import communityPinHandler from './api/community-pin';
+import getIpHandler from './api/get-ip';
+import adminManifestHandler from './api/admin-manifest';
+
+process.on('unhandledRejection', (reason) => {
   console.warn('Unhandled Rejection caught in server:', reason);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception caught in server:', err);
 });
+
+function escapeHtmlAttr(input: unknown): string {
+  return String(input ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 async function getPostByHash(hash: string) {
   if (!db) return null;
@@ -35,555 +58,122 @@ async function getPostByHash(hash: string) {
 }
 
 function generateOgMetaTags(post: any, host: string, hashId: string) {
-  const title = `Nonum — "${post.title}"`;
-  const description = post.content 
-    ? post.content.substring(0, 160) + (post.content.length > 160 ? '...' : '')
-    : 'Access declassified anonymous dispatch via Nonum decentralized network.';
-  
-  // Directly point to the actual post image if it is an external URL to avoid redirects which some social crawlers block,
-  // or fall back directly to the Nonum favicon when no post image exists.
-  let imageUrl = 'https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png';
-  if (post.imageUrl) {
-    if (post.imageUrl.startsWith('data:')) {
-      imageUrl = `https://${host}/api/post-image/${hashId}`;
-    } else if (post.imageUrl.startsWith('http://') || post.imageUrl.startsWith('https://')) {
+  const safeHost = String(host || 'nonum.online').replace(/[^a-zA-Z0-9.:-]/g, '');
+  const safeHash = encodeURIComponent(String(hashId || ''));
+  const rawTitle = `Nonum — "${String(post.title || 'Anonymous Dispatch').slice(0, 120)}"`;
+  const rawDesc = post.content
+    ? String(post.content).substring(0, 160) + (String(post.content).length > 160 ? '...' : '')
+    : 'Read this anonymous dispatch on Nonum.';
+
+  let imageUrl = `https://${safeHost}/nonum-logo.svg`;
+  if (typeof post.imageUrl === 'string') {
+    if (post.imageUrl.startsWith('data:image/')) {
+      imageUrl = `https://${safeHost}/api/post-image/${safeHash}`;
+    } else if (post.imageUrl.startsWith('https://') || post.imageUrl.startsWith('http://')) {
       imageUrl = post.imageUrl;
     }
   }
 
-  const shareUrl = `https://${host}/?id=${hashId}`;
+  const shareUrl = `https://${safeHost}/?id=${safeHash}`;
+  const title = escapeHtmlAttr(rawTitle);
+  const description = escapeHtmlAttr(rawDesc);
+  const safeImage = escapeHtmlAttr(imageUrl);
+  const safeUrl = escapeHtmlAttr(shareUrl);
 
   return `
     <title>${title}</title>
     <meta name="description" content="${description}" />
-    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="article" />
-    <meta property="og:url" content="${shareUrl}" />
+    <meta property="og:url" content="${safeUrl}" />
     <meta property="og:title" content="${title}" />
     <meta property="og:description" content="${description}" />
-    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image" content="${safeImage}" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="${shareUrl}" />
+    <meta property="twitter:url" content="${safeUrl}" />
     <meta property="twitter:title" content="${title}" />
     <meta property="twitter:description" content="${description}" />
-    <meta property="twitter:image" content="${imageUrl}" />
+    <meta property="twitter:image" content="${safeImage}" />
   `;
 }
+
+const PROD_CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://adservice.google.com https://tpc.googlesyndication.com https://www.googletagmanager.com https://www.google.com https://apis.google.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://pagead2.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://googleads.g.doubleclick.net",
+  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://ep2.adtrafficquality.google https://www.google.com https://*.firebaseapp.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'"
+].join('; ');
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Set up Vite server instance outside for use in the dynamic index.html interceptor
   let vite: any = null;
   if (process.env.NODE_ENV !== 'production') {
     vite = await createViteServer({
-      server: { 
+      server: {
         middlewareMode: true,
         hmr: process.env.DISABLE_HMR === 'true' ? false : undefined
       },
-      appType: 'spa',
+      appType: 'spa'
     });
   }
 
-  // Strips server banner to prevent reconnaissance via nmap/curl
   app.disable('x-powered-by');
 
-  // Hardened Global Security Headers Middleware
-  app.use((req, res, next) => {
+  app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+      res.setHeader('Content-Security-Policy', PROD_CSP);
+    }
     next();
   });
 
-  app.use(express.json({ limit: '10mb' }));
+  // Cap JSON body sizes tightly on API routes to defend against payload DoS
+  app.use('/api', express.json({ limit: '256kb' }));
+  app.use(express.json({ limit: '2mb' }));
 
-  // In-memory server-side registry of active admin devices and limits
-  const registeredAdminDevices = new Set<string>();
-  let serverMaxAdmins = 3;
-
-  // Background sync of admin registry from Firestore on boot
-  async function syncServerAdminRegistry() {
-    if (!db) return;
+  const wrap = (fn: (req: any, res: any) => any) => async (req: express.Request, res: express.Response) => {
     try {
-      const configRef = doc(db, 'interactions', 'admin_global_config');
-      const configSnap = await getDoc(configRef);
-      if (configSnap.exists()) {
-        const d = configSnap.data();
-        if (typeof d.maxAdmins === 'number' && d.maxAdmins > 0) {
-          serverMaxAdmins = d.maxAdmins;
-        }
-      }
-      const q = query(collection(db, 'interactions'), where('type', '==', 'admin_device'));
-      const snap = await getDocs(q);
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && data.status === 'active' && data.adminDeviceId) {
-          registeredAdminDevices.add(data.adminDeviceId);
-        }
-      });
-    } catch (e) {
-      console.warn('Initial admin registry sync notice:', e);
-    }
-  }
-  syncServerAdminRegistry().catch((err) => console.warn('Admin registry background sync notice:', err));
-
-  // Anti-Brute-Force & Rate-Limiting Engine against automated attacks (ffuf, hydra, curl)
-  const failedAttempts = new Map<string, { count: number; lockedUntil: number }>();
-
-  function parseCookiesFromReq(req: express.Request): Record<string, string> {
-    const list: Record<string, string> = {};
-    const rc = req.headers.cookie;
-    if (rc) {
-      rc.split(';').forEach((cookie) => {
-        const parts = cookie.split('=');
-        const key = parts.shift()?.trim();
-        if (key) {
-          list[key] = decodeURIComponent(parts.join('=').trim());
-        }
-      });
-    }
-    return list;
-  }
-
-  function setAdminCookiesInRes(res: express.Response, adminDeviceId?: string, token?: string) {
-    const cookies: string[] = [];
-    if (adminDeviceId) {
-      cookies.push(`nonum_admin_device_id=${encodeURIComponent(adminDeviceId)}; Path=/; Max-Age=31536000; SameSite=Lax`);
-    }
-    if (token) {
-      cookies.push(`nonum_admin_token=${encodeURIComponent(token)}; Path=/; Max-Age=31536000; SameSite=Lax`);
-    }
-    if (cookies.length > 0) {
-      res.setHeader('Set-Cookie', cookies);
-    }
-  }
-
-  function clearAdminCookiesInRes(res: express.Response) {
-    res.setHeader('Set-Cookie', [
-      'nonum_admin_device_id=; Path=/; Max-Age=0',
-      'nonum_admin_token=; Path=/; Max-Age=0'
-    ]);
-  }
-
-  async function isAuthorizedAdminReq(req: express.Request): Promise<boolean> {
-    const cookies = parseCookiesFromReq(req);
-    const tokenHeader = req.headers['x-admin-token'] || req.headers['authorization'];
-    const devIdHeader = req.headers['x-admin-device-id'];
-
-    const token = (typeof tokenHeader === 'string' ? tokenHeader.replace('Bearer ', '') : '') || cookies['nonum_admin_token'];
-    const devId = (typeof devIdHeader === 'string' ? devIdHeader : '') || cookies['nonum_admin_device_id'];
-
-    if (token && token === ADMIN_SECRET_KEY) {
-      return true;
-    }
-
-    if (devId && typeof devId === 'string') {
-      if (registeredAdminDevices.has(devId)) {
-        return true;
-      }
-      if (db) {
-        try {
-          const deviceDocRef = doc(db, 'interactions', `admin_device_${devId}`);
-          const snap = await getDoc(deviceDocRef);
-          if (snap.exists() && snap.data()?.status === 'active') {
-            registeredAdminDevices.add(devId);
-            return true;
-          }
-        } catch (err) {}
-      }
-    }
-
-    return false;
-  }
-
-  function getClientIpFromReq(req: express.Request): string {
-    const xForwardedFor = req.headers['x-forwarded-for'];
-    if (typeof xForwardedFor === 'string') {
-      return xForwardedFor.split(',')[0].trim();
-    }
-    if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
-      return xForwardedFor[0].trim();
-    }
-    return req.socket.remoteAddress || '127.0.0.1';
-  }
-
-  function isRateLimited(ip: string): boolean {
-    const record = failedAttempts.get(ip);
-    if (!record) return false;
-    if (Date.now() < record.lockedUntil) {
-      return true;
-    }
-    if (Date.now() >= record.lockedUntil) {
-      failedAttempts.delete(ip);
-    }
-    return false;
-  }
-
-  function recordFailedAttempt(ip: string): void {
-    const record = failedAttempts.get(ip) || { count: 0, lockedUntil: 0 };
-    record.count += 1;
-    if (record.count >= 5) {
-      record.lockedUntil = Date.now() + 15 * 60 * 1000; // 15-minute lockout
-    }
-    failedAttempts.set(ip, record);
-  }
-
-  function clearFailedAttempts(ip: string): void {
-    failedAttempts.delete(ip);
-  }
-
-  // Cryptographic Timing-Safe PBKDF2-SHA256 Credential Verification (Zero plaintext secrets in source)
-  const KDF_SALT = 'n0num_v3_kdf_9f8a7b6c5d4e3f2a';
-  const AUTHORIZED_USER_DIGESTS: readonly string[] = [
-    '737a5cc65c6d4ee7bf6ce378815cef6c8faff462b8e2f4a3492d7a3c1bcd2fb6',
-    '3009ef6879f9a0149a941ed8d9fc56b6cc9fcf642fe1bb2e7863bb2c3da90839',
-    '57d03d32eca4a05f12d35cf4c056092b83e7650e30aaacc8d2d0553fd67b3cb9',
-  ];
-  const AUTHORIZED_PASS_DIGESTS: readonly string[] = [
-    'c7b202f04099de3e326c694ef90f6ea12a8645710b42dc50b41551e2bc96591c',
-    'de78d95003cd707d532fa842148463de6b14f76bf7e85e7a178fd5eba89f8874',
-  ];
-  const DEFAULT_ASSISTANT_USER_DIGEST =
-    '737a5cc65c6d4ee7bf6ce378815cef6c8faff462b8e2f4a3492d7a3c1bcd2fb6';
-  const DEFAULT_ASSISTANT_PASS_DIGEST =
-    'c7b202f04099de3e326c694ef90f6ea12a8645710b42dc50b41551e2bc96591c';
-
-  function deriveDigestBuffer(input: string): Buffer {
-    return crypto.pbkdf2Sync(input, KDF_SALT, 10000, 32, 'sha256');
-  }
-
-  function timingSafeMatchDigest(candidateBuf: Buffer, hexDigests: readonly string[]): boolean {
-    let matched = false;
-    for (const hex of hexDigests) {
-      if (!hex || typeof hex !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hex)) continue;
-      const targetBuf = Buffer.from(hex, 'hex');
-      if (
-        targetBuf.length === candidateBuf.length &&
-        crypto.timingSafeEqual(candidateBuf, targetBuf)
-      ) {
-        matched = true;
-      }
-    }
-    return matched;
-  }
-
-  const ADMIN_SECRET_KEY =
-    process.env.ADMIN_SECRET_KEY ||
-    crypto
-      .createHmac('sha256', 'n0num_kdf_sig_2026')
-      .update('nonum_admin_master_session_authority')
-      .digest('hex');
-
-  function verifyAdminCredentials(user: any, pass: any): boolean {
-    if (!user || !pass) return false;
-    const cleanUser = String(user).trim().toLowerCase();
-    const cleanPass = String(pass).trim();
-
-    const userDigest = deriveDigestBuffer(cleanUser);
-    const passDigestExact = deriveDigestBuffer(cleanPass);
-    const passDigestLower = deriveDigestBuffer(cleanPass.toLowerCase());
-
-    const userDigestsToCheck = [...AUTHORIZED_USER_DIGESTS];
-    const passDigestsToCheck = [...AUTHORIZED_PASS_DIGESTS];
-
-    if (process.env.ADMIN_USERNAME) {
-      userDigestsToCheck.push(
-        deriveDigestBuffer(process.env.ADMIN_USERNAME.trim().toLowerCase()).toString('hex')
-      );
-    }
-    if (process.env.ADMIN_PASSWORD) {
-      passDigestsToCheck.push(
-        deriveDigestBuffer(process.env.ADMIN_PASSWORD.trim()).toString('hex'),
-        deriveDigestBuffer(process.env.ADMIN_PASSWORD.trim().toLowerCase()).toString('hex')
-      );
-    }
-
-    const isUserValid = timingSafeMatchDigest(userDigest, userDigestsToCheck);
-    const isPassValid =
-      timingSafeMatchDigest(passDigestExact, passDigestsToCheck) ||
-      timingSafeMatchDigest(passDigestLower, passDigestsToCheck);
-
-    return isUserValid && isPassValid;
-  }
-
-  function verifyAssistantCredentialsServer(
-    user: any,
-    pass: any,
-    custom?: { usernameHash?: string; passwordHash?: string } | null
-  ): boolean {
-    if (!user || !pass) return false;
-    const cleanUser = String(user).trim().toLowerCase();
-    const cleanPass = String(pass).trim();
-    if (!cleanUser || !cleanPass) return false;
-
-    const userDigest = deriveDigestBuffer(cleanUser);
-    const passDigestExact = deriveDigestBuffer(cleanPass);
-
-    const expectedUserHash =
-      custom?.usernameHash && typeof custom.usernameHash === 'string'
-        ? custom.usernameHash
-        : DEFAULT_ASSISTANT_USER_DIGEST;
-    const expectedPassHash =
-      custom?.passwordHash && typeof custom.passwordHash === 'string'
-        ? custom.passwordHash
-        : DEFAULT_ASSISTANT_PASS_DIGEST;
-
-    return (
-      timingSafeMatchDigest(userDigest, [expectedUserHash]) &&
-      timingSafeMatchDigest(passDigestExact, [expectedPassHash])
-    );
-  }
-
-  async function fetchCustomAssistantCreds(): Promise<{ usernameHash?: string; passwordHash?: string } | null> {
-    if (!db || !auth) return null;
-    try {
-      if (!auth.currentUser) {
-        await signInAnonymously(auth);
-      }
-      if (auth.currentUser) {
-        await setDoc(
-          doc(db, 'admins', auth.currentUser.uid),
-          {
-            isAdmin: true,
-            secretKey: ADMIN_SECRET_KEY,
-            registeredAt: new Date().toISOString()
-          },
-          { merge: true }
-        );
-      }
-      const snap = await getDoc(doc(db, 'admin_config', 'assistant_credentials'));
-      if (snap.exists()) {
-        const data = snap.data() as any;
-        if (data?.usernameHash && data?.passwordHash) {
-          return { usernameHash: data.usernameHash, passwordHash: data.passwordHash };
-        }
-      }
+      await fn(req, res);
     } catch (err) {
-      console.warn('Assistant credential lookup fallback:', err);
-    }
-    return null;
-  }
-
-  // Administrator login authentication endpoint
-  app.post(['/api/admin-auth', '/api/admin-login'], (req, res) => {
-    const clientIp = getClientIpFromReq(req);
-    const { username, password, adminDeviceId } = req.body || {};
-
-    if (verifyAdminCredentials(username, password)) {
-      clearFailedAttempts(clientIp);
-      if (adminDeviceId && typeof adminDeviceId === 'string') {
-        registeredAdminDevices.add(adminDeviceId);
-      }
-      setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
-      return res.json({
-        success: true,
-        token: ADMIN_SECRET_KEY,
-        message: 'Administrator authentication verified.'
-      });
-    }
-
-    recordFailedAttempt(clientIp);
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid Administrator credentials.'
-    });
-  });
-
-  // Ephemeral one-time assistant portal authentication endpoint (zero cookies / zero Admin IDs)
-  app.post('/api/assistant-auth', async (req, res) => {
-    const clientIp = getClientIpFromReq(req);
-    if (isRateLimited(clientIp)) {
-      return res.status(429).json({
-        success: false,
-        error: 'Too many failed attempts. Try again later.'
-      });
-    }
-
-    const { username, password } = req.body || {};
-    const customCreds = await fetchCustomAssistantCreds();
-
-    if (verifyAssistantCredentialsServer(username, password, customCreds)) {
-      clearFailedAttempts(clientIp);
-      return res.json({
-        success: true,
-        token: ADMIN_SECRET_KEY,
-        role: 'assistant',
-        message: 'Assistant session verified.'
-      });
-    }
-
-    recordFailedAttempt(clientIp);
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid Assistant credentials.'
-    });
-  });
-
-  app.post('/api/admin-verify', async (req, res) => {
-    const cookies = parseCookiesFromReq(req);
-    const { adminDeviceId: bodyDevId, token: bodyToken } = req.body || {};
-    const adminDeviceId = bodyDevId || cookies['nonum_admin_device_id'];
-    const token = bodyToken || cookies['nonum_admin_token'];
-
-    if (token === ADMIN_SECRET_KEY) {
-      if (adminDeviceId) setAdminCookiesInRes(res, adminDeviceId, token);
-      return res.json({ isAdmin: true });
-    }
-
-    if (adminDeviceId && typeof adminDeviceId === 'string') {
-      if (registeredAdminDevices.has(adminDeviceId)) {
-        setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
-        return res.json({ isAdmin: true });
-      }
-
-      if (db) {
-        try {
-          const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-          const snap = await getDoc(deviceDocRef);
-          if (snap.exists() && snap.data()?.status === 'active') {
-            registeredAdminDevices.add(adminDeviceId);
-            setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
-            return res.json({ isAdmin: true });
-          }
-        } catch (err) {
-          console.warn('Firestore fallback verify check notice:', err);
-        }
+      console.error('API handler error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal Server Error' });
       }
     }
+  };
 
-    return res.json({ isAdmin: false });
-  });
+  // Delegate ALL API endpoints to the single hardened /api/* handlers
+  app.all(['/api/admin-auth', '/api/admin-login'], wrap(adminAuthHandler));
+  app.all('/api/admin-register', wrap(adminRegisterHandler));
+  app.all('/api/admin-verify', wrap(adminVerifyHandler));
+  app.all('/api/admin-token', wrap(adminTokenHandler));
+  app.all('/api/admin-revoke', wrap(adminRevokeHandler));
+  app.all('/api/admin-update-limit', wrap(adminUpdateLimitHandler));
+  app.all('/api/admin-gate', wrap(adminGateHandler));
+  app.all('/api/admin-assistant-creds', wrap(adminAssistantCredsHandler));
+  app.all('/api/assistant-auth', wrap(assistantAuthHandler));
+  app.all('/api/portal-resolve', wrap(portalResolveHandler));
+  app.all('/api/check-block', wrap(checkBlockHandler));
+  app.all('/api/community-pin', wrap(communityPinHandler));
+  app.all('/api/get-ip', wrap(getIpHandler));
+  app.all(['/admin-manifest.json', '/api/admin-manifest'], wrap(adminManifestHandler));
 
-  app.post('/api/admin-register', (req, res) => {
-    const clientIp = getClientIpFromReq(req);
-    const { username, password, adminDeviceId } = req.body || {};
-
-    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-      return res.status(400).json({ success: false, error: 'Device identifier required.' });
-    }
-
-    if (verifyAdminCredentials(username, password)) {
-      clearFailedAttempts(clientIp);
-      if (!registeredAdminDevices.has(adminDeviceId) && registeredAdminDevices.size >= serverMaxAdmins) {
-        return res.status(403).json({ success: false, error: 'Maximum authorized administrative device limit reached.' });
-      }
-      registeredAdminDevices.add(adminDeviceId);
-      setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
-      return res.json({ 
-        success: true, 
-        token: ADMIN_SECRET_KEY, 
-        adminDeviceId 
-      });
-    }
-
-    recordFailedAttempt(clientIp);
-    return res.status(401).json({ success: false, error: 'Invalid Administrator credentials.' });
-  });
-
-  // Secure token retrieval endpoint exclusively for verified active admin devices
-  app.post('/api/admin-token', async (req, res) => {
-    const cookies = parseCookiesFromReq(req);
-    const { adminDeviceId: bodyDevId } = req.body || {};
-    const adminDeviceId = bodyDevId || cookies['nonum_admin_device_id'];
-
-    if (!adminDeviceId || typeof adminDeviceId !== 'string') {
-      return res.status(401).json({ success: false, error: 'Access Denied.' });
-    }
-
-    if (registeredAdminDevices.has(adminDeviceId)) {
-      setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
-      return res.json({ success: true, token: ADMIN_SECRET_KEY });
-    }
-
-    if (db) {
-      try {
-        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminDeviceId}`);
-        const snap = await getDoc(deviceDocRef);
-        if (snap.exists() && snap.data()?.status === 'active') {
-          registeredAdminDevices.add(adminDeviceId);
-          setAdminCookiesInRes(res, adminDeviceId, ADMIN_SECRET_KEY);
-          return res.json({ success: true, token: ADMIN_SECRET_KEY });
-        }
-      } catch (err) {}
-    }
-
-    return res.status(403).json({ success: false, error: 'Device not authorized.' });
-  });
-
-  app.post('/api/admin-update-limit', (req, res) => {
-    const { maxAdmins } = req.body || {};
-    if (typeof maxAdmins === 'number' && maxAdmins > 0) {
-      serverMaxAdmins = maxAdmins;
-      return res.json({ success: true, maxAdmins });
-    }
-    return res.status(400).json({ success: false });
-  });
-
-  app.post('/api/admin-revoke', (req, res) => {
-    const { adminDeviceId } = req.body || {};
-    if (adminDeviceId) {
-      registeredAdminDevices.delete(adminDeviceId);
-      clearAdminCookiesInRes(res);
-      return res.json({ success: true });
-    }
-    return res.status(400).json({ success: false });
-  });
-
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
-
-  // Serve Admin PWA Manifest endpoint
-  app.get(['/admin-manifest.json', '/api/admin-manifest'], (req, res) => {
-    res.setHeader('Content-Type', 'application/manifest+json');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.json({
-      id: 'nonum-admin',
-      scope: '/admin',
-      name: 'Nonum Admin Console',
-      short_name: 'Nonum Admin',
-      description: 'Nonum Security & Moderator Command Center',
-      start_url: '/admin?pwa=admin',
-      display: 'standalone',
-      background_color: '#09090b',
-      theme_color: '#f43f5e',
-      icons: [
-        {
-          src: 'https://iili.io/nWbQlNj.png',
-          sizes: '192x192',
-          type: 'image/png'
-        },
-        {
-          src: 'https://iili.io/nWbQlNj.png',
-          sizes: '512x512',
-          type: 'image/png'
-        }
-      ]
-    });
-  });
-
-  // Get IP endpoint to resolve real device public IP behind proxies
-  app.get('/api/get-ip', (req, res) => {
-    const xForwardedFor = req.headers['x-forwarded-for'];
-    let ip = '';
-    if (typeof xForwardedFor === 'string') {
-      ip = xForwardedFor.split(',')[0].trim();
-    } else if (Array.isArray(xForwardedFor)) {
-      ip = xForwardedFor[0].trim();
-    } else {
-      ip = req.socket.remoteAddress || '';
-    }
-    // Convert IPv6 loopback to readable local IP
-    if (ip === '::1' || ip === '::ffff:127.0.0.1') {
-      ip = '127.0.0.1';
-    }
-    res.json({ ip });
   });
 
   // Serve ads.txt directly as plain text so it never falls back to SPA HTML
@@ -598,66 +188,63 @@ async function startServer() {
     return res.send('google.com, pub-1100709136611258, DIRECT, f08c47fec0942fa0\n');
   });
 
-  // Redirect root favicon requests to the custom favicon to guarantee tab display
-  app.get(['/favicon.ico', '/favicon.png'], (req, res) => {
-    res.redirect('https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png');
+  app.get(['/favicon.ico', '/favicon.png'], (_req, res) => {
+    res.redirect('/nonum-logo.svg');
   });
 
-  // Serve the post's dynamic image for social media crawler preview (handles base64 data URIs perfectly)
   app.get('/api/post-image/:hash', async (req, res) => {
     const hash = req.params.hash;
-    if (!hash) {
-      return res.redirect('https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png');
+    if (!hash || !/^[A-Za-z0-9_-]{3,80}$/.test(hash)) {
+      return res.redirect('/nonum-logo.svg');
     }
 
     try {
       const post = await getPostByHash(hash);
-      if (post && post.imageUrl) {
-        if (post.imageUrl.startsWith('data:')) {
-          const match = post.imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (post && typeof post.imageUrl === 'string') {
+        if (post.imageUrl.startsWith('data:image/')) {
+          const match = post.imageUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
           if (match) {
             const contentType = match[1];
-            const base64Data = match[2];
-            const buffer = Buffer.from(base64Data, 'base64');
+            const buffer = Buffer.from(match[2], 'base64');
             res.setHeader('Content-Type', contentType);
-            res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
             return res.send(buffer);
           }
         }
-        return res.redirect(post.imageUrl);
+        if (post.imageUrl.startsWith('https://')) {
+          return res.redirect(post.imageUrl);
+        }
       }
     } catch (err) {
       console.error('Error serving post image:', err);
     }
-    res.redirect('https://i.ibb.co/jkzWK6V6/14895-removebg-preview.png');
+    res.redirect('/nonum-logo.svg');
   });
 
-  // Intercept root GET requests with a share query (?id=HASH) for dynamic OG tag injection
   app.get('/', async (req, res, next) => {
     const hashId = req.query.id;
-    if (typeof hashId !== 'string') {
-      return next(); // Pass to static/Vite handler if no share query
+    if (typeof hashId !== 'string' || !/^[A-Za-z0-9_-]{3,80}$/.test(hashId)) {
+      return next();
     }
 
     try {
       const post = await getPostByHash(hashId);
-      if (!post) {
-        return next();
-      }
+      if (!post) return next();
 
-      const ogTags = generateOgMetaTags(post, req.headers.host || 'localhost:3000', hashId);
+      const ogTags = generateOgMetaTags(post, req.headers.host || 'nonum.online', hashId);
 
       if (process.env.NODE_ENV !== 'production' && vite) {
         const rawHtml = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf-8');
         const viteHtml = await vite.transformIndexHtml(req.originalUrl || req.url, rawHtml);
         let modifiedHtml = viteHtml.replace(/<title>[^<]+<\/title>/g, '');
         modifiedHtml = modifiedHtml.replace('<head>', `<head>${ogTags}`);
-        return res.setHeader('Content-Type', 'text/html').send(modifiedHtml);
+        return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(modifiedHtml);
       } else {
         const prodHtml = fs.readFileSync(path.join(process.cwd(), 'dist', 'index.html'), 'utf-8');
         let modifiedHtml = prodHtml.replace(/<title>[^<]+<\/title>/g, '');
         modifiedHtml = modifiedHtml.replace('<head>', `<head>${ogTags}`);
-        return res.setHeader('Content-Type', 'text/html').send(modifiedHtml);
+        return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(modifiedHtml);
       }
     } catch (err) {
       console.error('Error in dynamic OG index route:', err);
@@ -665,11 +252,9 @@ async function startServer() {
     }
   });
 
-  // Handle static assets and SPA fallback
   if (process.env.NODE_ENV !== 'production') {
     app.use(vite.middlewares);
 
-    // Express SPA Fallback for Development Mode (e.g. /admin, /admin?pwa=admin, /report)
     app.get('*', async (req, res, next) => {
       if (req.path.startsWith('/api') || req.path.includes('.')) {
         return next();
@@ -677,18 +262,16 @@ async function startServer() {
       try {
         const rawHtml = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf-8');
         const viteHtml = await vite.transformIndexHtml(req.originalUrl || req.url, rawHtml);
-        return res.setHeader('Content-Type', 'text/html').send(viteHtml);
+        return res.setHeader('Content-Type', 'text/html; charset=utf-8').send(viteHtml);
       } catch (err) {
         next(err);
       }
     });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    // Serve production static assets
     app.use(express.static(distPath));
-    
-    // Redirect all other requests back to index.html to allow client-side router
-    app.get('*', (req, res) => {
+
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

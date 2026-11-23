@@ -17,9 +17,9 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
   const activePosts = posts.filter(p => !p.isDeleted && !(p as any).isPurged);
   const deletedPostsCount = posts.length - activePosts.length;
 
-  // Real observer count based on actual unique IP addresses of active posts + current observer
-  const uniqueIps = Array.from(new Set(activePosts.map(p => p.postedFromIp).filter(Boolean)));
-  const liveObservers = Math.max(1, uniqueIps.length);
+  // Unique anonymous authors across active posts
+  const uniqueAuthors = Array.from(new Set(activePosts.map(p => p.ownerUid || (p as any).postedFromIp).filter(Boolean)));
+  const liveObservers = Math.max(1, uniqueAuthors.length);
 
   // Compute analytics
   const totalNonumsCount = activePosts.length;
@@ -86,7 +86,7 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
             <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse inline-block" />
             {liveObservers}
           </span>
-          <span className="text-[9px] text-zinc-500 mt-1.5 block">Unique poster IPs connected</span>
+          <span className="text-[9px] text-zinc-500 mt-1.5 block">Unique anonymous authors</span>
         </div>
 
         <div className="bg-zinc-900/30 border border-zinc-900 rounded-lg p-4 backdrop-blur-sm relative overflow-hidden">
@@ -311,7 +311,7 @@ export const AdminTelemetry: React.FC<AdminTelemetryProps> = ({ posts }) => {
 
                 const value = matchedPosts.length;
                 const engagement = matchedPosts.reduce((acc, p) => acc + (p.likesCount || 0) + (p.commentsCount || 0) + (p.upvotesCount || 0), 0);
-                const active = Array.from(new Set(matchedPosts.map(p => p.postedFromIp).filter(Boolean))).length;
+                const active = Array.from(new Set(matchedPosts.map(p => p.ownerUid || (p as any).postedFromIp).filter(Boolean))).length;
 
                 return {
                   hour: hourStr,

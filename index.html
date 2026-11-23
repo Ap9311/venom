@@ -1,89 +1,53 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Nonum | Anonymous Posts, Polls &amp; Communities</title>
+    <meta name="description" content="Share anonymous posts, polls, Q&amp;As, and join anonymous communities on Nonum." />
+    <meta name="keywords" content="nonum, anonymous community, anonymous social network, anonymous polls, anonymous messaging" />
+    <meta name="author" content="Nonum" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" id="canonical-link" href="https://nonum.online/" />
     <meta name="theme-color" content="#09090b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1100709136611258"
-     crossorigin="anonymous"></script>
-    <title>Nonum | Decentralized Anonymous Grid</title>
-    <script>
-      (function() {
-        // Capture PWA install prompt as early as possible
-        window.addEventListener('beforeinstallprompt', function(e) {
-          e.preventDefault();
-          window.pwaInstallPrompt = e;
-          window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
-        });
+    <meta name="apple-mobile-web-app-title" content="Nonum" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="google-site-verification" content="02X-3h5oR8j77_P2_S6g-C2i-V9M1P3w7Z-z4a9a9sA" />
 
-        var path = window.location.pathname;
-        var hasAdminSession = false;
-        try {
-          hasAdminSession = sessionStorage.getItem('nonum_admin_auth') === 'true' && localStorage.getItem('nonum_is_admin_device') === 'true';
-        } catch(e) {}
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nonum.online/" />
+    <meta property="og:title" content="Nonum | Anonymous Posts, Polls &amp; Communities" />
+    <meta property="og:description" content="Share anonymous posts, polls, Q&amp;As, and join anonymous communities on Nonum." />
+    <meta property="og:image" content="https://nonum.online/nonum-logo.svg" />
+    <meta property="og:site_name" content="Nonum" />
 
-        var isAdminRoute = path.startsWith('/admin') || path.includes('admin') || path.includes('@ssist@nt') || window.location.hostname.startsWith('admin.');
-        var manifestUrl = isAdminRoute ? '/admin-manifest.json' : '/manifest.json';
-        var faviconUrl = 'https://iili.io/nWbQlNj.png';
-        var titleText = "Nonum | Decentralized Anonymous Grid";
-        if (isAdminRoute) {
-          if (path.includes('report')) {
-            titleText = "Nonum Admin Reports";
-          } else {
-            titleText = "Nonum Admin Console";
-          }
-        } else {
-          if (path.startsWith('/report') || path.includes('report')) {
-            titleText = "Nonum Security Report";
-          } else if (path.startsWith('/policies') || path.includes('policies')) {
-            titleText = "Nonum Policies";
-          } else if (path.startsWith('/guidelines') || path.includes('guidelines')) {
-            titleText = "Nonum Guidelines";
-          }
-        }
-        
-        try {
-          // Dynamically create and append the links to head to avoid the browser pre-loading /manifest.json by default on /admin route
-          var manifestLink = document.createElement('link');
-          manifestLink.id = 'pwa-manifest-link';
-          manifestLink.rel = 'manifest';
-          manifestLink.href = manifestUrl;
-          document.head.appendChild(manifestLink);
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://nonum.online/" />
+    <meta name="twitter:title" content="Nonum | Anonymous Posts, Polls &amp; Communities" />
+    <meta name="twitter:description" content="Share anonymous posts, polls, Q&amp;As, and join anonymous communities on Nonum." />
+    <meta name="twitter:image" content="https://nonum.online/nonum-logo.svg" />
 
-          var favicon32 = document.createElement('link');
-          favicon32.id = 'favicon-link-32';
-          favicon32.rel = 'icon';
-          favicon32.type = 'image/png';
-          favicon32.sizes = '32x32';
-          favicon32.href = faviconUrl + '?v=2';
-          document.head.appendChild(favicon32);
+    <link rel="icon" type="image/svg+xml" id="favicon-link-32" href="/nonum-logo.svg" />
+    <link rel="icon" type="image/svg+xml" id="favicon-link-16" href="/nonum-logo.svg" />
+    <link rel="apple-touch-icon" id="apple-icon-link" href="/nonum-logo.svg" />
+    <link rel="manifest" id="pwa-manifest-link" href="/manifest.json" />
 
-          var favicon16 = document.createElement('link');
-          favicon16.id = 'favicon-link-16';
-          favicon16.rel = 'icon';
-          favicon16.type = 'image/png';
-          favicon16.sizes = '16x16';
-          favicon16.href = faviconUrl + '?v=2';
-          document.head.appendChild(favicon16);
+    <!-- Externalized boot init (zero inline scripts for strict CSP) -->
+    <script src="/boot-init.js"></script>
 
-          var appleIcon = document.createElement('link');
-          appleIcon.id = 'apple-icon-link';
-          appleIcon.rel = 'apple-touch-icon';
-          appleIcon.href = faviconUrl + '?v=2';
-          document.head.appendChild(appleIcon);
-
-          document.title = titleText;
-        } catch(e) {
-          console.error('Error executing head initialization script:', e);
-        }
-      })();
-    </script>
+    <!-- Google AdSense -->
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1100709136611258"
+      crossorigin="anonymous"
+    ></script>
   </head>
-  <body>
+  <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

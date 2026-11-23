@@ -1,57 +1,84 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import fs from 'fs';
-import path from 'path';
-import { setCorsHeaders, ADMIN_SECRET_KEY } from './_helpers.js';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-function parseCookiesFromReq(req: IncomingMessage): Record<string, string> {
-  const list: Record<string, string> = {};
-  const rc = req.headers.cookie;
-  if (rc) {
-    rc.split(';').forEach((cookie) => {
-      const parts = cookie.split('=');
-      const key = parts.shift()?.trim();
-      if (key) {
-        list[key] = decodeURIComponent(parts.join('=').trim());
-      }
+import {
+  setCorsHeaders,
+  verifyCsrfOrigin,
+  getAdminSecretKey,
+  extractTokenFromRequest,
+  verifySessionToken,
+  isRegisteredActiveAdminDevice,
+  getAdminDeviceLimitAndList,
+  clearAdminCookies,
+  revokeClientFirestoreClaim,
+  sanitizePayload
+} from './_helpers';
+
+/**
+ * GET / POST /api/admin-gate
+ * - For unauthenticated visitors: returns ONLY minimal boolean { isOpen, isAdmin: false } (never exposes device IDs or counts).
+ * - For verified full admins: returns full device list, maxAdmins, and current adminDeviceId.
+ * - POST with { action: 'logout' } clears HttpOnly admin cookies and Firestore claim.
+ */
+export default async function handler(req: any, res: any) {
+  setCorsHeaders(res, req);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+  if (req.method === 'POST' && !verifyCsrfOrigin(req)) {
+    return res.status(403).json({ error: 'Origin not allowed.' });
+  }
+
+  const body = req.method === 'POST' ? sanitizePayload(req.body || {}) : {};
+  if (req.method === 'POST' && body.action === 'logout') {
+    clearAdminCookies(res);
+    if (typeof body.firebaseUid === 'string' && body.firebaseUid) {
+      await revokeClientFirestoreClaim(body.firebaseUid);
+    }
+    return res.status(200).json({ success: true });
+  }
+
+  if (!getAdminSecretKey()) {
+    return res.status(500).json({
+      isOpen: false,
+      isAdmin: false,
+      error: 'Server authentication is not configured.'
     });
   }
-  return list;
-}
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  try {
-    setCorsHeaders(res, req);
+  const token = extractTokenFromRequest(req);
+  const payload = verifySessionToken(token);
+  let isAdmin = false;
+  let currentDeviceId = '';
 
-    if (req.method === 'OPTIONS') {
-      res.statusCode = 200;
-      return res.end();
+  if (payload && payload.role === 'admin') {
+    const active = await isRegisteredActiveAdminDevice(payload.sub);
+    if (active) {
+      isAdmin = true;
+      currentDeviceId = payload.sub;
     }
-
-    const cookies = parseCookiesFromReq(req);
-    const tokenHeader = req.headers['x-admin-token'] || req.headers['authorization'];
-    const devIdHeader = req.headers['x-admin-device-id'];
-
-    const token = (typeof tokenHeader === 'string' ? tokenHeader.replace('Bearer ', '') : '') || cookies['nonum_admin_token'];
-    const devId = (typeof devIdHeader === 'string' ? devIdHeader : '') || cookies['nonum_admin_device_id'];
-
-    // Serve index.html, letting the SPA handle authorization redirects
-    const indexFilePath = path.join(process.cwd(), 'dist', 'index.html');
-    let htmlContent = '';
-    if (fs.existsSync(indexFilePath)) {
-      htmlContent = fs.readFileSync(indexFilePath, 'utf-8');
-    } else {
-      const devIndexPath = path.join(process.cwd(), 'index.html');
-      if (fs.existsSync(devIndexPath)) {
-        htmlContent = fs.readFileSync(devIndexPath, 'utf-8');
-      }
-    }
-
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.end(htmlContent);
-  } catch (err: any) {
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    return res.end(`Cannot GET ${req.url || '/'}`);
   }
+
+  const { maxAdmins, devices } = await getAdminDeviceLimitAndList();
+  const isOpen = devices.length < maxAdmins;
+
+  if (isAdmin) {
+    return res.status(200).json({
+      isAdmin: true,
+      isOpen,
+      maxAdmins,
+      registeredCount: devices.length,
+      currentDeviceId,
+      registeredDevices: devices
+    });
+  }
+
+  // Non-admin callers only learn whether /login registration gate is open
+  return res.status(200).json({
+    isAdmin: false,
+    isOpen
+  });
 }

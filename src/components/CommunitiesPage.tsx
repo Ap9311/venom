@@ -56,8 +56,8 @@ import {
   Instagram
 } from 'lucide-react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { getClientIp, getDeviceIdentifier, isMobileDevice, getDeviceSerial, getDeviceImei, getLegacyDeviceImei, syncCrossBrowserDeviceIdentity, getAllDeviceImeis } from '../utils/ip';
-import { generatePostHash, hashSha256 } from '../utils/crypto';
+import { getAnonymousUserId } from '../utils/ip';
+import { generatePostHash } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
 import { checkIpBlockStatus } from '../utils/blockChecker';
 import { formatTimeAgo, formatShortCount } from '../utils/time';
@@ -80,28 +80,32 @@ interface CommunitiesPageProps {
 }
 
 export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPageProps) {
-  // Device details
-  const [deviceIp, setDeviceIp] = useState('');
-  const [deviceSig, setDeviceSig] = useState({ type: 'SERIAL', value: '' });
-  const [deviceImei, setDeviceImei] = useState('');
-  const [deviceSerial, setDeviceSerial] = useState('');
+  // Anonymous Firebase UID (zero IP/IMEI/serial tracking)
+  const [anonUid, setAnonUid] = useState('');
+  const [ownedCommIds, setOwnedCommIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('nonum_owned_communities');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [unlockedCommIds, setUnlockedCommIds] = useState<string[]>([]);
+  const [noticeBanner, setNoticeBanner] = useState<string>('');
 
-  // Cross-browser device creator & ownership validator (hybrid hardware + vault + alias signature matching)
+  const showNotice = (msg: string) => {
+    setNoticeBanner(msg);
+    setTimeout(() => {
+      setNoticeBanner((prev) => (prev === msg ? '' : prev));
+    }, 4500);
+  };
+
+  // Anonymous UID-based creator & ownership validator (never uses IP/IMEI/serial)
   const checkIsCreator = (item: any): boolean => {
     if (!item) return false;
-    const legacyImei = getLegacyDeviceImei();
-    const allImeis = getAllDeviceImeis();
-    const targetImei = item.createdByImei;
-    const targetSerial = item.createdBySerial;
-    const currentImei = deviceImei || (typeof window !== 'undefined' ? localStorage.getItem('nonum_device_imei') : '');
-    const currentSerial = deviceSerial || (typeof window !== 'undefined' ? localStorage.getItem('nonum_device_serial') : '');
-
-    return Boolean(
-      (targetImei && (targetImei === currentImei || targetImei === deviceSig?.value || targetImei === legacyImei || allImeis.includes(targetImei))) ||
-      (targetSerial && (targetSerial === currentSerial || targetSerial === deviceSig?.value)) ||
-      (deviceIp && deviceIp !== '127.0.0.1' && item.createdByIp === deviceIp)
-    );
+    if (anonUid && item.ownerUid && item.ownerUid === anonUid) return true;
+    if (item.id && ownedCommIds.includes(item.id)) return true;
+    return false;
   };
 
   // Custom designed in-app Share Modal states
@@ -133,7 +137,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Creation Form State
   const [cName, setCName] = useState('');
   const [cDesc, setCDesc] = useState('');
-  const [cReligion, setCReligion] = useState('');
   const [cUserLimit, setCUserLimit] = useState('');
   const [cAllowUserPost, setCAllowUserPost] = useState(true);
   const [cPassword, setCPassword] = useState('');
@@ -146,10 +149,10 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editReligion, setEditReligion] = useState('');
   const [editUserLimit, setEditUserLimit] = useState('');
   const [editAllowUserPost, setEditAllowUserPost] = useState(true);
   const [editPassword, setEditPassword] = useState('');
+  const [editRemovePin, setEditRemovePin] = useState(false);
   const [editImageUrl, setEditImageUrl] = useState('');
   const [editImagePreview, setEditImagePreview] = useState('');
   const [editError, setEditError] = useState('');
@@ -159,6 +162,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   const [showPasswordGate, setShowPasswordGate] = useState<any | null>(null);
   const [gatePasswordInput, setGatePasswordInput] = useState('');
   const [gateError, setGateError] = useState('');
+  const [gateSubmitting, setGateSubmitting] = useState(false);
 
   // Report Modal states
   const [showReportModal, setShowReportModal] = useState(false);
@@ -329,7 +333,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   // Deep linking sharing state
   const [initialDeepLinkProcessed, setInitialDeepLinkProcessed] = useState(false);
 
-  const DEFAULT_COMMUNITY_LOGO = 'https://iili.io/nWbQlNj.png';
+  const DEFAULT_COMMUNITY_LOGO = '/nonum-logo.svg';
 
   const createFileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -337,100 +341,65 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatListRef = useRef<HTMLDivElement>(null);
 
-  // Load user identities & local persistent interaction lists
+  // Load anonymous Firebase UID & UID-scoped interactions
   useEffect(() => {
     let isMounted = true;
-    const initDevice = async () => {
-      await syncCrossBrowserDeviceIdentity();
-      const ip = await getClientIp();
-      const sig = await getDeviceIdentifier();
-      const imei = await getDeviceImei();
-      const serial = await getDeviceSerial();
-      const legacyImei = getLegacyDeviceImei();
-      const allImeis = Array.from(new Set([
-        imei,
-        ...(legacyImei ? [legacyImei] : []),
-        ...getAllDeviceImeis()
-      ])).filter(Boolean).slice(0, 10);
-
+    const initSession = async () => {
+      const uid = await getAnonymousUserId();
       if (isMounted) {
-        setDeviceIp(ip);
-        setDeviceSig(sig);
-        setDeviceImei(imei);
-        setDeviceSerial(serial);
+        setAnonUid(uid);
       }
 
-      // Check if user has posted at least 1 post on the main feed (hardware verified)
-      const hasPosted = posts.some(
-        p => p.postedFromIp === ip || 
-             p.postedFromImei === imei || 
-             p.postedFromImei === sig.value || 
-             (legacyImei && p.postedFromImei === legacyImei) ||
-             (p.postedFromImei && allImeis.includes(p.postedFromImei))
-      ) || localStorage.getItem('nonum_has_posted_at_least_once') === 'true';
+      // Check if user has posted at least 1 post on the main feed
+      const hasPosted =
+        posts.some((p) => p.ownerUid && p.ownerUid === uid) ||
+        localStorage.getItem('nonum_has_posted_at_least_once') === 'true';
 
       if (hasPosted && isMounted) {
         setHasPostedAtLeastOnce(true);
         localStorage.setItem('nonum_has_posted_at_least_once', 'true');
       }
 
-      // Query Firestore interactions collection across all device IMEI aliases and IP to restore all user actions across browsers
-      if (db && imei) {
+      if (db && uid) {
         try {
-          const qImeis = allImeis.length === 1
-            ? query(collection(db, 'interactions'), where('imei', '==', allImeis[0]))
-            : query(collection(db, 'interactions'), where('imei', 'in', allImeis));
-          const qDocs = [getDocs(qImeis)];
-          if (ip && ip !== '127.0.0.1') {
-            qDocs.push(getDocs(query(collection(db, 'interactions'), where('ip', '==', ip))));
-          }
-
-          const snaps = await Promise.all(qDocs);
+          const snap = await getDocs(query(collection(db, 'interactions'), where('uid', '==', uid)));
           const restoredLikes: string[] = [];
           const restoredReactions: { [chatId: string]: string } = {};
           const restoredPolls: { [chatId: string]: number } = {};
           const restoredUnlocks: string[] = [];
           let restoredPins: string[] | null = null;
 
-          snaps.forEach(snap => {
-            snap.forEach(d => {
-              const data = d.data();
-              if (data.type === 'chat_like' && data.chatId) {
-                if (!restoredLikes.includes(data.chatId)) restoredLikes.push(data.chatId);
-              } else if (data.type === 'chat_reaction' && data.chatId && data.reactionKey) {
-                restoredReactions[data.chatId] = data.reactionKey;
-              } else if (data.type === 'chat_poll' && data.chatId && typeof data.optionIndex === 'number') {
-                restoredPolls[data.chatId] = data.optionIndex;
-              } else if (d.id.startsWith('unlocked_comm_') && data.communityId) {
-                if (!restoredUnlocks.includes(data.communityId)) restoredUnlocks.push(data.communityId);
-                localStorage.setItem(`unlocked_comm_${data.communityId}`, 'true');
-                if (data.passwordHash) {
-                  localStorage.setItem(`unlocked_comm_hash_${data.communityId}`, data.passwordHash);
-                }
-                if (data.password) {
-                  localStorage.setItem(`unlocked_comm_pwd_${data.communityId}`, data.password);
-                }
-              } else if (d.id.startsWith('pinned_comms_') && Array.isArray(data.pinnedIds)) {
-                restoredPins = data.pinnedIds;
-              }
-            });
+          snap.forEach((d) => {
+            const data = d.data();
+            if (data.type === 'chat_like' && data.chatId) {
+              if (!restoredLikes.includes(data.chatId)) restoredLikes.push(data.chatId);
+            } else if (data.type === 'chat_reaction' && data.chatId && data.reactionKey) {
+              restoredReactions[data.chatId] = data.reactionKey;
+            } else if (data.type === 'chat_poll' && data.chatId && typeof data.optionIndex === 'number') {
+              restoredPolls[data.chatId] = data.optionIndex;
+            } else if (data.type === 'unlocked_community' && data.communityId) {
+              if (!restoredUnlocks.includes(data.communityId)) restoredUnlocks.push(data.communityId);
+              localStorage.setItem(`unlocked_comm_${data.communityId}`, 'true');
+            } else if (data.type === 'pinned_communities' && Array.isArray(data.pinnedIds)) {
+              restoredPins = data.pinnedIds;
+            }
           });
 
           if (isMounted) {
             if (restoredLikes.length > 0) {
-              setLikedChats(prev => Array.from(new Set([...prev, ...restoredLikes])));
+              setLikedChats((prev) => Array.from(new Set([...prev, ...restoredLikes])));
               localStorage.setItem('nonum_liked_chats', JSON.stringify(restoredLikes));
             }
             if (Object.keys(restoredReactions).length > 0) {
-              setUserChatReactions(prev => ({ ...prev, ...restoredReactions }));
+              setUserChatReactions((prev) => ({ ...prev, ...restoredReactions }));
               localStorage.setItem('nonum_chat_reactions', JSON.stringify(restoredReactions));
             }
             if (Object.keys(restoredPolls).length > 0) {
-              setVotedChatsPolls(prev => ({ ...prev, ...restoredPolls }));
+              setVotedChatsPolls((prev) => ({ ...prev, ...restoredPolls }));
               localStorage.setItem('nonum_voted_chats_polls', JSON.stringify(restoredPolls));
             }
             if (restoredUnlocks.length > 0) {
-              setUnlockedCommIds(prev => Array.from(new Set([...prev, ...restoredUnlocks])));
+              setUnlockedCommIds((prev) => Array.from(new Set([...prev, ...restoredUnlocks])));
             }
             if (restoredPins && (restoredPins as string[]).length > 0) {
               setPinnedIds(restoredPins);
@@ -443,34 +412,28 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       }
     };
 
-    initDevice();
+    initSession();
 
-    // Load pinned list from local storage fallback
     const savedPins = localStorage.getItem('nonum_pinned_communities');
     if (savedPins) {
       try {
         setPinnedIds(JSON.parse(savedPins));
-      } catch (e) {
-        console.warn('Pinned list loading error:', e);
-      }
+      } catch {}
     }
 
-    // Load liked chats list from local storage fallback
     const savedLiked = localStorage.getItem('nonum_liked_chats');
     if (savedLiked) {
-      try { setLikedChats(JSON.parse(savedLiked)); } catch(e){}
+      try { setLikedChats(JSON.parse(savedLiked)); } catch {}
     }
 
-    // Load voted chats polls from local storage fallback
     const savedVotedPolls = localStorage.getItem('nonum_voted_chats_polls');
     if (savedVotedPolls) {
-      try { setVotedChatsPolls(JSON.parse(savedVotedPolls)); } catch(e){}
+      try { setVotedChatsPolls(JSON.parse(savedVotedPolls)); } catch {}
     }
 
-    // Load chat reactions from local storage fallback
     const savedReactions = localStorage.getItem('nonum_chat_reactions');
     if (savedReactions) {
-      try { setUserChatReactions(JSON.parse(savedReactions)); } catch(e){}
+      try { setUserChatReactions(JSON.parse(savedReactions)); } catch {}
     }
 
     return () => {
@@ -580,50 +543,54 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     const sharedChatId = params.get('chatId');
 
     if (sharedCommunityId) {
-      const targetComm = communities.find(c => c.id === sharedCommunityId);
-      const isBlocked = targetComm?.isBlocked && (!targetComm.blockedUntil || (typeof targetComm.blockedUntil.toMillis === 'function' ? targetComm.blockedUntil.toMillis() : Number(targetComm.blockedUntil)) > Date.now());
+      const targetComm = communities.find((c) => c.id === sharedCommunityId);
+      const isBlocked =
+        targetComm?.isBlocked &&
+        (!targetComm.blockedUntil ||
+          (typeof targetComm.blockedUntil.toMillis === 'function'
+            ? targetComm.blockedUntil.toMillis()
+            : Number(targetComm.blockedUntil)) > Date.now());
       if (targetComm && !isBlocked) {
         setInitialDeepLinkProcessed(true);
 
-        // If password is set on shared community, check if unlocked with current password
-        if (targetComm.password && !checkIsCreator(targetComm)) {
-          const isUnlocked = unlockedCommIds.includes(targetComm.id) || localStorage.getItem(`unlocked_comm_${targetComm.id}`) === 'true';
-          const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${targetComm.id}`) || '';
-          if (!isUnlocked || (storedPwd && storedPwd !== targetComm.password)) {
+        const isPassProtected = Boolean(targetComm.hasPin);
+        if (isPassProtected && !checkIsCreator(targetComm)) {
+          const isUnlocked =
+            unlockedCommIds.includes(targetComm.id) ||
+            localStorage.getItem(`unlocked_comm_${targetComm.id}`) === 'true';
+          if (!isUnlocked) {
             setShowPasswordGate(targetComm);
           } else {
-            handleEnterCommunityDirect(targetComm, sharedChatId);
+            void handleEnterCommunityDirect(targetComm, sharedChatId);
           }
         } else {
-          // Join the community automatically
-          handleEnterCommunityDirect(targetComm, sharedChatId);
+          void handleEnterCommunityDirect(targetComm, sharedChatId);
         }
       }
     }
-  }, [communities, initialDeepLinkProcessed, unlockedCommIds]);
+  }, [communities, initialDeepLinkProcessed, unlockedCommIds, anonUid]);
 
-  // Synchronize activeCommunity and verify password gate in real-time
+  // Synchronize activeCommunity in real-time
   useEffect(() => {
-    if (!activeCommunity || communities.length === 0 || !deviceSig?.value) return;
-    const latestComm = communities.find(c => c.id === activeCommunity.id);
+    if (!activeCommunity || communities.length === 0) return;
+    const latestComm = communities.find((c) => c.id === activeCommunity.id);
     if (latestComm) {
       const isCreator = checkIsCreator(latestComm);
-      if (latestComm.password && !isCreator) {
-        const isUnlocked = unlockedCommIds.includes(latestComm.id) || localStorage.getItem(`unlocked_comm_${latestComm.id}`) === 'true';
-        const storedPwd = localStorage.getItem(`unlocked_comm_pwd_${latestComm.id}`) || '';
-        if (!isUnlocked || (storedPwd && storedPwd !== latestComm.password)) {
-          // Password has changed, kick the user out of activeCommunity and show password gate modal
+      if (latestComm.hasPin && !isCreator) {
+        const isUnlocked =
+          unlockedCommIds.includes(latestComm.id) ||
+          localStorage.getItem(`unlocked_comm_${latestComm.id}`) === 'true';
+        if (!isUnlocked) {
           setActiveCommunity(null);
           setShowPasswordGate(latestComm);
           return;
         }
       }
-      
-      // Sync any update in the active community details to state
+
       if (
         latestComm.name !== activeCommunity.name ||
         latestComm.description !== activeCommunity.description ||
-        latestComm.password !== activeCommunity.password ||
+        latestComm.hasPin !== activeCommunity.hasPin ||
         latestComm.imageUrl !== activeCommunity.imageUrl ||
         latestComm.allowUserPost !== activeCommunity.allowUserPost ||
         latestComm.userLimit !== activeCommunity.userLimit ||
@@ -632,9 +599,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         setActiveCommunity(latestComm);
       }
     }
-  }, [communities, activeCommunity, deviceSig]);
+  }, [communities, activeCommunity, anonUid, unlockedCommIds]);
 
-  // Device unique visits counter check & community entry trigger
+  // Anonymous unique visits counter check & community entry trigger
   const handleEnterCommunityDirect = async (comm: any, sharedChatId?: string | null) => {
     try {
       setActiveCommunity(comm);
@@ -642,16 +609,15 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         setPendingScrollChatId(sharedChatId);
       }
 
-      // Record visit dynamically (using device IP)
-      if (deviceIp) {
-        const visitDocRef = doc(db, 'communities', comm.id, 'visits', deviceIp);
+      const uid = anonUid || (await getAnonymousUserId());
+      if (uid && db) {
+        const visitDocRef = doc(db, 'communities', comm.id, 'visits', uid);
         const visitSnap = await getDoc(visitDocRef);
 
         if (!visitSnap.exists()) {
-          // Transactional write: Record visit & increment viewsCount on parent Community
           const batch = writeBatch(db);
           batch.set(visitDocRef, {
-            ip: deviceIp,
+            uid,
             visitedAt: serverTimestamp()
           });
           batch.update(doc(db, 'communities', comm.id), {
@@ -661,7 +627,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         }
       }
 
-      // If deep linking a specific chat, trigger an automatic focus/scroll highlight
       if (sharedChatId) {
         setTimeout(() => {
           const targetMessage = document.getElementById(`chat-${sharedChatId}`);
@@ -675,19 +640,19 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         }, 1200);
       }
     } catch (err) {
-      console.error('Failed to register community visit:', err);
+      console.warn('Community visit registration notice:', err);
     }
   };
 
   // Toggle Pinned status (limit 5)
-  const handleTogglePin = (e: React.MouseEvent, commId: string) => {
+  const handleTogglePin = async (e: React.MouseEvent, commId: string) => {
     e.stopPropagation();
     let updatedPins = [...pinnedIds];
     if (pinnedIds.includes(commId)) {
-      updatedPins = updatedPins.filter(id => id !== commId);
+      updatedPins = updatedPins.filter((id) => id !== commId);
     } else {
       if (updatedPins.length >= 5) {
-        alert('CRITICAL OVERLOAD: You can pin up to 5 priority communities only.');
+        showNotice('You can pin up to 5 communities at a time.');
         return;
       }
       updatedPins.push(commId);
@@ -695,26 +660,35 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     setPinnedIds(updatedPins);
     localStorage.setItem('nonum_pinned_communities', JSON.stringify(updatedPins));
 
-    if (deviceImei && db) {
-      setDoc(doc(db, 'interactions', `pinned_comms_${deviceImei}`), {
-        type: 'pinned_communities',
-        pinnedIds: updatedPins,
-        imei: deviceImei,
-        ip: deviceIp,
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(console.error);
+    const uid = anonUid || (await getAnonymousUserId());
+    if (uid && db) {
+      setDoc(
+        doc(db, 'interactions', `pinned_comms_${uid}`),
+        {
+          type: 'pinned_communities',
+          pinnedIds: updatedPins,
+          uid,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      ).catch(console.error);
     }
   };
 
-  // Submit Community Creation
+  // Submit Community Creation (non-blocking, PIN stored server-side)
   const handleCreateCommunitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasPostedAtLeastOnce) {
-      setCError('CLEARANCE SUSPENDED: You must make at least 1 main grid Nonum post from this device first.');
+      setCError('Please make at least 1 public post on the main feed before creating a community.');
       return;
     }
     if (!cName.trim() || !cDesc.trim()) {
-      setCError('All highlighted fields are required to seed.');
+      setCError('Community name and description are required.');
+      return;
+    }
+    const rawPass = cPassword.trim();
+    if (rawPass && (rawPass.length < 3 || rawPass.length > 64)) {
+      setCError('PIN must be between 3 and 64 characters (or leave blank for open access).');
       return;
     }
 
@@ -722,34 +696,56 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     setCError('');
 
     try {
-      const commsRef = collection(db, 'communities');
-      const customCommRef = doc(commsRef);
-      const commId = customCommRef.id;
+      const uid = anonUid || (await getAnonymousUserId());
+      if (!anonUid && uid) setAnonUid(uid);
 
-      // Check if creator is blacklisted before creating community
-      const block = await checkIpBlockStatus(deviceIp, deviceSig.value);
+      // Server-side IP block status check
+      const block = await checkIpBlockStatus();
       if (block.isBlocked) {
-        setCError('TRANSMISSION QUARANTINED: Device blacklisted.');
+        setCError('Your session is currently restricted from creating communities.');
         setCSubmitting(false);
         return;
       }
 
-      const rawPass = cPassword.trim();
-      const passwordHash = rawPass ? await hashSha256(rawPass) : '';
-      const parsedUserLimit = cUserLimit && !isNaN(parseInt(cUserLimit)) ? parseInt(cUserLimit) : null;
+      const commsRef = collection(db, 'communities');
+      const customCommRef = doc(commsRef);
+      const commId = customCommRef.id;
+
+      // If PIN is provided, store salted scrypt hash on the server BEFORE creating public doc
+      let hasPin = false;
+      if (rawPass) {
+        const pinRes = await fetch('/api/community-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set',
+            communityId: commId,
+            pin: rawPass,
+            ownerUid: uid
+          })
+        });
+        const pinData = await pinRes.json().catch(() => ({}));
+        if (!pinRes.ok || !pinData?.success) {
+          setCError(pinData?.error || 'Could not save community PIN. Please try again.');
+          setCSubmitting(false);
+          return;
+        }
+        hasPin = true;
+      }
+
+      const parsedUserLimit =
+        cUserLimit.trim() && !isNaN(parseInt(cUserLimit, 10)) && parseInt(cUserLimit, 10) > 0
+          ? parseInt(cUserLimit, 10)
+          : null;
 
       const payload = {
         id: commId,
         name: cName.trim(),
         description: cDesc.trim(),
-        religion: '',
         userLimit: parsedUserLimit,
         allowUserPost: cAllowUserPost,
-        passwordHash,
-        createdByIp: deviceIp,
-        createdByImei: deviceSig.value,
-        createdBySerial: await getDeviceSerial(),
-        createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
+        hasPin,
+        ownerUid: uid,
         createdAt: serverTimestamp(),
         reportsCount: 0,
         isBlocked: false,
@@ -758,47 +754,45 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       };
 
       await setDoc(customCommRef, payload);
-      
-      // Persist the clearance as well so user doesn't need to post again
+
+      // Remember ownership locally as well
+      const nextOwned = Array.from(new Set([...ownedCommIds, commId]));
+      setOwnedCommIds(nextOwned);
+      localStorage.setItem('nonum_owned_communities', JSON.stringify(nextOwned));
+
       localStorage.setItem('nonum_has_posted_at_least_once', 'true');
       setHasPostedAtLeastOnce(true);
 
-      // Auto pin the created community
-      const updatedPins = [...pinnedIds, commId].slice(0, 5);
+      const updatedPins = Array.from(new Set([commId, ...pinnedIds])).slice(0, 5);
       setPinnedIds(updatedPins);
       localStorage.setItem('nonum_pinned_communities', JSON.stringify(updatedPins));
 
-      // Reset form & CLOSE MODAL IMMEDIATELY
+      // Reset form & close modal immediately so UI never hangs
       setCName('');
       setCDesc('');
-      setCReligion('');
       setCUserLimit('');
       setCAllowUserPost(true);
       setCPassword('');
       setCImageUrl('');
       setCImagePreview('');
+      setCSubmitting(false);
       setShowCreateModal(false);
 
-      // Automatically join the newly created community in background
-      try {
-        await handleEnterCommunityDirect(payload);
-      } catch (visitErr) {
-        console.warn('Community visit recording notice:', visitErr);
-      }
+      // Enter the newly created community without blocking modal dismissal
+      void handleEnterCommunityDirect(payload);
     } catch (err: any) {
       console.error('Community creation error details:', err);
-      const detailedMessage = err?.message || 'Failed to create community. Try again.';
+      const detailedMessage = err?.message || 'Failed to create community. Please try again.';
       setCError(`Failed to create community: ${detailedMessage}`);
-    } finally {
       setCSubmitting(false);
     }
   };
 
-  // Submit Community Settings Update (Creator-only)
+  // Submit Community Settings Update (Creator-only, Item 10 fix)
   const handleUpdateSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCommunity || !checkIsCreator(activeCommunity)) {
-      setEditError('SECURITY ALERT: Authorization mismatch.');
+      setEditError('Only the community creator can edit these settings.');
       return;
     }
 
@@ -808,7 +802,11 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     const safeImageUrl = (editImageUrl || '').trim();
 
     if (!safeName || !safeDesc) {
-      setEditError('Highlighted fields are mandatory.');
+      setEditError('Community name and description are required.');
+      return;
+    }
+    if (safePass && !editRemovePin && (safePass.length < 3 || safePass.length > 64)) {
+      setEditError('New PIN must be between 3 and 64 characters.');
       return;
     }
 
@@ -816,32 +814,70 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     setEditError('');
 
     try {
+      const uid = anonUid || (await getAnonymousUserId());
+      let nextHasPin = Boolean(activeCommunity.hasPin);
+
+      if (editRemovePin) {
+        const res = await fetch('/api/community-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'remove',
+            communityId: activeCommunity.id,
+            ownerUid: activeCommunity.ownerUid || uid
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) {
+          setEditError(data?.error || 'Could not remove community PIN.');
+          setEditSubmitting(false);
+          return;
+        }
+        nextHasPin = false;
+      } else if (safePass) {
+        const res = await fetch('/api/community-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set',
+            communityId: activeCommunity.id,
+            pin: safePass,
+            ownerUid: activeCommunity.ownerUid || uid
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) {
+          setEditError(data?.error || 'Could not update community PIN.');
+          setEditSubmitting(false);
+          return;
+        }
+        nextHasPin = true;
+      }
+
       const commDocRef = doc(db, 'communities', activeCommunity.id);
-      const passwordHash = safePass ? await hashSha256(safePass) : (activeCommunity.passwordHash || '');
-      const parsedUserLimit = editUserLimit && !isNaN(parseInt(editUserLimit)) ? parseInt(editUserLimit) : null;
+      const parsedUserLimit =
+        editUserLimit.trim() && !isNaN(parseInt(editUserLimit, 10)) && parseInt(editUserLimit, 10) > 0
+          ? parseInt(editUserLimit, 10)
+          : null;
 
       const updatedFields: any = {
         name: safeName,
         description: safeDesc,
-        religion: '',
         userLimit: parsedUserLimit,
         allowUserPost: editAllowUserPost,
-        passwordHash,
+        hasPin: nextHasPin,
         imageUrl: safeImageUrl || activeCommunity.imageUrl || DEFAULT_COMMUNITY_LOGO
       };
 
       await updateDoc(commDocRef, updatedFields);
 
-      // Sync active state
-      setActiveCommunity((prev: any) => ({
-        ...prev,
-        ...updatedFields
-      }));
-
+      setActiveCommunity((prev: any) => (prev ? { ...prev, ...updatedFields } : prev));
+      setEditPassword('');
+      setEditRemovePin(false);
       setShowSettingsModal(false);
     } catch (err: any) {
       console.error('Update community failed:', err);
-      setEditError('Update failed: ' + (err?.message || 'Please check field inputs.'));
+      setEditError('Update failed: ' + (err?.message || 'Please check your inputs and try again.'));
     } finally {
       setEditSubmitting(false);
     }
@@ -869,46 +905,66 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     }
   };
 
-  // Password gate trigger
+  // Server-verified Password Gate trigger
   const handlePasswordGateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGateError('');
-    if (!showPasswordGate) return;
+    if (!showPasswordGate || gateSubmitting) return;
 
     const targetComm = showPasswordGate;
-    const inputHash = await hashSha256(gatePasswordInput.trim());
-    const expectedHash = targetComm.passwordHash || (targetComm.password ? await hashSha256(targetComm.password) : '');
+    const enteredPin = gatePasswordInput.trim();
+    if (!enteredPin) {
+      setGateError('Please enter the community PIN.');
+      return;
+    }
 
-    const isMatch = Boolean(expectedHash) && (inputHash === expectedHash || gatePasswordInput.trim() === targetComm.password);
+    setGateSubmitting(true);
+    try {
+      const res = await fetch('/api/community-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify',
+          communityId: targetComm.id,
+          pin: enteredPin
+        })
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (isMatch) {
-      if (rememberPassword) {
-        localStorage.setItem(`unlocked_comm_${targetComm.id}`, 'true');
-        localStorage.setItem(`unlocked_comm_hash_${targetComm.id}`, expectedHash);
-        if (deviceImei && db) {
-          setDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`), {
-            type: 'unlocked_community',
-            communityId: targetComm.id,
-            passwordHash: expectedHash,
-            imei: deviceImei,
-            ip: deviceIp,
-            unlockedAt: new Date().toISOString()
-          }, { merge: true }).catch(console.error);
+      if (res.ok && data?.success && data?.unlocked) {
+        const uid = anonUid || (await getAnonymousUserId());
+        if (rememberPassword) {
+          localStorage.setItem(`unlocked_comm_${targetComm.id}`, 'true');
+          if (uid && db) {
+            setDoc(
+              doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${uid}`),
+              {
+                type: 'unlocked_community',
+                communityId: targetComm.id,
+                uid,
+                unlockedAt: new Date().toISOString()
+              },
+              { merge: true }
+            ).catch(console.error);
+          }
+          setUnlockedCommIds((prev) => Array.from(new Set([...prev, targetComm.id])));
+        } else {
+          localStorage.removeItem(`unlocked_comm_${targetComm.id}`);
+          if (uid && db) {
+            deleteDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${uid}`)).catch(console.error);
+          }
+          setUnlockedCommIds((prev) => prev.filter((id) => id !== targetComm.id));
         }
-        setUnlockedCommIds(prev => Array.from(new Set([...prev, targetComm.id])));
+        setShowPasswordGate(null);
+        setGatePasswordInput('');
+        void handleEnterCommunityDirect(targetComm);
       } else {
-        localStorage.removeItem(`unlocked_comm_${targetComm.id}`);
-        localStorage.removeItem(`unlocked_comm_hash_${targetComm.id}`);
-        if (deviceImei && db) {
-          deleteDoc(doc(db, 'interactions', `unlocked_comm_${targetComm.id}_${deviceImei}`)).catch(console.error);
-        }
-        setUnlockedCommIds(prev => prev.filter(id => id !== targetComm.id));
+        setGateError(data?.error || 'Incorrect PIN. Access denied.');
       }
-      setShowPasswordGate(null);
-      setGatePasswordInput('');
-      handleEnterCommunityDirect(targetComm);
-    } else {
-      setGateError('DECRYPTION FAILURE: Incendiary password. Access denied.');
+    } catch {
+      setGateError('Unable to verify PIN right now. Please try again.');
+    } finally {
+      setGateSubmitting(false);
     }
   };
 
@@ -917,10 +973,9 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     e.preventDefault();
     if (!activeCommunity) return;
 
-    // Check if posting is restricted to owner only
     const isOwner = checkIsCreator(activeCommunity);
     if (!activeCommunity.allowUserPost && !isOwner) {
-      setChatError('RESTRICTED GATEWAY: Only the owner is authorized to dispatch chats inside this community.');
+      setChatError('Only the community creator can post messages here.');
       return;
     }
 
@@ -933,25 +988,24 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     setChatError('');
 
     try {
-      // Validate block status
-      const block = await checkIpBlockStatus(deviceIp, deviceSig.value);
+      const block = await checkIpBlockStatus();
       if (block.isBlocked) {
-        setChatError('TRANSMISSION SHIELD: Device suspended.');
+        setChatError('Your session is currently restricted from posting.');
         setSendingChat(false);
         return;
       }
 
+      const uid = anonUid || (await getAnonymousUserId());
       const chatsRef = collection(db, 'communities', activeCommunity.id, 'chats');
       const customChatRef = doc(chatsRef);
       const chatId = customChatRef.id;
 
-      // Clean poll options if applicable
       let cleanedPollOptions: string[] = [];
       const pollVotesObj: { [key: string]: number } = {};
       if (chatType === 'poll' || chatType === 'qa') {
-        cleanedPollOptions = pollOptions.map(o => o.trim()).filter(o => o !== '');
+        cleanedPollOptions = pollOptions.map((o) => o.trim()).filter((o) => o !== '');
         if (cleanedPollOptions.length < 2) {
-          setChatError('At least 2 poll choices are mandatory.');
+          setChatError('At least 2 poll choices are required.');
           setSendingChat(false);
           return;
         }
@@ -968,10 +1022,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         type: chatType,
         content: chatContent.trim(),
         createdAt: serverTimestamp(),
-        createdByIp: deviceIp,
-        createdByImei: deviceSig.value,
-        createdBySerial: await getDeviceSerial(),
-        createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
+        ownerUid: uid,
         encryptedHash: hash,
         likesCount: 0,
         reactions: { love: 0, fire: 0, laugh: 0, wow: 0, like: 0, angry: 0 },
@@ -989,7 +1040,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       await setDoc(customChatRef, payload);
 
-      // Reset active form
       setChatContent('');
       setChatImageUrl('');
       setChatImagePreview('');
@@ -997,25 +1047,25 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       setQaCorrectIndex(null);
       setChatType('text');
     } catch (err: any) {
-      setChatError('Failed to dispatch message.');
+      setChatError('Failed to send message.');
       handleFirestoreError(err, OperationType.WRITE, `communities/${activeCommunity.id}/chats`);
     } finally {
       setSendingChat(false);
     }
   };
 
-  // Upvote/Downvote NOT allowed - only Like, Reaction, Comment (No vote indicators)
+  // Upvote/Downvote NOT allowed - only Like, Reaction, Comment
   const handleLikeChat = async (chatId: string) => {
     if (!activeCommunity) return;
 
-    let isLiked = likedChats.includes(chatId);
+    const isLiked = likedChats.includes(chatId);
     let updatedLikes = [...likedChats];
 
     try {
       const chatDocRef = doc(db, 'communities', activeCommunity.id, 'chats', chatId);
 
       if (isLiked) {
-        updatedLikes = updatedLikes.filter(id => id !== chatId);
+        updatedLikes = updatedLikes.filter((id) => id !== chatId);
         await updateDoc(chatDocRef, { likesCount: increment(-1) });
       } else {
         updatedLikes.push(chatId);
@@ -1025,22 +1075,17 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       setLikedChats(updatedLikes);
       localStorage.setItem('nonum_liked_chats', JSON.stringify(updatedLikes));
 
-      if (deviceImei && db) {
-        const intRef = doc(db, 'interactions', `chat_like_${chatId}_${deviceImei}`);
+      const uid = anonUid || (await getAnonymousUserId());
+      if (uid && db) {
+        const intRef = doc(db, 'interactions', `chat_like_${chatId}_${uid}`);
         if (isLiked) {
           deleteDoc(intRef).catch(console.error);
-          for (const alias of getAllDeviceImeis()) {
-            if (alias !== deviceImei) {
-              deleteDoc(doc(db, 'interactions', `chat_like_${chatId}_${alias}`)).catch(() => {});
-            }
-          }
         } else {
           setDoc(intRef, {
             type: 'chat_like',
             chatId,
             communityId: activeCommunity.id,
-            imei: deviceImei,
-            ip: deviceIp,
+            uid,
             createdAt: new Date().toISOString()
           }).catch(console.error);
         }
@@ -1059,24 +1104,19 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
     try {
       const chatDocRef = doc(db, 'communities', activeCommunity.id, 'chats', chatId);
-
-      // Compute incremental update logic safely
       const reactionUpdate: { [key: string]: any } = {};
 
       if (previousReaction === reactionKey) {
-        // Undo reaction
         delete updatedReactions[chatId];
         reactionUpdate[`reactions.${reactionKey}`] = increment(-1);
       } else {
-        // Toggle or Add reaction
         updatedReactions[chatId] = reactionKey;
         if (previousReaction) {
           reactionUpdate[`reactions.${previousReaction}`] = increment(-1);
         }
         reactionUpdate[`reactions.${reactionKey}`] = increment(1);
 
-        // Spawn particles
-        const emoji = REACTIONS.find(r => r.key === reactionKey)?.emoji || '❤️';
+        const emoji = REACTIONS.find((r) => r.key === reactionKey)?.emoji || '❤️';
         spawnFloatingEmojis(chatId, emoji);
       }
 
@@ -1085,23 +1125,18 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       localStorage.setItem('nonum_chat_reactions', JSON.stringify(updatedReactions));
       setReactionMenuChatId(null);
 
-      if (deviceImei && db) {
-        const intRef = doc(db, 'interactions', `chat_reaction_${chatId}_${deviceImei}`);
+      const uid = anonUid || (await getAnonymousUserId());
+      if (uid && db) {
+        const intRef = doc(db, 'interactions', `chat_reaction_${chatId}_${uid}`);
         if (previousReaction === reactionKey) {
           deleteDoc(intRef).catch(console.error);
-          for (const alias of getAllDeviceImeis()) {
-            if (alias !== deviceImei) {
-              deleteDoc(doc(db, 'interactions', `chat_reaction_${chatId}_${alias}`)).catch(() => {});
-            }
-          }
         } else {
           setDoc(intRef, {
             type: 'chat_reaction',
             chatId,
             reactionKey,
             communityId: activeCommunity.id,
-            imei: deviceImei,
-            ip: deviceIp,
+            uid,
             createdAt: new Date().toISOString()
           }).catch(console.error);
         }
@@ -1119,6 +1154,7 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     setSubmittingComment(true);
 
     try {
+      const uid = anonUid || (await getAnonymousUserId());
       const commentsRef = collection(db, 'communities', activeCommunity.id, 'chats', commentingOnChat.id, 'comments');
       const customCommentRef = doc(commentsRef);
       const commentId = customCommentRef.id;
@@ -1126,16 +1162,15 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
       const payload = {
         id: commentId,
         content: newCommentContent.trim(),
-        createdAt: serverTimestamp(),
-        createdByIp: deviceIp,
-        createdByImei: deviceSig.value,
-        createdBySerial: await getDeviceSerial(),
-        createdByDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP'
+        ownerUid: uid,
+        likesCount: 0,
+        repliesCount: 0,
+        repliesList: [],
+        createdAt: serverTimestamp()
       };
 
       await setDoc(customCommentRef, payload);
 
-      // Increment commentsCount on parent chat
       const chatDocRef = doc(db, 'communities', activeCommunity.id, 'chats', commentingOnChat.id);
       await updateDoc(chatDocRef, { commentsCount: increment(1) });
 
@@ -1147,11 +1182,12 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     }
   };
 
-  // Trigger report community modal
-  const handleReportCommunity = (commId?: any, commName?: any) => {
-    const targetId = (typeof commId === 'string' && commId) ? commId : activeCommunity?.id;
-    const targetName = (typeof commName === 'string' && commName) ? commName : activeCommunity?.name;
-    if (!targetId || typeof targetId !== 'string' || !targetName || typeof targetName !== 'string') return;
+  // Trigger report community modal (strict string coercion prevents event-object React crash — Item 9)
+  const handleReportCommunity = (commId?: unknown, commName?: unknown) => {
+    const targetId = typeof commId === 'string' && commId.trim() ? commId.trim() : String(activeCommunity?.id || '');
+    const targetName =
+      typeof commName === 'string' && commName.trim() ? commName.trim() : String(activeCommunity?.name || 'Community');
+    if (!targetId) return;
 
     setReportTargetId(targetId);
     setReportTargetType('community');
@@ -1167,13 +1203,13 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
   // Trigger report chat message modal
   const handleReportChat = (chatId: string, contentSummary: string) => {
-    if (!activeCommunity) return;
+    if (!activeCommunity || typeof chatId !== 'string' || !chatId) return;
 
-    setReportTargetId(activeCommunity.id);
+    setReportTargetId(String(activeCommunity.id || ''));
     setReportTargetType('chat');
-    setReportTargetName(activeCommunity.name);
+    setReportTargetName(String(activeCommunity.name || 'Community'));
     setReportChatId(chatId);
-    setReportChatContent(contentSummary);
+    setReportChatContent(typeof contentSummary === 'string' ? contentSummary : '');
     setReportReason('Illicit message content');
     setReportOpinion('');
     setReportError('');
@@ -1181,30 +1217,30 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     setShowReportModal(true);
   };
 
-  // Handle Submit from report modal
+  // Handle Submit from report modal (no IP/IMEI stored)
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const isChat = reportTargetType === 'chat';
     const targetId = reportTargetId;
     const deviceReportKey = isChat ? `reported_chat_${reportChatId}` : `reported_comm_${targetId}`;
-    
+
     if (localStorage.getItem(deviceReportKey) === 'true') {
-      setReportError('POLICY SHIELD: You can submit a report for this specific content only once from this device.');
+      setReportError('You have already submitted a report for this item.');
       return;
     }
 
-    // Hardware-locked duplicate check from Firestore
-    if (deviceImei && db) {
+    const uid = anonUid || (await getAnonymousUserId());
+    if (uid && db) {
       try {
-        const repRef = doc(db, 'interactions', `${deviceReportKey}_${deviceImei}`);
+        const repRef = doc(db, 'interactions', `${deviceReportKey}_${uid}`);
         const repSnap = await getDoc(repRef);
         if (repSnap.exists()) {
           localStorage.setItem(deviceReportKey, 'true');
-          setReportError('POLICY SHIELD: You can submit a report for this specific content only once from this device.');
+          setReportError('You have already submitted a report for this item.');
           return;
         }
-      } catch (err) {}
+      } catch {}
     }
 
     setReportSubmitting(true);
@@ -1212,17 +1248,15 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
     try {
       if (isChat) {
-        // Increment reportsCount on the chat doc
         const chatDocRef = doc(db, 'communities', targetId, 'chats', reportChatId);
         await updateDoc(chatDocRef, {
           reportsCount: increment(1)
         });
       }
 
-      // Also increment reportsCount on parent community
       const commDocRef = doc(db, 'communities', targetId);
-      const currentComm = communities.find(c => c.id === targetId);
-      const newReportCount = ((currentComm?.reportsCount || 0) + 1);
+      const currentComm = communities.find((c) => c.id === targetId);
+      const newReportCount = (currentComm?.reportsCount || 0) + 1;
 
       const updatePayload: any = {
         reportsCount: increment(1)
@@ -1234,7 +1268,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       await updateDoc(commDocRef, updatePayload);
 
-      // Log report in firestore reports collection
       const reportRef = doc(collection(db, 'reports'));
       const reportPayload: any = {
         id: reportRef.id,
@@ -1242,9 +1275,8 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         communityName: reportTargetName,
         reason: reportReason,
         opinion: reportOpinion ? reportOpinion.trim() : 'No additional details provided.',
-        createdAt: new Date().toISOString(),
-        ip: deviceIp,
-        imei: deviceSig.value
+        reporterUid: uid,
+        createdAt: new Date().toISOString()
       };
 
       if (isChat) {
@@ -1254,20 +1286,19 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
 
       await setDoc(reportRef, reportPayload);
 
-      // Lock reporting for this content on this device
       localStorage.setItem(deviceReportKey, 'true');
 
-      if (deviceImei && db) {
-        setDoc(doc(db, 'interactions', `${deviceReportKey}_${deviceImei}`), {
+      if (uid && db) {
+        setDoc(doc(db, 'interactions', `${deviceReportKey}_${uid}`), {
           type: isChat ? 'chat_report' : 'comm_report',
           targetId,
           chatId: reportChatId || null,
-          imei: deviceImei,
+          uid,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       }
 
-      setReportSuccess('Report submitted successfully. Thank you for keeping the grid secure.');
+      setReportSuccess('Report submitted. Thank you for helping keep Nonum safe.');
 
       if (newReportCount >= 100) {
         if (activeCommunity?.id === targetId) {
@@ -1279,7 +1310,6 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
         setShowReportModal(false);
         setReportSuccess('');
       }, 2000);
-
     } catch (err: any) {
       console.error('Report submission failed:', err);
       setReportError('Failed to submit report. Please try again.');
@@ -1288,30 +1318,18 @@ export default function CommunitiesPage({ onBackToHome, posts }: CommunitiesPage
     }
   };
 
-  // Share active chat deep-link
+  // Share active chat deep-link (Item 16: nonum.online domain)
   const handleShareChat = (chatId: string) => {
     if (!activeCommunity) return;
-    const shareLink = `${window.location.origin}/communities?communityId=${activeCommunity.id}&chatId=${chatId}`;
-    const chatObj = chats.find(c => c.id === chatId);
-    const contentText = chatObj?.content || 'Attached payload/graphic';
-    
-    // Format a beautiful, highly detailed share message matching the exact user template
-    const rawType = chatObj?.type || 'text';
-    const typeLabel = rawType === 'qa' ? 'Q&A' : rawType.charAt(0).toUpperCase() + rawType.slice(1);
+    const baseOrigin =
+      window.location.hostname === 'localhost' ? window.location.origin : 'https://nonum.online';
+    const shareLink = `${baseOrigin}/communities?communityId=${activeCommunity.id}&chatId=${chatId}`;
+    const chatObj = chats.find((c) => c.id === chatId);
+    const contentText = chatObj?.content || 'Attached image or poll';
 
-    const formattedMessage = `Nonum
+    const formattedMessage = `Read this anonymous message in ${activeCommunity.name} on Nonum:\n${shareLink}`;
 
-${activeCommunity.name}
-${activeCommunity.description}
-
-Review this chat (${typeLabel})
-"${chatObj?.content || ''}"
-
-Link: ${shareLink}
-
-Post Nonum Now: https://mynonum.vercel.app`;
-
-    setShareModalTitle('Share Chat Message');
+    setShareModalTitle('Share Message');
     setShareModalUrl(shareLink);
     setShareModalPreview(contentText);
     setShareModalFormattedMessage(formattedMessage);
@@ -1319,26 +1337,19 @@ Post Nonum Now: https://mynonum.vercel.app`;
     setShowShareModal(true);
   };
 
-  // Share community itself deep-link
+  // Share community itself deep-link (Items 15 & 16: Members + nonum.online)
   const handleShareCommunity = (comm?: any) => {
-    const targetComm = (comm && typeof comm === 'object' && 'id' in comm) ? comm : activeCommunity;
+    const targetComm = comm && typeof comm === 'object' && 'id' in comm ? comm : activeCommunity;
     if (!targetComm) return;
-    const shareLink = `${window.location.origin}/communities?communityId=${targetComm.id}`;
-    
-    const formattedMessage = `Nonum
+    const baseOrigin =
+      window.location.hostname === 'localhost' ? window.location.origin : 'https://nonum.online';
+    const shareLink = `${baseOrigin}/communities?communityId=${targetComm.id}`;
 
-${targetComm.name}
-${targetComm.description}
-
-Total Review: ${targetComm.viewsCount || 0}
-
-Link: ${shareLink}
-
-Post Nonum Now: https://mynonum.vercel.app`;
+    const formattedMessage = `Join ${targetComm.name} on Nonum (${targetComm.viewsCount || 0} Members):\n${shareLink}`;
 
     setShareModalTitle(`Share Community: ${targetComm.name}`);
     setShareModalUrl(shareLink);
-    setShareModalPreview(targetComm.description || 'Secure Cognitive Cohort on Nonum Grid');
+    setShareModalPreview(targetComm.description || 'Anonymous community on Nonum');
     setShareModalFormattedMessage(formattedMessage);
     setIsCopiedLink(false);
     setShowShareModal(true);
@@ -1421,14 +1432,14 @@ Post Nonum Now: https://mynonum.vercel.app`;
       setVotedChatsPolls(updatedVoted);
       localStorage.setItem('nonum_voted_chats_polls', JSON.stringify(updatedVoted));
 
-      if (deviceImei && db) {
-        setDoc(doc(db, 'interactions', `chat_poll_${chatId}_${deviceImei}`), {
+      const uid = anonUid || (await getAnonymousUserId());
+      if (uid && db) {
+        setDoc(doc(db, 'interactions', `chat_poll_${chatId}_${uid}`), {
           type: 'chat_poll',
           chatId,
           optionIndex: optionIdx,
           communityId: activeCommunity.id,
-          imei: deviceImei,
-          ip: deviceIp,
+          uid,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       }
@@ -1492,20 +1503,29 @@ Post Nonum Now: https://mynonum.vercel.app`;
     if (!activeCommunity) return;
     setEditName(activeCommunity.name || '');
     setEditDesc(activeCommunity.description || '');
-    setEditReligion('');
     setEditUserLimit(activeCommunity.userLimit ? activeCommunity.userLimit.toString() : '');
     setEditAllowUserPost(activeCommunity.allowUserPost !== false);
-    setEditPassword(activeCommunity.password || '');
+    setEditPassword('');
+    setEditRemovePin(false);
+    setEditError('');
     setEditImageUrl(activeCommunity.imageUrl || '');
     setEditImagePreview(activeCommunity.imageUrl || '');
     setShowSettingsModal(true);
   };
 
   return (
-    <div className="min-h-screen bg-[#030303] text-zinc-300 font-sans flex flex-col md:flex-row pb-20 md:pb-0" id="communities-page-viewport">
+    <div className="min-h-[100dvh] h-[100dvh] md:h-screen bg-[#030303] text-zinc-300 font-sans flex flex-col md:flex-row overflow-hidden" id="communities-page-viewport">
+      {noticeBanner && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[70] max-w-md w-[92%] bg-zinc-900 border border-amber-500/40 text-amber-300 text-xs px-4 py-2.5 rounded-xl shadow-2xl flex items-center justify-between gap-2">
+          <span>{noticeBanner}</span>
+          <button type="button" onClick={() => setNoticeBanner('')} className="text-zinc-400 hover:text-white cursor-pointer">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       
       {/* LEFT PANEL: COMMUNITIES FEED (Similar to Nonum Main Feed) */}
-      <div className={`w-full md:w-1/3 border-r border-zinc-900/60 bg-zinc-950 flex flex-col h-[calc(100vh-4rem)] md:h-screen ${activeCommunity ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-1/3 border-r border-zinc-900/60 bg-zinc-950 flex flex-col h-[100dvh] md:h-screen ${activeCommunity ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Header & Launcher */}
         <div className="px-4 py-3 border-b border-zinc-900/80 flex items-center justify-between">
@@ -1555,7 +1575,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
           <button
             onClick={() => {
               if (!hasPostedAtLeastOnce) {
-                alert('CLEARANCE DENIED: You must make at least 1 public Nonum Post first to demonstrate active device utility before launching a private community.');
+                showNotice('Please make at least 1 public post on the main feed first before creating a community.');
               } else {
                 setShowCreateModal(true);
               }
@@ -1587,16 +1607,16 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   onClick={() => {
                     const isUnlocked = unlockedCommIds.includes(comm.id) || localStorage.getItem(`unlocked_comm_${comm.id}`) === 'true';
                     const isCreator = checkIsCreator(comm);
-                    const isPassProtected = Boolean(comm.passwordHash || comm.password);
+                    const isPassProtected = Boolean(comm.hasPin);
 
                     if (isPassProtected && !isCreator) {
                       if (!isUnlocked) {
                         setShowPasswordGate(comm);
                       } else {
-                        handleEnterCommunityDirect(comm);
+                        void handleEnterCommunityDirect(comm);
                       }
                     } else {
-                      handleEnterCommunityDirect(comm);
+                      void handleEnterCommunityDirect(comm);
                     }
                   }}
                   className={`border rounded-xl p-3.5 bg-zinc-950/50 hover:bg-zinc-900/30 transition-all cursor-pointer relative group flex flex-col gap-3 ${
@@ -1620,7 +1640,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                           {comm.name}
                         </h3>
                         <div className="flex items-center gap-1 shrink-0">
-                          {Boolean(comm.passwordHash || comm.password) && <Lock className="w-3 h-3 text-emerald-400 shrink-0" />}
+                          {Boolean(comm.hasPin) && <Lock className="w-3 h-3 text-emerald-400 shrink-0" />}
                           {isPinned && <Pin className="w-3 h-3 text-emerald-400 fill-emerald-400 shrink-0" />}
                         </div>
                       </div>
@@ -1636,7 +1656,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] font-mono bg-zinc-900 px-2 py-0.5 rounded text-zinc-400 flex items-center gap-1">
                         <Users className="w-2.5 h-2.5 text-emerald-500" />
-                        <span>{comm.viewsCount || 0} Reviews</span>
+                        <span>{comm.viewsCount || 0} Members</span>
                       </span>
                       {comm.userLimit && (
                         <span className="text-[9px] font-mono bg-zinc-900 px-2 py-0.5 rounded text-rose-400">
@@ -1696,8 +1716,8 @@ Post Nonum Now: https://mynonum.vercel.app`;
         </div>
       </div>
 
-      {/* RIGHT PANEL: CHATROOM WORKSPACE (WhatsApp styled) */}
-      <div className={`flex-1 bg-zinc-950 flex flex-col h-[calc(100vh-4rem)] md:h-screen ${activeCommunity ? 'flex' : 'hidden md:flex items-center justify-center p-8 bg-[#020202]'}`}>
+      {/* RIGHT PANEL: CHATROOM WORKSPACE (WhatsApp styled, mobile-safe dvh height) */}
+      <div className={`flex-1 bg-zinc-950 flex flex-col h-[100dvh] md:h-screen min-h-0 ${activeCommunity ? 'flex' : 'hidden md:flex items-center justify-center p-8 bg-[#020202]'}`}>
         
         {activeCommunity ? (() => {
           const isOwner = checkIsCreator(activeCommunity);
@@ -1864,7 +1884,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                       {/* Top metadata tags */}
                       <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500 mb-1.5 gap-4 relative z-10">
                         <span className="font-bold truncate text-zinc-400 flex items-center gap-1.5">
-                          {chat.createdByImei === activeCommunity.createdByImei ? (
+                          {activeCommunity.ownerUid && chat.ownerUid === activeCommunity.ownerUid ? (
                             <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
                               OWNER
                             </span>
@@ -2096,9 +2116,9 @@ Post Nonum Now: https://mynonum.vercel.app`;
               <div ref={chatBottomRef} />
             </div>
 
-            {/* Bottom active entry messaging panel (WhatsApp styled) */}
+            {/* Bottom active entry messaging panel (cleared cleanly above fixed MobileBottomBar — Item 13) */}
             {(!activeCommunity.allowUserPost && !checkIsCreator(activeCommunity)) ? null : (
-              <form onSubmit={handleSendChatSubmit} className="p-3 border-t border-zinc-900 bg-zinc-950 flex flex-col shrink-0 gap-2 relative mb-16 md:mb-0 z-40">
+              <form onSubmit={handleSendChatSubmit} className="px-3 pt-3 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-3 border-t border-zinc-900 bg-zinc-950 flex flex-col shrink-0 gap-2 relative z-40">
                 {chatError && (
                   <div className="absolute top-0 left-0 right-0 -translate-y-full bg-rose-950/25 border-t border-rose-500/20 text-rose-400 text-[10px] py-1.5 px-4 z-20 flex justify-between items-center leading-relaxed">
                     <span>[WARNING]: {chatError}</span>
@@ -2429,7 +2449,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   disabled={cSubmitting}
                   className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-sans font-black text-xs rounded-lg uppercase mt-4 tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-lg shadow-emerald-950/20"
                 >
-                  {cSubmitting ? 'DISPATCHING SEED PIXEL...' : 'SEED CYBER NETWORK'}
+                  {cSubmitting ? 'Creating...' : 'Create Community'}
                 </button>
               </form>
             </motion.div>
@@ -2534,14 +2554,31 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] font-mono font-bold text-zinc-500 block uppercase tracking-wider">PIN PASSWORD</label>
+                    <label className="text-[9px] font-mono font-bold text-zinc-500 block uppercase tracking-wider">
+                      {activeCommunity?.hasPin ? 'NEW PIN (OPTIONAL)' : 'SET PIN (OPTIONAL)'}
+                    </label>
                     <input
                       type="password"
-                      placeholder="No lock"
+                      disabled={editRemovePin}
+                      placeholder={activeCommunity?.hasPin ? 'Leave blank to keep' : 'No lock'}
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none"
+                      className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none disabled:opacity-40"
                     />
+                    {activeCommunity?.hasPin && (
+                      <label className="flex items-center gap-1.5 text-[10px] text-zinc-400 pt-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editRemovePin}
+                          onChange={(e) => {
+                            setEditRemovePin(e.target.checked);
+                            if (e.target.checked) setEditPassword('');
+                          }}
+                          className="accent-rose-500"
+                        />
+                        <span>Remove PIN lock</span>
+                      </label>
+                    )}
                   </div>
                 </div>
 
@@ -2646,9 +2683,10 @@ Post Nonum Now: https://mynonum.vercel.app`;
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-md shadow-emerald-950/10"
+                    disabled={gateSubmitting}
+                    className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-md shadow-emerald-950/10 disabled:opacity-50"
                   >
-                    DECRYPT HUB
+                    {gateSubmitting ? 'VERIFYING...' : 'UNLOCK'}
                   </button>
                 </div>
               </form>
@@ -2690,7 +2728,7 @@ Post Nonum Now: https://mynonum.vercel.app`;
                 chatComments.map((comm) => (
                   <div key={comm.id} className="p-3 border border-zinc-900 rounded-xl bg-zinc-950/80 space-y-1.5">
                     <div className="flex justify-between items-center text-[8px] font-mono text-zinc-500">
-                      <span>{checkIsCreator(comm) ? 'YOU' : `MEMBER (${comm.createdByIp})`}</span>
+                      <span>{checkIsCreator(comm) ? 'YOU' : 'MEMBER'}</span>
                       <span>{comm.createdAt ? new Date(comm.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}</span>
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed">
@@ -2792,8 +2830,8 @@ Post Nonum Now: https://mynonum.vercel.app`;
 
                 {/* Copy Link input box */}
                 <div className="space-y-1.5 pt-1">
-                  <div className="text-[9px] text-zinc-600 font-mono font-bold tracking-wider uppercase text-left">
-                    Direct Secure Link
+                  <div className="text-[11px] text-zinc-400 font-sans font-medium text-left">
+                    Community link
                   </div>
                   <div className="flex gap-2">
                     <input
@@ -2821,11 +2859,6 @@ Post Nonum Now: https://mynonum.vercel.app`;
                     </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Footer status */}
-              <div className="px-4 py-3 bg-zinc-900/40 border-t border-zinc-900 text-center text-[9px] text-zinc-500 font-mono">
-                DECENTRALIZED DEEP LINK ENCRYPTED SECURELY
               </div>
             </motion.div>
           </motion.div>
