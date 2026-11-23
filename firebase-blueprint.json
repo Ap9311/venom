@@ -2,58 +2,54 @@
   "entities": {
     "Post": {
       "title": "Post",
-      "description": "An anonymous Nonum post (text, image, poll, or Q&A) with zero user PII.",
+      "description": "A nonum post containing text, image, poll, or Q&A content.",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "type": { "type": "string", "enum": ["text", "image", "poll", "qa"] },
         "title": { "type": "string" },
         "content": { "type": "string" },
         "imageUrl": { "type": "string" },
         "pollOptions": { "type": "array" },
         "pollVotes": { "type": "object" },
-        "correctOptionIndex": { "type": "integer" },
         "likesCount": { "type": "integer" },
         "upvotesCount": { "type": "integer" },
         "downvotesCount": { "type": "integer" },
         "commentsCount": { "type": "integer" },
-        "reactions": { "type": "object" },
-        "reportsCount": { "type": "integer" },
-        "isDeleted": { "type": "boolean" },
-        "ownerUid": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "encryptedHash": { "type": "string" },
         "category": { "type": "string" }
       },
-      "required": ["type", "title", "content", "likesCount", "upvotesCount", "downvotesCount", "commentsCount", "createdAt", "encryptedHash"]
+      "required": ["id", "type", "title", "content", "likesCount", "upvotesCount", "downvotesCount", "commentsCount", "createdAt", "encryptedHash"]
     },
     "Comment": {
       "title": "Comment",
-      "description": "A privacy-safe anonymous comment on a post.",
+      "description": "A comment on a post.",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "content": { "type": "string" },
         "likesCount": { "type": "integer" },
         "repliesCount": { "type": "integer" },
-        "ownerUid": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["content", "likesCount", "repliesCount", "createdAt"]
+      "required": ["id", "content", "likesCount", "repliesCount", "createdAt"]
     },
     "Reply": {
       "title": "Reply",
-      "description": "A privacy-safe anonymous reply to a comment.",
+      "description": "A reply to a comment.",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "content": { "type": "string" },
         "likesCount": { "type": "integer" },
-        "ownerUid": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["content", "likesCount", "createdAt"]
+      "required": ["id", "content", "likesCount", "createdAt"]
     },
     "BlockedDevice": {
       "title": "BlockedDevice",
-      "description": "Moderator-managed firewall suspension record (moderator-only access).",
+      "description": "A blocked IP or IMEI record.",
       "type": "object",
       "properties": {
         "isBlocked": { "type": "boolean" },
@@ -63,83 +59,80 @@
         "reason": { "type": "string" },
         "blockCount": { "type": "integer" },
         "totalReports": { "type": "integer" },
-        "triggerPostId": { "type": "string" }
+        "triggerPostId": { "type": "string" },
+        "triggerPostTitle": { "type": "string" },
+        "triggerPostContent": { "type": "string" },
+        "triggerPostImageUrl": { "type": "string" },
+        "reportReason": { "type": "string" },
+        "reportOpinion": { "type": "string" }
       },
       "required": ["isBlocked"]
     },
     "Report": {
       "title": "Report",
-      "description": "A privacy-safe moderation report filed against a post or community (moderator-only read).",
+      "description": "A report filed against a post or community.",
       "type": "object",
       "properties": {
         "postId": { "type": "string" },
         "communityId": { "type": "string" },
-        "chatId": { "type": "string" },
         "postTitle": { "type": "string" },
         "postContent": { "type": "string" },
         "postImageUrl": { "type": "string" },
+        "authorIp": { "type": "string" },
+        "authorImei": { "type": "string" },
         "reason": { "type": "string" },
         "opinion": { "type": "string" },
-        "reporterUid": { "type": "string" },
-        "isDismissed": { "type": "boolean" },
-        "isResolved": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "ip": { "type": "string" },
+        "imei": { "type": "string" }
       },
       "required": ["reason", "createdAt"]
     },
     "Interaction": {
       "title": "Interaction",
-      "description": "Per-UID anonymous interaction record (likes, votes, polls, reactions, pins, unlocks).",
+      "description": "A device-level interaction (like, vote, poll, reaction).",
       "type": "object",
       "properties": {
-        "uid": { "type": "string" },
+        "ip": { "type": "string" },
+        "imei": { "type": "string" },
         "postId": { "type": "string" },
         "chatId": { "type": "string" },
-        "communityId": { "type": "string" },
         "type": { "type": "string" },
         "direction": { "type": "string" },
         "optionIndex": { "type": "integer" },
         "reactionKey": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "type", "createdAt"]
+      "required": ["type", "createdAt"]
     },
     "Community": {
       "title": "Community",
-      "description": "An anonymous community channel. PIN secrets are stored separately server-side.",
+      "description": "A community created by a user containing profile details, restrictions, and members info.",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "name": { "type": "string" },
         "description": { "type": "string" },
         "imageUrl": { "type": "string" },
         "religion": { "type": "string" },
         "userLimit": { "type": "integer" },
         "allowUserPost": { "type": "boolean" },
-        "hasPin": { "type": "boolean" },
-        "ownerUid": { "type": "string" },
+        "password": { "type": "string" },
+        "createdByIp": { "type": "string" },
+        "createdByImei": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "reportsCount": { "type": "integer" },
         "isBlocked": { "type": "boolean" },
         "viewsCount": { "type": "integer" }
       },
-      "required": ["name", "allowUserPost", "createdAt", "reportsCount", "isBlocked", "viewsCount"]
-    },
-    "CommunitySecret": {
-      "title": "CommunitySecret",
-      "description": "Server-only scrypt PIN hash for PIN-locked communities (admin/server only).",
-      "type": "object",
-      "properties": {
-        "pinHash": { "type": "string" },
-        "ownerUid": { "type": "string" },
-        "updatedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["pinHash", "updatedAt"]
+      "required": ["id", "name", "description", "religion", "allowUserPost", "createdByIp", "createdByImei", "createdAt", "reportsCount", "isBlocked", "viewsCount"]
     },
     "CommunityChat": {
       "title": "CommunityChat",
-      "description": "A privacy-safe message dispatch inside a community.",
+      "description": "A chat/post message within a community.",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "communityId": { "type": "string" },
         "type": { "type": "string", "enum": ["text", "image", "poll", "qa"] },
         "content": { "type": "string" },
@@ -147,164 +140,131 @@
         "pollOptions": { "type": "array" },
         "pollVotes": { "type": "object" },
         "correctOptionIndex": { "type": "integer" },
-        "ownerUid": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
+        "createdByIp": { "type": "string" },
+        "createdByImei": { "type": "string" },
         "encryptedHash": { "type": "string" },
         "likesCount": { "type": "integer" },
         "reactions": { "type": "object" },
         "commentsCount": { "type": "integer" }
       },
-      "required": ["communityId", "type", "content", "createdAt", "encryptedHash", "likesCount", "commentsCount"]
+      "required": ["id", "communityId", "type", "content", "createdAt", "createdByIp", "createdByImei", "encryptedHash", "likesCount", "commentsCount"]
     },
     "CommunityChatComment": {
       "title": "CommunityChatComment",
-      "description": "A comment on a community chat message.",
+      "description": "A comment on a specific community chat.",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "content": { "type": "string" },
-        "ownerUid": { "type": "string" },
-        "likesCount": { "type": "integer" },
-        "repliesCount": { "type": "integer" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdByIp": { "type": "string" },
+        "createdByImei": { "type": "string" }
       },
-      "required": ["content", "createdAt"]
+      "required": ["id", "content", "createdAt", "createdByIp", "createdByImei"]
     },
     "CommunityVisit": {
       "title": "CommunityVisit",
-      "description": "Per-UID unique community member visit marker.",
+      "description": "Tracks device entries/reviews to a community.",
       "type": "object",
       "properties": {
-        "uid": { "type": "string" },
+        "ip": { "type": "string" },
         "visitedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "visitedAt"]
-    },
-    "AdminClaim": {
-      "title": "AdminClaim",
-      "description": "Server-issued short-lived Firestore role bridge document (never client-writable without server bridge key).",
-      "type": "object",
-      "properties": {
-        "isAdmin": { "type": "boolean" },
-        "role": { "type": "string", "enum": ["admin", "assistant"] },
-        "serverAuthKey": { "type": "string" },
-        "expiresAt": { "type": "integer" },
-        "updatedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["isAdmin", "role", "serverAuthKey", "expiresAt"]
+      "required": ["ip", "visitedAt"]
     },
     "AdminDevice": {
       "title": "AdminDevice",
-      "description": "Registered administrative device identifier managed strictly by server APIs.",
+      "description": "Registered administrative device hardware identity.",
       "type": "object",
       "properties": {
         "adminDeviceId": { "type": "string" },
+        "userImei": { "type": "string" },
         "os": { "type": "string" },
+        "deviceDetails": { "type": "string" },
+        "ip": { "type": "string" },
         "registeredAt": { "type": "string", "format": "date-time" },
         "label": { "type": "string" },
-        "status": { "type": "string", "enum": ["active", "revoked"] }
+        "status": { "type": "string" }
       },
       "required": ["adminDeviceId", "registeredAt", "status"]
     },
     "AdminConfig": {
       "title": "AdminConfig",
-      "description": "Admin slot limit and server-side scrypt assistant credentials.",
+      "description": "System-wide administrative settings and slot limits.",
       "type": "object",
       "properties": {
         "maxAdmins": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["maxAdmins"]
+    },
+    "AssistantCredentials": {
+      "title": "AssistantCredentials",
+      "description": "PBKDF2-SHA256 credential digests and metadata for the one-time assistant portal.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
         "usernameDisplay": { "type": "string" },
         "usernameHash": { "type": "string" },
         "passwordHash": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "RateLimitRecord": {
-      "title": "RateLimitRecord",
-      "description": "Server-only authentication lockout record keyed by HMAC-hashed IP.",
-      "type": "object",
-      "properties": {
-        "count": { "type": "integer" },
-        "lockedUntil": { "type": "integer" },
-        "updatedAt": { "type": "integer" }
       },
-      "required": ["count", "lockedUntil", "updatedAt"]
+      "required": ["type", "usernameDisplay", "usernameHash", "passwordHash", "updatedAt"]
     }
   },
   "firestore": {
-    "/private_config/{docId}": {
-      "schema": "AdminConfig",
-      "description": "Server bridge secret referenced exclusively by Firestore rules (no client read/write)."
-    },
-    "/admins/{uid}": {
-      "schema": "AdminClaim",
-      "description": "Short-lived server-validated role claims for admin and assistant sessions."
-    },
     "/admin_devices/{deviceId}": {
       "schema": "AdminDevice",
-      "description": "Registered admin devices (full admin & server only)."
+      "description": "Registered admin devices with cryptographic hardware fingerprint identities."
     },
     "/admin_config/{configId}": {
       "schema": "AdminConfig",
-      "description": "Global admin configuration and assistant credentials (full admin & server only)."
-    },
-    "/community_secrets/{communityId}": {
-      "schema": "CommunitySecret",
-      "description": "Server-side scrypt PIN hashes for locked communities (full admin & server only)."
-    },
-    "/rate_limits/{key}": {
-      "schema": "RateLimitRecord",
-      "description": "Authentication rate-limit state keyed by HMAC-SHA256 IP hash (server only)."
-    },
-    "/blocked_ip_hashes/{ipHash}": {
-      "schema": "BlockedDevice",
-      "description": "Salted HMAC-hashed IP block records (full admin & server only)."
+      "description": "Global administrator configuration, slot limit allocation, and assistant portal credentials."
     },
     "/posts/{postId}": {
       "schema": "Post",
-      "description": "Public anonymous posts feed."
+      "description": "Top-level collection for all posts."
     },
     "/posts/{postId}/comments/{commentId}": {
       "schema": "Comment",
-      "description": "Comments on a post."
+      "description": "Comments belonging to a specific post."
     },
     "/posts/{postId}/comments/{commentId}/replies/{replyId}": {
       "schema": "Reply",
-      "description": "Replies on a post comment."
+      "description": "Replies belonging to a specific comment."
     },
     "/blockedIps/{ip}": {
       "schema": "BlockedDevice",
-      "description": "Moderator-managed IP firewall rules (moderator-only access)."
+      "description": "Blocked IP addresses."
     },
     "/blockedImeis/{imei}": {
       "schema": "BlockedDevice",
-      "description": "Legacy moderator-managed device firewall rules (moderator-only access)."
+      "description": "Blocked device signatures (IMEIs)."
     },
     "/reports/{reportId}": {
       "schema": "Report",
-      "description": "User-submitted content reports (signed-in create, moderator-only read/manage)."
+      "description": "Reported content/posts."
     },
     "/interactions/{interactionId}": {
       "schema": "Interaction",
-      "description": "UID-scoped anonymous user interaction records."
+      "description": "Device-level interactions to lock state."
     },
     "/communities/{communityId}": {
       "schema": "Community",
-      "description": "Public anonymous communities."
+      "description": "Top-level collection for communities."
     },
     "/communities/{communityId}/chats/{chatId}": {
       "schema": "CommunityChat",
-      "description": "Messages posted inside a community."
+      "description": "Chats or posts belonging to a community."
     },
     "/communities/{communityId}/chats/{chatId}/comments/{commentId}": {
       "schema": "CommunityChatComment",
-      "description": "Comments on a community chat message."
+      "description": "Comments belonging to a community chat."
     },
-    "/communities/{communityId}/chats/{chatId}/comments/{commentId}/replies/{replyId}": {
-      "schema": "Reply",
-      "description": "Replies to comments on a community chat message."
-    },
-    "/communities/{communityId}/visits/{visitId}": {
+    "/communities/{communityId}/visits/{ip}": {
       "schema": "CommunityVisit",
-      "description": "UID-scoped unique member visit tracker."
+      "description": "Visits/reviews tracker per device IP."
     }
   }
 }

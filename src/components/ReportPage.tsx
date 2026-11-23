@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getClientIp } from '../utils/ip';
 import { submitPostReport } from '../utils/reports';
 import { checkIpBlockStatus, BlockStatus } from '../utils/blockChecker';
 import { ShieldAlert, ChevronLeft, Search, Eye, AlertCircle, CheckCircle, RefreshCw, AlertTriangle, ExternalLink, Download, BookOpen } from 'lucide-react';
@@ -28,7 +29,8 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<any | null>(null);
 
-  // Quarantine status
+  // Client IP and blocking state
+  const [userIp, setUserIp] = useState('');
   const [blockStatus, setBlockStatus] = useState<BlockStatus | null>(null);
 
   // Pre-fill post ID from query params if specified (e.g. /report?id=abc)
@@ -37,12 +39,22 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
     const queryId = params.get('id');
     if (queryId) {
       setPostId(queryId);
+      // Automatically trigger verification on load if ID is provided
       handleVerifyPost(queryId);
     }
 
-    checkIpBlockStatus()
-      .then((block) => setBlockStatus(block))
-      .catch(() => {});
+    // Resolve client IP
+    const initIp = async () => {
+      try {
+        const ip = await getClientIp();
+        setUserIp(ip);
+        const block = await checkIpBlockStatus(ip);
+        setBlockStatus(block);
+      } catch (err) {
+        console.error('Failed to resolve IP or check block status:', err);
+      }
+    };
+    initIp();
   }, []);
 
   const handleVerifyPost = async (idToVerify?: string) => {
@@ -109,7 +121,8 @@ export default function ReportPage({ onBackToHome }: ReportPageProps) {
     setSubmitError(null);
 
     try {
-      const result = await submitPostReport(verifiedPost.id, selectedReason, opinion, false);
+      const reporterIp = userIp || (await getClientIp());
+      const result = await submitPostReport(verifiedPost.id, selectedReason, opinion, reporterIp);
       setSubmitResult(result);
     } catch (err: any) {
       console.error('Report submission failed:', err);

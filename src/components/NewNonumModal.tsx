@@ -20,7 +20,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { generatePostHash } from '../utils/crypto';
 import { compressImageToBase64 } from '../utils/image';
-import { getAnonymousUserId } from '../utils/ip';
+import { getClientIp, getDeviceDetails, getDeviceImei, isMobileDevice, getDeviceSerial } from '../utils/ip';
 import { getDoc } from 'firebase/firestore';
 import { checkIpBlockStatus } from '../utils/blockChecker';
 import { motion } from 'motion/react';
@@ -195,12 +195,14 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
     }
 
     try {
-      const uid = await getAnonymousUserId();
+      const userIp = await getClientIp();
+      const userImei = await getDeviceImei();
+      const deviceDetails = getDeviceDetails();
 
-      // Server-side quarantine check (timeout-guarded; never exposes raw IP)
-      const block = await checkIpBlockStatus();
+      // Check if user is blocked by IP address or IMEI before writing to firestore
+      const block = await checkIpBlockStatus(userIp, userImei);
       if (block.isBlocked) {
-        setErrorMsg(`Your access is currently restricted from posting. Status: ${block.timeLeftLabel}. Reason: ${block.reason || 'Guidelines violation'}`);
+        setErrorMsg(`YOUR DEVICE IP HAS BEEN SUSPENDED FROM POSTING NONUMS. Status: ${block.timeLeftLabel}. Reason: ${block.reason || 'Guidelines violation'}`);
         setIsSubmitting(false);
         return;
       }
@@ -210,7 +212,7 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
       const newPostId = customDocRef.id;
 
       const payload: any = {
-        id: newPostId,
+        id: newPostId, // Now correctly matching document ID to satisfy security rules
         type,
         title: title.trim(),
         content: content.trim(),
@@ -219,10 +221,13 @@ export default function NewNonumModal({ onClose, onPostCreated }: NewNonumModalP
         upvotesCount: 0,
         downvotesCount: 0,
         commentsCount: 0,
-        reportsCount: 0,
         createdAt: serverTimestamp(),
         encryptedHash: cipherHash,
-        ownerUid: uid,
+        postedFromIp: userIp,
+        postedFromDevice: deviceDetails,
+        postedFromImei: await getDeviceImei(),
+        postedFromSerial: await getDeviceSerial(),
+        postedFromDeviceType: isMobileDevice() ? 'MOBILE' : 'DESKTOP',
       };
 
       // Set imageUrl if any exists (poll, qa, text, or image type)

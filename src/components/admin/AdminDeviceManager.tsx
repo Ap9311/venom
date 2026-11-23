@@ -15,7 +15,7 @@ import {
   resetAssistantCredentials,
   AdminDevice 
 } from '../../utils/adminAuth';
-import { getAnonymousUserId } from '../../utils/ip';
+import { getDeviceImei } from '../../utils/ip';
 import { 
   ShieldCheck, 
   Cpu, 
@@ -44,7 +44,7 @@ export const AdminDeviceManager: React.FC = () => {
   const [newLimitInput, setNewLimitInput] = useState(3);
   const [registeredDevices, setRegisteredDevices] = useState<AdminDevice[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState('');
-  const [currentSessionUid, setCurrentSessionUid] = useState('');
+  const [currentUserImei, setCurrentUserImei] = useState('');
   
   const [updatingLimit, setUpdatingLimit] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -52,10 +52,10 @@ export const AdminDeviceManager: React.FC = () => {
   const [deviceToRevoke, setDeviceToRevoke] = useState<AdminDevice | null>(null);
 
   // Assistant portal credentials management
-  const [assistantUsernameDisplay, setAssistantUsernameDisplay] = useState('Loading...');
+  const [assistantUsernameDisplay, setAssistantUsernameDisplay] = useState('theakshatpopat');
   const [assistantIsCustom, setAssistantIsCustom] = useState(false);
   const [assistantUpdatedAt, setAssistantUpdatedAt] = useState<string | undefined>(undefined);
-  const [assistantUsernameInput, setAssistantUsernameInput] = useState('');
+  const [assistantUsernameInput, setAssistantUsernameInput] = useState('theakshatpopat');
   const [assistantPasswordInput, setAssistantPasswordInput] = useState('');
   const [showAssistantPassword, setShowAssistantPassword] = useState(false);
   const [savingAssistantCreds, setSavingAssistantCreds] = useState(false);
@@ -64,25 +64,21 @@ export const AdminDeviceManager: React.FC = () => {
   const fetchConfig = async () => {
     try {
       setLoading(true);
-      const [currAdminId, currUid, config, assistantMeta] = await Promise.all([
+      const [currAdminId, currImei, config, assistantMeta] = await Promise.all([
         getAdminDeviceId(),
-        getAnonymousUserId(),
+        getDeviceImei(),
         getAdminConfig(),
         getAssistantCredentialsMeta()
       ]);
 
       setCurrentDeviceId(currAdminId);
-      setCurrentSessionUid(currUid);
+      setCurrentUserImei(currImei);
       setMaxAdmins(config.maxAdmins);
       setNewLimitInput(config.maxAdmins);
       setRegisteredDevices(config.registeredDevices);
 
       setAssistantUsernameDisplay(assistantMeta.usernameDisplay);
-      setAssistantUsernameInput(
-        assistantMeta.usernameDisplay && assistantMeta.usernameDisplay !== 'Not configured'
-          ? assistantMeta.usernameDisplay
-          : ''
-      );
+      setAssistantUsernameInput(assistantMeta.usernameDisplay);
       setAssistantIsCustom(assistantMeta.isCustom);
       setAssistantUpdatedAt(assistantMeta.updatedAt);
     } catch (err) {
@@ -135,19 +131,14 @@ export const AdminDeviceManager: React.FC = () => {
     try {
       const ok = await resetAssistantCredentials();
       if (ok) {
-        const refreshed = await getAssistantCredentialsMeta();
-        setAssistantUsernameDisplay(refreshed.usernameDisplay);
-        setAssistantUsernameInput(
-          refreshed.usernameDisplay && refreshed.usernameDisplay !== 'Not configured'
-            ? refreshed.usernameDisplay
-            : ''
-        );
+        setAssistantUsernameDisplay('theakshatpopat');
+        setAssistantUsernameInput('theakshatpopat');
         setAssistantIsCustom(false);
         setAssistantUpdatedAt(undefined);
         setAssistantPasswordInput('');
         setAssistantFeedback({
           type: 'success',
-          message: 'Assistant portal credentials restored to environment configuration.'
+          message: 'Assistant portal credentials restored to default configuration.'
         });
         setTimeout(() => setAssistantFeedback(null), 5000);
       } else {
@@ -274,26 +265,26 @@ export const AdminDeviceManager: React.FC = () => {
           <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-3 space-y-1">
             <span className="text-[10px] text-zinc-500 uppercase flex items-center gap-1.5">
               <Smartphone className="w-3.5 h-3.5 text-zinc-500" />
-              1. Anonymous Session UID
+              1. User Device Identity (IMEI)
             </span>
-            <div className="text-zinc-200 font-bold tracking-wider text-sm select-all break-all">
-              {currentSessionUid || 'Resolving...'}
+            <div className="text-zinc-200 font-bold tracking-wider text-sm select-all">
+              {currentUserImei || 'Calculating...'}
             </div>
             <span className="text-[9px] text-zinc-600 block">
-              Privacy-preserving Firebase anonymous identity (no IP or hardware identifiers stored).
+              Permanent hardware key for user feed activity, likes, and communities.
             </span>
           </div>
 
           <div className="bg-zinc-950/80 border border-emerald-500/20 rounded-lg p-3 space-y-1">
             <span className="text-[10px] text-emerald-500/80 uppercase flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              2. Admin Session Device ID
+              2. Admin Hardware Identity (Admin ID)
             </span>
-            <div className="text-emerald-400 font-bold tracking-wider text-sm select-all break-all">
+            <div className="text-emerald-400 font-bold tracking-wider text-sm select-all">
               {currentDeviceId || 'Calculating...'}
             </div>
             <span className="text-[9px] text-emerald-500/60 block">
-              Server-issued device identifier paired with signed short-lived session tokens.
+              Permanent hardware key granting cryptographic administrative clearance.
             </span>
           </div>
         </div>
@@ -417,7 +408,7 @@ export const AdminDeviceManager: React.FC = () => {
                 </span>
               </h3>
               <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                Configured private portal route (server env) • Ephemeral login only (no Admin ID created)
+                Portal Route: <span className="text-zinc-300">/@ssist@nt/nup@nel</span> • Ephemeral login only (no Admin ID created)
               </p>
             </div>
           </div>
@@ -587,6 +578,12 @@ export const AdminDeviceManager: React.FC = () => {
                         <span className="text-zinc-600">Admin ID: </span>
                         <span className="text-emerald-400 font-bold select-all">{device.adminDeviceId}</span>
                       </div>
+                      {device.userImei && (
+                        <div>
+                          <span className="text-zinc-600">User IMEI: </span>
+                          <span className="text-zinc-400 select-all">{device.userImei}</span>
+                        </div>
+                      )}
                       <div>
                         <span className="text-zinc-600">Registered: </span>
                         <span className="text-zinc-400">

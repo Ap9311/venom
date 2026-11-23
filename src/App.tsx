@@ -1,9 +1,4 @@
-import {
-  resolveEffectivePath,
-  navigateToDomainRoute,
-  setRuntimeAssistantBaseSegment,
-  getRuntimeAssistantBaseSegment
-} from './utils/subdomainRouting';
+import { resolveEffectivePath, navigateToDomainRoute, ASSISTANT_PORTAL_SEGMENT } from './utils/subdomainRouting';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,12 +8,19 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   collection, 
   query, 
+  orderBy, 
+  limit, 
   onSnapshot, 
-  where
+  doc, 
+  getDoc, 
+  setDoc,
+  where, 
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { Post } from './types';
-import { getAnonymousUserId } from './utils/ip';
+import { getClientIp, getDeviceImei, getLegacyDeviceImei, syncCrossBrowserDeviceIdentity, getAllDeviceImeis } from './utils/ip';
 import Header from './components/Header';
 import NonumCard from './components/NonumCard';
 import NewNonumModal from './components/NewNonumModal';
@@ -30,10 +32,10 @@ import CommunitiesPage from './components/CommunitiesPage';
 import NxDomainError from './components/NxDomainError';
 import {
   checkIsAdminDevice,
+  getAdminDeviceId,
   setInMemoryAssistantToken,
   clearAssistantFirestoreClaim,
-  ensureFirestoreAdminClaim,
-  clearInMemoryAdminSession
+  ensureFirestoreAdminClaim
 } from './utils/adminAuth';
 
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
@@ -95,11 +97,6 @@ export default function App() {
   const [isAdminDevice, setIsAdminDevice] = useState<boolean | null>(null);
   const [assistantToken, setAssistantToken] = useState<string | null>(null);
   const assistantTokenRef = useRef<string | null>(null);
-  const [assistantRouteMatch, setAssistantRouteMatch] = useState<{
-    checkedPath: string;
-    isAssistantPortal: boolean;
-    subPath: string;
-  }>({ checkedPath: '', isAssistantPortal: false, subPath: '' });
   const [showWelcomeCard, setShowWelcomeCard] = useState(() => {
     return typeof window !== 'undefined' && !localStorage.getItem('nonum_welcome_dismissed');
   });
@@ -137,90 +134,71 @@ export default function App() {
     setShowWelcomeCard(false);
   };
 
-  // Resolve whether an unrecognized /admin/... path matches the server-configured assistant portal
-  const cleanEffectivePath = currentPath.split('?')[0].replace(/\/+$/, '') || '/';
-  const STANDARD_ADMIN_PATHS = new Set([
-    '/admin',
-    '/admin/audit',
-    '/admin/report',
-    '/admin/communities',
-    '/admin/community-reports',
-    '/admin/report-communities'
-  ]);
-
+  // Verify whether this physical device holds active administrative clearance in real-time
   useEffect(() => {
-    if (!cleanEffectivePath.startsWith('/admin/') || STANDARD_ADMIN_PATHS.has(cleanEffectivePath)) {
-      if (assistantRouteMatch.isAssistantPortal) {
-        setAssistantRouteMatch({ checkedPath: cleanEffectivePath, isAssistantPortal: false, subPath: '' });
-      }
-      return;
-    }
-
-    let active = true;
-    fetch('/api/portal-resolve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: cleanEffectivePath })
-    })
-      .then((res) => (res.ok ? res.json() : { isAssistantPortal: false }))
-      .then((data) => {
-        if (!active) return;
-        if (data?.isAssistantPortal) {
-          const sub = typeof data.subPath === 'string' ? data.subPath : '';
-          const withoutAdmin = cleanEffectivePath.slice('/admin'.length);
-          const baseSeg = sub ? withoutAdmin.slice(0, withoutAdmin.length - sub.length) : withoutAdmin;
-          setRuntimeAssistantBaseSegment(baseSeg);
-          setAssistantRouteMatch({
-            checkedPath: cleanEffectivePath,
-            isAssistantPortal: true,
-            subPath: sub
-          });
-        } else {
-          setAssistantRouteMatch({
-            checkedPath: cleanEffectivePath,
-            isAssistantPortal: false,
-            subPath: ''
-          });
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setAssistantRouteMatch({
-            checkedPath: cleanEffectivePath,
-            isAssistantPortal: false,
-            subPath: ''
-          });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [cleanEffectivePath]);
-
-  // Verify admin session strictly against server /api/admin-verify (only when visiting admin routes)
-  useEffect(() => {
-    if (!cleanEffectivePath.startsWith('/admin')) return;
     let isMounted = true;
+    let unsubAdminDoc: (() => void) | null = null;
 
-    const verifyAdmin = async () => {
+    const setupAdminVerification = async () => {
       try {
-        const isAdm = await checkIsAdminDevice();
-        if (!isMounted) return;
-        setIsAdminDevice(isAdm);
-        if (!isAdm && !assistantTokenRef.current) {
-          clearInMemoryAdminSession();
+        const adminId = await getAdminDeviceId();
+        if (!adminId || !isMounted) return;
+
+        if (!db) {
+          const isAdm = await checkIsAdminDevice();
+          if (isMounted) setIsAdminDevice(isAdm);
+          return;
         }
-      } catch {
+
+        const deviceDocRef = doc(db, 'interactions', `admin_device_${adminId}`);
+
+        // Listen in real-time to this device's registration document in Firestore
+        unsubAdminDoc = onSnapshot(deviceDocRef, (snap) => {
+          if (!isMounted) return;
+          if (snap.exists() && snap.data()?.status === 'active') {
+            setIsAdminDevice(true);
+            sessionStorage.setItem('nonum_admin_auth', 'true');
+            localStorage.setItem('nonum_is_admin_device', 'true');
+          } else {
+            // Revoked or does not exist in active registry!
+            setIsAdminDevice(false);
+            if (!assistantTokenRef.current) {
+              sessionStorage.removeItem('nonum_admin_auth');
+              sessionStorage.removeItem('nonum_admin_token');
+              localStorage.removeItem('nonum_is_admin_device');
+              if (auth?.currentUser && db) {
+                deleteDoc(doc(db, 'admins', auth.currentUser.uid)).catch(() => {});
+              }
+            }
+          }
+        }, (err) => {
+          console.warn('Real-time admin check fallback:', err);
+          checkIsAdminDevice().then(isAdm => {
+            if (isMounted) setIsAdminDevice(isAdm);
+          });
+        });
+      } catch (err) {
         if (isMounted) setIsAdminDevice(false);
       }
     };
 
-    verifyAdmin();
+    setupAdminVerification();
+
+    const handleSync = async () => {
+      const isAdm = await checkIsAdminDevice();
+      if (isMounted) setIsAdminDevice(isAdm);
+    };
+
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('popstate', handleSync);
+
     return () => {
       isMounted = false;
+      if (unsubAdminDoc) unsubAdminDoc();
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('popstate', handleSync);
     };
-  }, [cleanEffectivePath]);
+  }, []);
 
   useEffect(() => {
     (window as any).openPwaInstallModal = (type: 'main' | 'admin' = 'main') => {
@@ -368,11 +346,8 @@ export default function App() {
       activeApp = 'main';
       localStorage.setItem('nonum_pwa_active_app', 'main');
     } else {
-      const activeAssistantSeg = getRuntimeAssistantBaseSegment();
-      if (
-        window.location.pathname.startsWith('/admin') &&
-        (!activeAssistantSeg || !window.location.pathname.includes(activeAssistantSeg))
-      ) {
+      // Determine based on current path if no active PWA type is stored
+      if (window.location.pathname.startsWith('/admin') && !window.location.pathname.includes(ASSISTANT_PORTAL_SEGMENT)) {
         activeApp = 'admin';
         localStorage.setItem('nonum_pwa_active_app', 'admin');
       } else if (!activeApp) {
@@ -459,14 +434,14 @@ export default function App() {
       currentPath.startsWith('/admin/report') ||
       currentPath.includes('admin/report') ||
       currentPath.includes('/community-reports') ||
-      (assistantRouteMatch.isAssistantPortal && currentPath.includes('/report')) ||
+      (currentPath.includes(ASSISTANT_PORTAL_SEGMENT) && currentPath.includes('/report')) ||
       currentPath.includes('reports');
     const isAdminRoute = currentPath.startsWith('/admin');
     const isReportRoute = currentPath.startsWith('/report');
     const isPoliciesRoute = currentPath.startsWith('/policies');
     const isGuidelinesRoute = currentPath.startsWith('/guidelines');
     
-    let pageTitle = "Nonum | Anonymous Posts, Polls & Communities";
+    let pageTitle = "Nonum | Decentralized Anonymous Grid";
     if (isAdminReportRoute) {
       pageTitle = "Nonum Admin Reports";
     } else if (isAdminRoute) {
@@ -481,7 +456,7 @@ export default function App() {
 
     document.title = pageTitle;
 
-    const iconUrl = isAdminRoute ? "/nonum-admin-logo.svg" : "/nonum-logo.svg";
+    const iconUrl = "https://iili.io/nWbQlNj.png";
 
     const manifestUrl = (isAdminRoute || isAdminReportRoute)
       ? "/api/admin-manifest"
@@ -519,24 +494,75 @@ export default function App() {
     }
   }, [currentPath]);
 
-  // Server-side quarantine / IP block status check (never exposes IPs or reads blockedIps on client)
+  const [blockedIpAddresses, setBlockedIpAddresses] = useState<string[]>([]);
+
+  // Listen to the complete list of blocked IP addresses in real-time to filter posts dynamically
   useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'blockedIps'), where('isBlocked', '==', true));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const ips = snapshot.docs.map((docSnap) => docSnap.id);
+        setBlockedIpAddresses(ips);
+      },
+      (error) => {
+        console.error('Error listening to blocked IPs:', error);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Check client IP and listen to its block status in real-time
+  useEffect(() => {
+    if (!db) return;
     let active = true;
-    const checkStatus = async () => {
+    let unsubIp: (() => void) | null = null;
+    let unsubImei: (() => void) | null = null;
+
+    const setupBlockSubscription = async () => {
       try {
-        const status = await checkIpBlockStatus();
+        const ip = await getClientIp();
+        const imei = await getDeviceImei();
         if (!active) return;
-        setBlockStatus(status);
-        if (status.isBlocked) {
+        setUserIp(ip);
+
+        // Check initial block status on load
+        const initialStatus = await checkIpBlockStatus(ip, imei);
+        if (!active) return;
+        if (initialStatus.isBlocked) {
+          setBlockStatus(initialStatus);
           setShowQuarantineModal(true);
         }
-      } catch {
-        // non-blocking
+
+        const ipRef = doc(db, 'blockedIps', ip);
+        const imeiRef = doc(db, 'blockedImeis', imei);
+
+        const checkStatusAndUpdate = async () => {
+          const status = await checkIpBlockStatus(ip, imei);
+          if (!active) return;
+          setBlockStatus(status);
+          setShowQuarantineModal(status.isBlocked);
+        };
+
+        unsubIp = onSnapshot(ipRef, checkStatusAndUpdate, (error) => {
+          console.error('Error in IP block status listener:', error);
+        });
+
+        unsubImei = onSnapshot(imeiRef, checkStatusAndUpdate, (error) => {
+          console.error('Error in IMEI block status listener:', error);
+        });
+      } catch (err) {
+        console.error('Failed to retrieve client IP/IMEI block status:', err);
       }
     };
-    checkStatus();
+
+    setupBlockSubscription();
+    
     return () => {
       active = false;
+      if (unsubIp) unsubIp();
+      if (unsubImei) unsubImei();
     };
   }, []);
 
@@ -573,78 +599,170 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Sync ONLY this anonymous user's own interactions (scoped by Firebase Auth UID; zero IP/IMEI)
+  // Load and synchronize IMEI & IP-based interactions in real-time across all browsers on this device
   useEffect(() => {
     if (!db || !dbConnected) return;
     let isActive = true;
-    let unsub: (() => void) | null = null;
+    const unsubs: (() => void)[] = [];
 
     const setupRealtimeInteractionSync = async () => {
       try {
-        const uid = await getAnonymousUserId();
-        if (!uid || !isActive) return;
+        // 1. Unite cross-browser device identity via Firestore anchor first
+        await syncCrossBrowserDeviceIdentity();
+        if (!isActive) return;
 
-        const qUid = query(collection(db, 'interactions'), where('uid', '==', uid));
-        unsub = onSnapshot(
-          qUid,
-          (snap) => {
-            if (!isActive) return;
-            const likedPosts: string[] = [];
-            const votedPosts: { [postId: string]: 'up' | 'down' } = {};
-            const votedPolls: { [postId: string]: number } = {};
-            const reactedPosts: { [postId: string]: string } = {};
-            const likedComments: string[] = [];
-            const likedReplies: string[] = [];
-            const reportedPosts: string[] = [];
+        const userIp = await getClientIp();
+        const deviceImei = await getDeviceImei();
+        const allImeis = Array.from(new Set([
+          deviceImei,
+          ...(getLegacyDeviceImei() ? [getLegacyDeviceImei()!] : []),
+          ...getAllDeviceImeis()
+        ])).filter(Boolean).slice(0, 10);
 
-            snap.forEach((docSnap) => {
-              const data = docSnap.data();
-              if (!data) return;
-              if (data.type === 'like_comment' && data.commentKey) {
-                if (!likedComments.includes(data.commentKey)) likedComments.push(data.commentKey);
-              } else if (data.type === 'like_reply' && data.replyKey) {
-                if (!likedReplies.includes(data.replyKey)) likedReplies.push(data.replyKey);
-              } else if (data.type === 'report_post' && data.postId) {
-                if (!reportedPosts.includes(data.postId)) reportedPosts.push(data.postId);
-              } else if (data.postId) {
-                if (data.type === 'like' && !likedPosts.includes(data.postId)) {
-                  likedPosts.push(data.postId);
-                } else if (data.type === 'vote' && data.direction) {
-                  votedPosts[data.postId] = data.direction;
-                } else if (data.type === 'poll' && typeof data.optionIndex === 'number') {
-                  votedPolls[data.postId] = data.optionIndex;
-                } else if (data.type === 'reaction' && data.reactionKey) {
-                  reactedPosts[data.postId] = data.reactionKey;
-                }
+        if (!isActive) return;
+
+        const docsByKey = new Map<string, any>();
+
+        const recomputeAndBroadcast = () => {
+          if (!isActive) return;
+          const likedPosts: string[] = [];
+          const votedPosts: { [postId: string]: 'up' | 'down' } = {};
+          const votedPolls: { [postId: string]: number } = {};
+          const reactedPosts: { [postId: string]: string } = {};
+          const likedComments: string[] = [];
+          const likedReplies: string[] = [];
+          const reportedPosts: string[] = [];
+
+          docsByKey.forEach((data, docId) => {
+            if (!data || data.type === 'device_anchor' || data.type === 'admin_device' || data.type === 'admin_config') {
+              return;
+            }
+            if (data.type === 'like_comment' && data.commentKey) {
+              if (!likedComments.includes(data.commentKey)) likedComments.push(data.commentKey);
+              return;
+            }
+            if (data.type === 'like_reply' && data.replyKey) {
+              if (!likedReplies.includes(data.replyKey)) likedReplies.push(data.replyKey);
+              return;
+            }
+            if (data.type === 'report_post' && data.postId) {
+              if (!reportedPosts.includes(data.postId)) reportedPosts.push(data.postId);
+              return;
+            }
+
+            const pId = data.postId;
+            if (!pId) return;
+
+            if (data.type === 'like') {
+              if (!likedPosts.includes(pId)) likedPosts.push(pId);
+              // Mirror alias/IP like doc to canonical deviceImei so any browser can toggle/unlike cleanly
+              const canonicalId = `${pId}_${deviceImei}_like`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            } else if (data.type === 'vote') {
+              votedPosts[pId] = data.direction;
+              const canonicalId = `${pId}_${deviceImei}_vote`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            } else if (data.type === 'poll') {
+              votedPolls[pId] = data.optionIndex;
+              const canonicalId = `${pId}_${deviceImei}_poll`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            } else if (data.type === 'reaction') {
+              reactedPosts[pId] = data.reactionKey;
+              const canonicalId = `${pId}_${deviceImei}_reaction`;
+              if (docId !== canonicalId && !docsByKey.has(canonicalId)) {
+                setDoc(doc(db, 'interactions', canonicalId), {
+                  ...data,
+                  imei: deviceImei,
+                  ip: userIp || data.ip || ''
+                }, { merge: true }).catch(() => {});
+              }
+            }
+          });
+
+          localStorage.setItem('nonum_user_interactions', JSON.stringify({
+            likedPosts,
+            votedPosts,
+            votedPolls,
+            likedComments,
+            likedReplies,
+            reactedPosts,
+            reportedPosts,
+          }));
+
+          window.dispatchEvent(new CustomEvent('nonum_interactions_updated'));
+          window.dispatchEvent(new Event('storage'));
+        };
+
+        // Listen to all IMEI aliases for this physical device
+        if (allImeis.length > 0) {
+          const qImeis = allImeis.length === 1
+            ? query(collection(db, 'interactions'), where('imei', '==', allImeis[0]))
+            : query(collection(db, 'interactions'), where('imei', 'in', allImeis));
+
+          const unsubImei = onSnapshot(qImeis, (snap) => {
+            snap.docChanges().forEach((change) => {
+              if (change.type === 'removed') {
+                docsByKey.delete(change.doc.id);
+              } else {
+                docsByKey.set(change.doc.id, change.doc.data());
               }
             });
+            recomputeAndBroadcast();
+          }, () => {});
+          unsubs.push(unsubImei);
+        }
 
-            localStorage.setItem(
-              'nonum_user_interactions',
-              JSON.stringify({
-                likedPosts,
-                votedPosts,
-                votedPolls,
-                likedComments,
-                likedReplies,
-                reactedPosts,
-                reportedPosts
-              })
-            );
-            window.dispatchEvent(new CustomEvent('nonum_interactions_updated'));
-          },
-          () => {}
-        );
-      } catch {
-        // non-blocking
+        // Also listen by IP so interactions from another browser on the same device/network sync immediately
+        if (userIp && userIp !== '127.0.0.1') {
+          const qIp = query(collection(db, 'interactions'), where('ip', '==', userIp));
+          const unsubIp = onSnapshot(qIp, (snap) => {
+            snap.docChanges().forEach((change) => {
+              if (change.type === 'removed') {
+                docsByKey.delete(change.doc.id);
+              } else {
+                docsByKey.set(change.doc.id, change.doc.data());
+              }
+            });
+            recomputeAndBroadcast();
+          }, () => {});
+          unsubs.push(unsubIp);
+        }
+      } catch (err) {
+        console.error('Failed to sync device-level interactions:', err);
       }
     };
 
     setupRealtimeInteractionSync();
 
+    const handleIdentitySynced = () => {
+      unsubs.forEach(u => u());
+      unsubs.length = 0;
+      setupRealtimeInteractionSync();
+    };
+    window.addEventListener('nonum_identity_synced', handleIdentitySynced);
+
     return () => {
       isActive = false;
-      if (unsub) unsub();
+      unsubs.forEach(u => u());
+      window.removeEventListener('nonum_identity_synced', handleIdentitySynced);
     };
   }, [dbConnected]);
 
@@ -681,8 +799,19 @@ export default function App() {
   // Perform client-side category filtering, search queries, and ranking
   const filteredPosts = posts
     .filter((post) => {
-      // Never show deleted posts
+      // 1. Never show deleted posts
       if (post.isDeleted || (post as any).isPurged) return false;
+      
+      // 2. Never show posts from blocked IPs (except admin system IPs)
+      if (
+        post.postedFromIp && 
+        post.postedFromIp !== '150.129.200.97' && 
+        post.postedFromIp !== 'ADMIN_CONSOLE' &&
+        blockedIpAddresses.includes(post.postedFromIp)
+      ) {
+        return false;
+      }
+
       return true;
     })
     .filter((post) => {
@@ -734,114 +863,109 @@ export default function App() {
     );
   }
 
-  // Server-resolved Assistant Portal (secret path is never embedded in client code)
-  // Uses strictly in-memory one-time credentials; Admin Audit is completely excluded.
-  if (
-    cleanEffectivePath.startsWith('/admin/') &&
-    !STANDARD_ADMIN_PATHS.has(cleanEffectivePath)
-  ) {
-    if (assistantRouteMatch.checkedPath !== cleanEffectivePath) {
-      return <div className="min-h-screen bg-black" />;
-    }
+  // Dedicated Assistant Admin Portal (/admin/@ssist@nt/nup@nel and admin.nonum.online/@ssist@nt/nup@nel)
+  // Uses strictly in-memory one-time credentials; does NOT create or require hardware Admin IDs.
+  // Admin Audit is completely excluded and blocked here.
+  const cleanEffectivePath = currentPath.split('?')[0].replace(/\/+$/, '') || '/';
+  const assistantBasePath = `/admin${ASSISTANT_PORTAL_SEGMENT}`;
 
-    if (assistantRouteMatch.isAssistantPortal) {
-      const assistantSub = assistantRouteMatch.subPath;
+  if (cleanEffectivePath === assistantBasePath || cleanEffectivePath.startsWith(`${assistantBasePath}/`)) {
+    const assistantSub = cleanEffectivePath.slice(assistantBasePath.length);
 
-      if (assistantSub === '/audit' || assistantSub.startsWith('/audit/')) {
-        return <NxDomainError />;
-      }
-
-      if (assistantSub === '/report-communities' || assistantSub === '/community-reports') {
-        return (
-          <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="min-h-screen bg-[#030303]"
-            >
-              <AdminCommunityReports
-                onNavigateHome={handleBackToHome}
-                isAssistantMode={true}
-                assistantAuthenticated={Boolean(assistantToken)}
-                onAssistantLogin={handleAssistantLogin}
-                onAssistantLogout={handleAssistantLogout}
-              />
-            </motion.div>
-          </Suspense>
-        );
-      }
-
-      if (assistantSub === '/report') {
-        return (
-          <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="min-h-screen bg-[#030303]"
-            >
-              <AdminReports
-                onNavigateHome={handleBackToHome}
-                isAssistantMode={true}
-                assistantAuthenticated={Boolean(assistantToken)}
-                onAssistantLogin={handleAssistantLogin}
-                onAssistantLogout={handleAssistantLogout}
-              />
-            </motion.div>
-          </Suspense>
-        );
-      }
-
-      if (assistantSub === '/communities') {
-        return (
-          <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="min-h-screen bg-[#030303]"
-            >
-              <AdminCommunities
-                onNavigateHome={handleBackToHome}
-                isAssistantMode={true}
-                assistantAuthenticated={Boolean(assistantToken)}
-                onAssistantLogin={handleAssistantLogin}
-                onAssistantLogout={handleAssistantLogout}
-              />
-            </motion.div>
-          </Suspense>
-        );
-      }
-
-      if (assistantSub === '') {
-        return (
-          <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="min-h-screen bg-zinc-950"
-            >
-              <AdminPanel
-                posts={posts}
-                onNavigateHome={handleBackToHome}
-                isAssistantMode={true}
-                assistantAuthenticated={Boolean(assistantToken)}
-                onAssistantLogin={handleAssistantLogin}
-                onAssistantLogout={handleAssistantLogout}
-              />
-            </motion.div>
-          </Suspense>
-        );
-      }
-
+    if (assistantSub === '/audit' || assistantSub.startsWith('/audit/')) {
       return <NxDomainError />;
     }
+
+    if (assistantSub === '/report-communities' || assistantSub === '/community-reports') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminCommunityReports
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    if (assistantSub === '/report') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminReports
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    if (assistantSub === '/communities') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-[#030303]" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-[#030303]"
+          >
+            <AdminCommunities
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    if (assistantSub === '') {
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="min-h-screen bg-zinc-950"
+          >
+            <AdminPanel
+              posts={posts}
+              onNavigateHome={handleBackToHome}
+              isAssistantMode={true}
+              assistantAuthenticated={Boolean(assistantToken)}
+              onAssistantLogin={handleAssistantLogin}
+              onAssistantLogout={handleAssistantLogout}
+            />
+          </motion.div>
+        </Suspense>
+      );
+    }
+
+    return <NxDomainError />;
   }
 
   // Cryptographic Administrative Access Gate (/admin and sub-routes)

@@ -1,4 +1,5 @@
 import { navigateToDomainRoute, navigateAssistantRoute } from '../../utils/subdomainRouting';
+import { hashSha256 } from '../../utils/crypto';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -23,10 +24,7 @@ import {
   ensureFirestoreAdminClaim,
   checkIsAdminDevice,
   verifyAdminCredentials,
-  verifyAssistantCredentials,
-  logoutAdminSession,
-  getInMemoryAdminToken,
-  getInMemoryAssistantToken
+  verifyAssistantCredentials
 } from '../../utils/adminAuth';
 import { 
   Trash2, 
@@ -90,13 +88,16 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
   const [editDesc, setEditDesc] = useState('');
   const [editImageUrl, setEditImageUrl] = useState('');
   const [editPassword, setEditPassword] = useState('');
-  const [removePinOnSave, setRemovePinOnSave] = useState(false);
   const [editArea, setEditArea] = useState('');
   const [editAllowUserPost, setEditAllowUserPost] = useState(true);
-  const [editTotalMembers, setEditTotalMembers] = useState<number>(0);
+  const [editTotalReviews, setEditTotalReviews] = useState<number>(0);
   const [blockType, setBlockType] = useState<'none' | 'temporary' | 'permanent'>('none');
   const [blockDays, setBlockDays] = useState<number>(1);
   const [editUserLimit, setEditUserLimit] = useState('');
+  const [editCreatedByIp, setEditCreatedByIp] = useState('');
+  const [editCreatedByImei, setEditCreatedByImei] = useState('');
+  const [editCreatedBySerial, setEditCreatedBySerial] = useState('');
+  const [editCreatedByDeviceType, setEditCreatedByDeviceType] = useState('DESKTOP');
   const [editReportsCount, setEditReportsCount] = useState<number>(0);
 
   // Reports states for selected community
@@ -110,6 +111,10 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
   const [editChatComments, setEditChatComments] = useState<number>(0);
   const [editChatReports, setEditChatReports] = useState<number>(0);
   const [editChatImageUrl, setEditChatImageUrl] = useState('');
+  const [editChatIp, setEditChatIp] = useState('');
+  const [editChatImei, setEditChatImei] = useState('');
+  const [editChatSerial, setEditChatSerial] = useState('');
+  const [editChatDeviceType, setEditChatDeviceType] = useState('DESKTOP');
   const [editChatMsgType, setEditChatMsgType] = useState('text');
 
   // Check existing admin device status
@@ -192,12 +197,15 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
       setEditName(selectedComm.name || '');
       setEditDesc(selectedComm.description || '');
       setEditImageUrl(selectedComm.imageUrl || '');
-      setEditPassword('');
-      setRemovePinOnSave(false);
+      setEditPassword(selectedComm.password || '');
       setEditArea(selectedComm.religion || '');
       setEditAllowUserPost(selectedComm.allowUserPost !== false);
-      setEditTotalMembers(selectedComm.viewsCount || 0);
+      setEditTotalReviews(selectedComm.viewsCount || 0);
       setEditUserLimit(selectedComm.userLimit ? selectedComm.userLimit.toString() : '');
+      setEditCreatedByIp(selectedComm.createdByIp || '');
+      setEditCreatedByImei(selectedComm.createdByImei || '');
+      setEditCreatedBySerial(selectedComm.createdBySerial || '');
+      setEditCreatedByDeviceType(selectedComm.createdByDeviceType || 'DESKTOP');
       setEditReportsCount(selectedComm.reportsCount || 0);
       
       if (selectedComm.isBlocked) {
@@ -278,7 +286,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
       onAssistantLogout?.();
       return;
     }
-    void logoutAdminSession();
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   // Permanently delete a community and all of its chats/subcollections
@@ -382,55 +390,23 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
   const handleSaveCommunity = async () => {
     if (!selectedComm) return;
     try {
-      await ensureFirestoreAdminClaim();
       const commRef = doc(db, 'communities', selectedComm.id);
       const rawEditPass = editPassword.trim();
-      let hasPin = Boolean(selectedComm.hasPin || selectedComm.passwordHash || selectedComm.password);
-
-      const authToken = isAssistantMode ? getInMemoryAssistantToken() : getInMemoryAdminToken();
-      const pinHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (authToken) pinHeaders['Authorization'] = `Bearer ${authToken}`;
-
-      if (rawEditPass) {
-        const pinRes = await fetch('/api/community-pin', {
-          method: 'POST',
-          headers: pinHeaders,
-          credentials: 'include',
-          body: JSON.stringify({
-            action: 'set',
-            communityId: selectedComm.id,
-            pin: rawEditPass
-          })
-        });
-        if (!pinRes.ok) {
-          throw new Error('Failed to store community PIN securely on server.');
-        }
-        hasPin = true;
-      } else if (removePinOnSave) {
-        const pinRes = await fetch('/api/community-pin', {
-          method: 'POST',
-          headers: pinHeaders,
-          credentials: 'include',
-          body: JSON.stringify({
-            action: 'remove',
-            communityId: selectedComm.id
-          })
-        });
-        if (!pinRes.ok) {
-          throw new Error('Failed to remove community PIN on server.');
-        }
-        hasPin = false;
-      }
+      const passwordHash = rawEditPass ? await hashSha256(rawEditPass) : (selectedComm.passwordHash || '');
       
       const updateData: any = {
         name: editName.trim(),
         description: editDesc.trim(),
         imageUrl: editImageUrl.trim(),
-        hasPin,
+        passwordHash,
         religion: editArea.trim(),
         allowUserPost: editAllowUserPost,
-        viewsCount: Number(editTotalMembers),
+        viewsCount: Number(editTotalReviews),
         userLimit: editUserLimit ? parseInt(editUserLimit) : null,
+        createdByIp: editCreatedByIp.trim(),
+        createdByImei: editCreatedByImei.trim(),
+        createdBySerial: editCreatedBySerial.trim(),
+        createdByDeviceType: editCreatedByDeviceType,
         reportsCount: Number(editReportsCount)
       };
 
@@ -454,8 +430,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
         ...selectedComm,
         ...updateData
       });
-      setEditPassword('');
-      setRemovePinOnSave(false);
+
       setIsEditingComm(false);
       alert('Community parameters saved successfully!');
     } catch (err: any) {
@@ -468,7 +443,6 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
   const handleSaveChat = async (chatId: string) => {
     if (!selectedComm) return;
     try {
-      await ensureFirestoreAdminClaim();
       const chatRef = doc(db, 'communities', selectedComm.id, 'chats', chatId);
       await updateDoc(chatRef, {
         content: editChatContent.trim(),
@@ -476,6 +450,10 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
         commentsCount: Number(editChatComments),
         reportsCount: Number(editChatReports),
         imageUrl: editChatImageUrl.trim(),
+        createdByIp: editChatIp.trim(),
+        createdByImei: editChatImei.trim(),
+        createdBySerial: editChatSerial.trim(),
+        createdByDeviceType: editChatDeviceType,
         type: editChatMsgType
       });
       setEditingChatId(null);
@@ -528,12 +506,13 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
 
   const filteredComms = communities.filter(c => {
     if (searchTerm.trim() !== '') {
-      const q = searchTerm.toLowerCase();
+      const query = searchTerm.toLowerCase();
       return (
-        c.name?.toLowerCase().includes(q) ||
-        c.description?.toLowerCase().includes(q) ||
-        c.religion?.toLowerCase().includes(q) ||
-        c.ownerUid?.toLowerCase().includes(q)
+        c.name?.toLowerCase().includes(query) ||
+        c.description?.toLowerCase().includes(query) ||
+        c.religion?.toLowerCase().includes(query) ||
+        c.createdByIp?.toLowerCase().includes(query) ||
+        c.createdByImei?.toLowerCase().includes(query)
       );
     }
     return true;
@@ -667,7 +646,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
               <div className="relative w-full md:w-80">
                 <input
                   type="text"
-                  placeholder="Filter by Name, Region, UID..."
+                  placeholder="Filter by Name, IP, IMEI, Region..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500/30 rounded px-3 py-1.5 pl-8 text-xs text-zinc-300 focus:outline-none placeholder-zinc-700 transition-colors"
@@ -710,8 +689,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                           }`}
                         >
                           <img
-                            src={c.imageUrl || '/nonum-logo.svg'}
-                            onError={(e) => { e.currentTarget.src = '/nonum-logo.svg'; }}
+                            src={c.imageUrl || 'https://iili.io/nWbQlNj.png'}
+                            onError={(e) => { e.currentTarget.src = 'https://iili.io/nWbQlNj.png'; }}
                             alt={c.name}
                             className="w-10 h-10 rounded object-cover bg-zinc-900 border border-zinc-800 shrink-0"
                             referrerPolicy="no-referrer"
@@ -722,7 +701,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                               {c.name}
                             </h3>
                             <p className="text-[9px] text-zinc-600 truncate mt-0.5 uppercase">
-                              Region: {c.religion || 'Global'} | Access: {c.hasPin || c.passwordHash || c.password ? 'PIN Protected' : 'Public'}
+                              Region: {c.religion || 'Global'} | Access: {c.passwordHash || c.password ? 'PIN Protected (Encrypted)' : 'Public'}
                             </p>
                             
                             <div className="flex gap-2 items-center mt-2 flex-wrap">
@@ -738,7 +717,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                 </span>
                               )}
                               <span className="text-[8px] bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded font-bold shrink-0">
-                                MEMBERS: {c.viewsCount || 0}
+                                REVIEWS: {c.viewsCount || 0}
                               </span>
                             </div>
                           </div>
@@ -844,30 +823,13 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                               />
                             </div>
                             <div>
-                              <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Set / Rotate PIN (stored server-side)</label>
+                              <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Access password (empty = public)</label>
                               <input
-                                type="password"
+                                type="text"
                                 value={editPassword}
-                                onChange={(e) => {
-                                  setEditPassword(e.target.value);
-                                  if (e.target.value.trim()) setRemovePinOnSave(false);
-                                }}
-                                placeholder="Leave blank to keep current PIN"
+                                onChange={(e) => setEditPassword(e.target.value)}
                                 className="w-full bg-zinc-950 border border-zinc-900 rounded px-2.5 py-1.5 text-zinc-300 focus:outline-none focus:border-emerald-500/30 text-[10px]"
                               />
-                              {(selectedComm.hasPin || selectedComm.passwordHash || selectedComm.password) && (
-                                <label className="mt-1.5 flex items-center gap-1.5 text-[9px] text-rose-400 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={removePinOnSave}
-                                    onChange={(e) => {
-                                      setRemovePinOnSave(e.target.checked);
-                                      if (e.target.checked) setEditPassword('');
-                                    }}
-                                  />
-                                  <span>Remove existing PIN (make public)</span>
-                                </label>
-                              )}
                             </div>
                           </div>
 
@@ -886,24 +848,24 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                               </button>
                             </div>
                             <div>
-                              <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Total Members</label>
+                              <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Total Reviews</label>
                               <div className="flex items-center bg-zinc-950 border border-zinc-900 rounded overflow-hidden">
                                 <button
                                   type="button"
-                                  onClick={() => setEditTotalMembers(prev => Math.max(0, prev - 1))}
+                                  onClick={() => setEditTotalReviews(prev => Math.max(0, prev - 1))}
                                   className="px-3 py-1.5 bg-zinc-900 text-zinc-400 hover:text-rose-400 border-r border-zinc-900 active:bg-zinc-850 cursor-pointer"
                                 >
                                   <Minus className="w-3.5 h-3.5" />
                                 </button>
                                 <input
                                   type="number"
-                                  value={editTotalMembers}
-                                  onChange={(e) => setEditTotalMembers(Math.max(0, Number(e.target.value)))}
+                                  value={editTotalReviews}
+                                  onChange={(e) => setEditTotalReviews(Math.max(0, Number(e.target.value)))}
                                   className="w-full text-center bg-transparent focus:outline-none font-bold text-zinc-300 text-xs"
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => setEditTotalMembers(prev => prev + 1)}
+                                  onClick={() => setEditTotalReviews(prev => prev + 1)}
                                   className="px-3 py-1.5 bg-zinc-900 text-zinc-400 hover:text-emerald-400 border-l border-zinc-900 active:bg-zinc-850 cursor-pointer"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
@@ -914,8 +876,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
 
                           {/* ADVANCED METADATA ROW */}
                           <div className="pt-2 border-t border-zinc-900/60">
-                            <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1.5">Advanced Community Settings</label>
-                            <div className="grid grid-cols-2 gap-3">
+                            <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1.5">Advanced Community Metadata</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                               <div>
                                 <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">User Limit (0 = unlimited)</label>
                                 <input
@@ -932,6 +894,44 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                   type="number"
                                   value={editReportsCount}
                                   onChange={(e) => setEditReportsCount(Math.max(0, Number(e.target.value)))}
+                                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-2.5 py-1.5 text-zinc-300 focus:outline-none focus:border-emerald-500/30 text-[10px]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Creator Device Type</label>
+                                <select
+                                  value={editCreatedByDeviceType}
+                                  onChange={(e) => setEditCreatedByDeviceType(e.target.value)}
+                                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-2.5 py-1.5 text-zinc-300 focus:outline-none focus:border-emerald-500/30 text-[10px]"
+                                >
+                                  <option value="DESKTOP">DESKTOP / LAPTOP</option>
+                                  <option value="MOBILE">MOBILE DEVICE</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Creator IP Address</label>
+                                <input
+                                  type="text"
+                                  value={editCreatedByIp}
+                                  onChange={(e) => setEditCreatedByIp(e.target.value)}
+                                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-2.5 py-1.5 text-zinc-300 focus:outline-none focus:border-emerald-500/30 text-[10px]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Creator IMEI</label>
+                                <input
+                                  type="text"
+                                  value={editCreatedByImei}
+                                  onChange={(e) => setEditCreatedByImei(e.target.value)}
+                                  className="w-full bg-zinc-950 border border-zinc-900 rounded px-2.5 py-1.5 text-zinc-300 focus:outline-none focus:border-emerald-500/30 text-[10px]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] uppercase text-zinc-600 font-bold mb-1">Creator Serial Number</label>
+                                <input
+                                  type="text"
+                                  value={editCreatedBySerial}
+                                  onChange={(e) => setEditCreatedBySerial(e.target.value)}
                                   className="w-full bg-zinc-950 border border-zinc-900 rounded px-2.5 py-1.5 text-zinc-300 focus:outline-none focus:border-emerald-500/30 text-[10px]"
                                 />
                               </div>
@@ -1016,8 +1016,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                         /* VISUAL METADATA BANNER */
                         <div className="mt-3 flex items-start gap-3 p-3 bg-zinc-900/10 border border-zinc-900/40 rounded-lg">
                           <img
-                            src={selectedComm.imageUrl || '/nonum-logo.svg'}
-                            onError={(e) => { e.currentTarget.src = '/nonum-logo.svg'; }}
+                            src={selectedComm.imageUrl}
                             alt={selectedComm.name}
                             className="w-12 h-12 rounded-lg object-cover border border-zinc-850 shrink-0"
                             referrerPolicy="no-referrer"
@@ -1031,7 +1030,7 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                 Area: {selectedComm.religion || 'General'}
                               </span>
                               <span className="text-[8px] bg-zinc-950 text-zinc-500 px-2 py-0.5 rounded font-bold uppercase font-mono">
-                                Members: {selectedComm.viewsCount || 0}
+                                Reviews: {selectedComm.viewsCount || 0}
                               </span>
                               {selectedComm.isBlocked && (
                                 <span className="text-[8px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-bold uppercase font-mono flex items-center gap-0.5">
@@ -1047,14 +1046,36 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                       )}
 
                       {/* Info grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 p-3 bg-[#050505] border border-zinc-900 rounded-lg">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 p-3 bg-[#050505] border border-zinc-900 rounded-lg">
                         <div>
-                          <span className="text-[8px] text-zinc-600 block uppercase">CREATOR ANONYMOUS UID</span>
-                          <span className="text-[10px] font-bold text-zinc-400 truncate block">{selectedComm.ownerUid || 'Anonymous'}</span>
+                          <span className="text-[8px] text-zinc-600 block uppercase">CREATOR IP</span>
+                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.createdByIp || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-zinc-600 block uppercase">CREATOR DEVICE DETECTED</span>
+                          <span className="text-[10px] font-bold text-zinc-400 truncate block max-w-xs">
+                            {selectedComm.createdByDeviceType === 'MOBILE' ? (
+                              `IMEI: ${selectedComm.createdByImei || 'N/A'}`
+                            ) : (
+                              `S/N: ${selectedComm.createdBySerial || (() => {
+                                const creatorImei = selectedComm.createdByImei || '359182371283718';
+                                let hash = 0;
+                                for (let i = 0; i < creatorImei.length; i++) {
+                                  hash = creatorImei.charCodeAt(i) + ((hash << 5) - hash);
+                                }
+                                const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                                let creatorSerial = 'VSN';
+                                for (let i = 0; i < 10; i++) {
+                                  creatorSerial += chars.charAt(Math.abs((hash + i * 23) % chars.length));
+                                }
+                                return creatorSerial;
+                              })()}`
+                            )}
+                          </span>
                         </div>
                         <div>
                           <span className="text-[8px] text-zinc-600 block uppercase">GATE LOCK</span>
-                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.hasPin || selectedComm.passwordHash || selectedComm.password ? 'PIN PROTECTED (SERVER)' : 'NONE'}</span>
+                          <span className="text-[10px] font-bold text-zinc-400">{selectedComm.passwordHash || selectedComm.password ? 'LOCKED (SHA-256 ENCRYPTED)' : 'NONE'}</span>
                         </div>
                         <div>
                           <span className="text-[8px] text-zinc-600 block uppercase">PERMISSIONS</span>
@@ -1086,8 +1107,8 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                   </p>
                                 )}
                                 <div className="flex justify-between text-[8px] text-zinc-600 pt-1 border-t border-zinc-900/60 font-mono">
-                                  <span>FILER UID: {rep.reporterUid || 'Anonymous'}</span>
-                                  {rep.ip && <span>LEGACY IP: {rep.ip}</span>}
+                                  <span>FILER IP: {rep.ip || 'N/A'}</span>
+                                  <span>FILER IMEI/SIG: {rep.imei || 'N/A'}</span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-zinc-900/40">
                                   <button
@@ -1136,10 +1157,22 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                         <div className="text-center py-12 text-zinc-600 text-[10px] uppercase">COHORT DISPATCH SHELL IS EMPTY</div>
                       ) : (
                         activeChats.map((chat) => {
-                          const isOwner = Boolean(
-                            (chat.ownerUid && selectedComm.ownerUid && chat.ownerUid === selectedComm.ownerUid) ||
-                            (chat.createdByImei && selectedComm.createdByImei && chat.createdByImei === selectedComm.createdByImei)
-                          );
+                          const isMobile = chat.createdByDeviceType === 'MOBILE' || (!chat.createdByDeviceType && chat.createdByImei && !chat.createdBySerial);
+                          const dispatcherImei = chat.createdByImei || 'N/A';
+                          const dispatcherSerial = chat.createdBySerial || (() => {
+                            const imeiVal = chat.createdByImei || '359182371283718';
+                            let dispHash = 0;
+                            for (let i = 0; i < imeiVal.length; i++) {
+                              dispHash = imeiVal.charCodeAt(i) + ((dispHash << 5) - dispHash);
+                            }
+                            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                            let serial = 'VSN';
+                            for (let i = 0; i < 10; i++) {
+                              serial += chars.charAt(Math.abs((dispHash + i * 23) % chars.length));
+                            }
+                            return serial;
+                          })();
+
                           const isEditingThisChat = editingChatId === chat.id;
 
                           return (
@@ -1201,7 +1234,48 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                     </div>
                                   </div>
 
-                                  <div className="grid grid-cols-1 gap-2">
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    <div>
+                                      <label className="block text-[8px] font-mono uppercase text-zinc-600 mb-1">Sender IP Address</label>
+                                      <input
+                                        type="text"
+                                        value={editChatIp}
+                                        onChange={(e) => setEditChatIp(e.target.value)}
+                                        className="w-full bg-black border border-zinc-900 rounded p-1.5 text-zinc-200 focus:outline-none text-[10px]"
+                                        placeholder="Sender IP"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[8px] font-mono uppercase text-zinc-600 mb-1">Sender IMEI</label>
+                                      <input
+                                        type="text"
+                                        value={editChatImei}
+                                        onChange={(e) => setEditChatImei(e.target.value)}
+                                        className="w-full bg-black border border-zinc-900 rounded p-1.5 text-zinc-200 focus:outline-none text-[10px]"
+                                        placeholder="Sender IMEI"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[8px] font-mono uppercase text-zinc-600 mb-1">Sender Serial Number</label>
+                                      <input
+                                        type="text"
+                                        value={editChatSerial}
+                                        onChange={(e) => setEditChatSerial(e.target.value)}
+                                        className="w-full bg-black border border-zinc-900 rounded p-1.5 text-zinc-200 focus:outline-none text-[10px]"
+                                        placeholder="Sender Serial"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[8px] font-mono uppercase text-zinc-600 mb-1">Device Type</label>
+                                      <select
+                                        value={editChatDeviceType}
+                                        onChange={(e) => setEditChatDeviceType(e.target.value)}
+                                        className="w-full bg-black border border-zinc-900 rounded p-1.5 text-zinc-200 focus:outline-none text-[10px]"
+                                      >
+                                        <option value="DESKTOP">DESKTOP</option>
+                                        <option value="MOBILE">MOBILE</option>
+                                      </select>
+                                    </div>
                                     <div>
                                       <label className="block text-[8px] font-mono uppercase text-zinc-600 mb-1">Message Type</label>
                                       <select
@@ -1238,14 +1312,14 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                     <div className="flex justify-between items-center text-[8px] font-mono text-zinc-600">
                                       <span className="flex items-center gap-1">
                                         ROLE: 
-                                        {isOwner ? (
+                                        {chat.createdByImei === selectedComm.createdByImei ? (
                                           <span className="text-emerald-400 font-bold bg-emerald-950/20 px-1 py-0.5 rounded border border-emerald-500/20 text-[7px]">OWNER</span>
                                         ) : (
                                           <span className="text-zinc-400 font-bold bg-zinc-900 px-1 py-0.5 rounded border border-zinc-800 text-[7px]">MEMBER</span>
                                         )}
                                       </span>
                                       <span>
-                                        SENDER UID: {chat.ownerUid || 'Anonymous'}
+                                        SENDER DEVICE: {chat.createdByDeviceType || 'DESKTOP'}
                                       </span>
                                     </div>
 
@@ -1279,6 +1353,10 @@ export const AdminCommunities: React.FC<AdminCommunitiesProps> = ({
                                         setEditChatComments(chat.commentsCount || 0);
                                         setEditChatReports(chat.reportsCount || 0);
                                         setEditChatImageUrl(chat.imageUrl || '');
+                                        setEditChatIp(chat.createdByIp || '');
+                                        setEditChatImei(chat.createdByImei || '');
+                                        setEditChatSerial(chat.createdBySerial || '');
+                                        setEditChatDeviceType(chat.createdByDeviceType || 'DESKTOP');
                                         setEditChatMsgType(chat.type || 'text');
                                       }}
                                       className="p-1.5 text-zinc-700 hover:text-emerald-400 rounded hover:bg-emerald-950/15 cursor-pointer transition-colors"

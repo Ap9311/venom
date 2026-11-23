@@ -17,8 +17,7 @@ import {
   checkIsAdminDevice,
   ensureFirestoreAdminClaim,
   verifyAdminCredentials,
-  verifyAssistantCredentials,
-  logoutAdminSession
+  verifyAssistantCredentials
 } from '../../utils/adminAuth';
 import { 
   ShieldAlert, 
@@ -126,7 +125,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onAssistantLogout?.();
       return;
     }
-    void logoutAdminSession();
+    sessionStorage.removeItem('nonum_admin_auth');
   };
 
   const handleSavedEdit = () => {

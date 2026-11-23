@@ -12,16 +12,14 @@ import {
   deleteDoc,
   query, 
   orderBy, 
-  getDocs,
   onSnapshot, 
   increment, 
   serverTimestamp,
   arrayUnion 
 } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Comment, Reply } from '../types';
-import { getAnonymousUserId } from '../utils/ip';
+import { getDeviceImei, getClientIp, getAllDeviceImeis } from '../utils/ip';
 import { 
   isCommentLiked, 
   toggleCommentLikeStore, 
@@ -62,81 +60,33 @@ export default function CommentsPane({
   isDrawerMode = false,
 }: CommentsPaneProps) {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [loadingComments, setLoadingComments] = useState(true);
   const [newCommentText, setNewCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  const toMillis = (ts: any): number => {
-    if (!ts) return Date.now();
-    if (typeof ts?.toMillis === 'function') return ts.toMillis();
-    if (typeof ts?.seconds === 'number') return ts.seconds * 1000;
-    const parsed = new Date(ts).getTime();
-    return Number.isNaN(parsed) ? 0 : parsed;
-  };
-
-  // Real-time listener for comments with auth-ready retry & unordered fallback (fixes refresh race)
+  // Real-time listener for comments
   useEffect(() => {
-    let active = true;
-    let unsubSnap: (() => void) | null = null;
-    setLoadingComments(true);
+    const commentsRef = collection(db, 'posts', postId, 'comments');
+    const q = query(commentsRef, orderBy('createdAt', 'desc'));
 
-    const applyList = (docs: any[]) => {
-      if (!active) return;
-      const fetchedComments = docs
-        .map((docSnap) => ({
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const fetchedComments = snapshot.docs.map((docSnap) => ({
           id: docSnap.id,
           ...docSnap.data(),
         })) as Comment[];
-      fetchedComments.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
-      const deduped = deduplicateById(fetchedComments);
-      setComments(deduped);
-      setLoadingComments(false);
-      if (onCommentsCountChange) {
-        onCommentsCountChange(deduped.length);
-      }
-    };
-
-    const attachListener = () => {
-      if (unsubSnap) {
-        unsubSnap();
-        unsubSnap = null;
-      }
-      const commentsRef = collection(db, 'posts', postId, 'comments');
-      const q = query(commentsRef, orderBy('createdAt', 'desc'));
-      unsubSnap = onSnapshot(
-        q,
-        (snapshot) => {
-          applyList(snapshot.docs);
-        },
-        async (error) => {
-          console.warn('Comments ordered listener fallback:', error);
-          try {
-            const snap = await getDocs(commentsRef);
-            applyList(snap.docs);
-          } catch (fallbackErr) {
-            console.warn('Comments fallback fetch error:', fallbackErr);
-            if (active) setLoadingComments(false);
-          }
+        
+        setComments(deduplicateById(fetchedComments));
+        if (onCommentsCountChange) {
+          onCommentsCountChange(fetchedComments.length);
         }
-      );
-    };
+      },
+      (error) => {
+        console.warn('Comments query fallback notice:', error);
+      }
+    );
 
-    attachListener();
-
-    // Re-attach once auth initializes after a hard page refresh so rules/cache settle cleanly
-    const unsubAuth = auth
-      ? onAuthStateChanged(auth, (user) => {
-          if (active && user) {
-            attachListener();
-          }
-        })
-      : () => {};
-
-    return () => {
-      active = false;
-      if (unsubSnap) unsubSnap();
-      unsubAuth();
-    };
+    return () => unsubscribe();
   }, [postId]);
 
   const handlePostComment = async (e: React.FormEvent) => {
@@ -152,7 +102,6 @@ export default function CommentsPane({
     setNewCommentText('');
 
     try {
-      const uid = await getAnonymousUserId();
       const commentsRef = collection(db, 'posts', postId, 'comments');
       const customCommentRef = doc(commentsRef);
       const newCommentId = customCommentRef.id;
@@ -160,7 +109,6 @@ export default function CommentsPane({
       await setDoc(customCommentRef, {
         id: newCommentId,
         content: text,
-        ownerUid: uid,
         likesCount: 0,
         repliesCount: 0,
         repliesList: [],
@@ -197,11 +145,7 @@ export default function CommentsPane({
       <div className="flex flex-col h-full font-sans bg-zinc-950 overflow-hidden">
         {/* Comments List (Fills remaining height) */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {loadingComments && uniqueComments.length === 0 ? (
-            <div className="text-center py-12 text-xs text-zinc-500 font-sans">
-              Loading comments...
-            </div>
-          ) : uniqueComments.length === 0 ? (
+          {uniqueComments.length === 0 ? (
             <div className="text-center py-12 text-xs text-zinc-500 flex flex-col items-center justify-center gap-2 font-mono">
               <ShieldAlert className="w-6 h-6 text-zinc-600 animate-pulse" />
               <span className="text-zinc-300 font-sans font-medium text-sm">No comments yet</span>
@@ -264,11 +208,7 @@ export default function CommentsPane({
 
       {/* Comments List */}
       <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
-        {loadingComments && uniqueComments.length === 0 ? (
-          <div className="text-center py-6 text-xs text-zinc-500 font-sans">
-            Loading comments...
-          </div>
-        ) : uniqueComments.length === 0 ? (
+        {uniqueComments.length === 0 ? (
           <div className="text-center py-6 text-xs text-zinc-600 flex flex-col items-center gap-2 font-mono">
             <ShieldAlert className="w-5 h-5 text-zinc-700 animate-pulse" />
             <span>No comments yet. Share your thoughts above!</span>
@@ -383,19 +323,25 @@ function CommentItem({
         likesCount: increment(liked ? 1 : -1),
       });
 
-      const uid = await getAnonymousUserId();
-      const interactionRef = doc(db, 'interactions', `${key}_${uid}_comment_like`);
+      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_comment_like`);
       if (liked) {
         setDoc(interactionRef, {
           type: 'like_comment',
           commentKey: key,
           postId,
           commentId: comment.id,
-          uid,
+          imei: deviceImei,
+          ip: userIp,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       } else {
         deleteDoc(interactionRef).catch(console.error);
+        for (const alias of getAllDeviceImeis()) {
+          if (alias !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${key}_${alias}_comment_like`)).catch(() => {});
+          }
+        }
       }
     } catch (error) {
       toggleCommentLikeStore(key);
@@ -416,7 +362,6 @@ function CommentItem({
     setReplies(deduplicateById(updated));
 
     try {
-      const uid = await getAnonymousUserId();
       const commentRef = doc(db, 'posts', postId, 'comments', comment.id);
       await updateDoc(commentRef, {
         repliesList: updated
@@ -429,7 +374,8 @@ function CommentItem({
         });
       } catch (subErr) {}
 
-      const interactionRef = doc(db, 'interactions', `${key}_${uid}_reply_like`);
+      const [deviceImei, userIp] = await Promise.all([getDeviceImei(), getClientIp()]);
+      const interactionRef = doc(db, 'interactions', `${key}_${deviceImei}_reply_like`);
       if (liked) {
         setDoc(interactionRef, {
           type: 'like_reply',
@@ -437,11 +383,17 @@ function CommentItem({
           postId,
           commentId: comment.id,
           replyId,
-          uid,
+          imei: deviceImei,
+          ip: userIp,
           createdAt: new Date().toISOString()
         }).catch(console.error);
       } else {
         deleteDoc(interactionRef).catch(console.error);
+        for (const alias of getAllDeviceImeis()) {
+          if (alias !== deviceImei) {
+            deleteDoc(doc(db, 'interactions', `${key}_${alias}_reply_like`)).catch(() => {});
+          }
+        }
       }
     } catch (error) {
       toggleReplyLikeStore(key);
@@ -461,11 +413,9 @@ function CommentItem({
     setReplyText('');
 
     try {
-      const uid = await getAnonymousUserId();
       const newReplyObj = {
         id: 'reply_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         content: text,
-        ownerUid: uid,
         likesCount: 0,
         createdAt: new Date().toISOString()
       };

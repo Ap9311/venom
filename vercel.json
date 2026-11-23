@@ -1,37 +1,27 @@
 {
-  "redirects": [
+  "rewrites": [
     {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "mynonum.vercel.app"
-        }
-      ],
-      "destination": "https://nonum.online/:path*",
-      "permanent": true
+      "source": "/admin-manifest.json",
+      "destination": "/api/admin-manifest"
     },
     {
-      "source": "/:path*",
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+
+    {
+      "source": "/(.*)",
       "has": [
         {
           "type": "host",
-          "value": "myvenom.vercel.app"
+          "value": "admin(.*)"
         }
       ],
-      "destination": "https://nonum.online/:path*",
-      "permanent": true
+      "destination": "/api/admin-gate"
     },
     {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.nonum.online"
-        }
-      ],
-      "destination": "https://nonum.online/:path*",
-      "permanent": true
+      "source": "/(.*)",
+      "destination": "/"
     }
   ],
   "headers": [
@@ -41,47 +31,15 @@
         {
           "key": "Content-Type",
           "value": "text/plain; charset=utf-8"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
         }
       ]
     },
     {
-      "source": "/api/(.*)",
+      "source": "/sitemap.xml",
       "headers": [
         {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://nonum.online"
-        },
-        {
-          "key": "Access-Control-Allow-Credentials",
-          "value": "true"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-Admin-Token, X-Admin-Device-Id"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, private"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
+          "key": "Content-Type",
+          "value": "application/xml"
         }
       ]
     },
@@ -89,12 +47,16 @@
       "source": "/(.*)",
       "headers": [
         {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
         },
         {
           "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
         },
         {
           "key": "Referrer-Policy",
@@ -102,35 +64,13 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=(), payment=()"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=63072000; includeSubDomains; preload"
+          "value": "camera=(), microphone=(), geolocation=()"
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://pagead2.googlesyndication.com https://googleads.g.doubleclick.net https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://adservice.google.com https://tpc.googlesyndication.com https://www.googletagmanager.com https://www.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://pagead2.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://googleads.g.doubleclick.net; frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://ep2.adtrafficquality.google https://www.google.com https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://i.ibb.co https://iili.io https://*.googleapis.com; connect-src 'self' https://firestore.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.googleapis.com; frame-src 'self'; object-src 'none';"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/ads.txt",
-      "destination": "/ads.txt"
-    },
-    {
-      "source": "/admin-manifest.json",
-      "destination": "/api/index?__route=admin-manifest"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index?__route=$1"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
     }
   ]
 }
